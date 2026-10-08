@@ -1,0 +1,42 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres-ci-only
+          POSTGRES_DB: ledger
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ledger"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      DATABASE_OWNER_URL: postgresql://ledger_owner:owner-ci-only@localhost:5432/ledger
+      DATABASE_APP_URL: postgresql://ledger_app:app-ci-only@localhost:5432/ledger
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      # Service containers skip the docker init scripts, so run the same role setup by hand.
+      - name: Create database roles
+        run: |
+          psql -v ON_ERROR_STOP=1 \
+            -v dbname=ledger -v owner_password=owner-ci-only -v app_password=app-ci-only \
+            -f docker/roles/roles.sql
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres-ci-only
+          PGDATABASE: ledger
+      - run: uv run pytest
