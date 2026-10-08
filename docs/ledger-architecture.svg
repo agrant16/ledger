@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 392" width="760" height="392" role="img" aria-label="Every transfer is one database transaction that must sum to zero" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13">
+  <defs>
+    <marker id="arch-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#6b7280"/>
+    </marker>
+  </defs>
+  <rect width="760" height="392" fill="#ffffff"/>
+
+  <text x="24" y="28" font-size="15" font-weight="600" fill="#1f2328">Every transfer is one database transaction that must sum to zero</text>
+
+  <!-- connectors -->
+  <g fill="none" stroke="#6b7280" stroke-width="1.25">
+    <path d="M144 94H184" marker-end="url(#arch-arrow)"/>
+    <path d="M324 94H364" marker-end="url(#arch-arrow)"/>
+    <path d="M504 94H536" marker-end="url(#arch-arrow)"/>
+    <path d="M434 122V150" marker-end="url(#arch-arrow)"/>
+    <path d="M296 340H336" marker-end="url(#arch-arrow)"/>
+    <path d="M516 340H536" marker-end="url(#arch-arrow)"/>
+  </g>
+
+  <!-- client -->
+  <rect x="24" y="66" width="120" height="56" rx="8" fill="none" stroke="#6b7280" stroke-width="1.25"/>
+  <text x="84" y="90" text-anchor="middle" font-weight="600" fill="#1f2328">Client</text>
+  <text x="84" y="106" text-anchor="middle" font-size="11.5" fill="#5b6370">retries safely</text>
+
+  <!-- api layer -->
+  <rect x="184" y="66" width="140" height="56" rx="8" fill="none" stroke="#6b7280" stroke-width="1.25"/>
+  <text x="254" y="90" text-anchor="middle" font-weight="600" fill="#1f2328">API layer</text>
+  <text x="254" y="106" text-anchor="middle" font-size="11.5" fill="#5b6370">validate, map errors</text>
+
+  <!-- ledger service (accent) -->
+  <rect x="364" y="66" width="140" height="56" rx="8" fill="#2563eb" fill-opacity="0.12" stroke="#2563eb" stroke-width="2"/>
+  <text x="434" y="90" text-anchor="middle" font-weight="600" fill="#1f2328">Ledger service</text>
+  <text x="434" y="106" text-anchor="middle" font-size="11.5" fill="#5b6370">claim, lock, post</text>
+
+  <!-- transfer sequence -->
+  <rect x="24" y="150" width="480" height="120" rx="8" fill="none" stroke="#6b7280" stroke-width="1.25"/>
+  <text x="40" y="174" font-weight="600" fill="#1f2328">One transfer, in order</text>
+  <text x="40" y="190" font-size="12.5" fill="#1f2328">1. Insert the transactions row, which claims the idempotency key</text>
+  <text x="40" y="206" font-size="12.5" fill="#1f2328">2. Check that both accounts exist and match the transfer's currency</text>
+  <text x="40" y="222" font-size="12.5" fill="#1f2328">3. Lock every touched balances row, lowest account id first</text>
+  <text x="40" y="238" font-size="12.5" fill="#1f2328">4. Check the overdraft rule on the locked balance, then insert the entries</text>
+  <text x="40" y="254" font-size="12.5" fill="#1f2328">5. Update every touched balance and commit, or roll everything back</text>
+
+  <!-- postgres -->
+  <rect x="536" y="52" width="200" height="296" rx="8" fill="#eeeeea" stroke="#6b7280" stroke-width="1.25"/>
+  <text x="636" y="72" text-anchor="middle" font-weight="600" fill="#1f2328">PostgreSQL</text>
+
+  <rect x="552" y="84" width="168" height="56" rx="8" fill="none" stroke="#6b7280" stroke-width="1.25"/>
+  <text x="636" y="108" text-anchor="middle" font-weight="600" fill="#1f2328">accounts</text>
+  <text x="636" y="124" text-anchor="middle" font-size="11.5" fill="#5b6370">referenced by the rest</text>
+
+  <rect x="552" y="148" width="168" height="56" rx="8" fill="none" stroke="#6b7280" stroke-width="1.25"/>
+  <text x="636" y="172" text-anchor="middle" font-weight="600" fill="#1f2328">transactions</text>
+  <text x="636" y="188" text-anchor="middle" font-size="11.5" fill="#5b6370">idempotency key+hash</text>
+
+  <rect x="552" y="212" width="168" height="56" rx="8" fill="none" stroke="#6b7280" stroke-width="1.25"/>
+  <text x="636" y="236" text-anchor="middle" font-weight="600" fill="#1f2328">entries</text>
+  <text x="636" y="252" text-anchor="middle" font-size="11.5" fill="#5b6370">append-only, sum 0</text>
+
+  <rect x="552" y="276" width="168" height="56" rx="8" fill="none" stroke="#6b7280" stroke-width="1.25"/>
+  <text x="636" y="300" text-anchor="middle" font-weight="600" fill="#1f2328">balances</text>
+  <text x="636" y="316" text-anchor="middle" font-size="11.5" fill="#5b6370">cached; job-checked</text>
+
+  <!-- statement csv -->
+  <rect x="156" y="312" width="140" height="56" rx="8" fill="none" stroke="#6b7280" stroke-width="1.25"/>
+  <text x="226" y="336" text-anchor="middle" font-weight="600" fill="#1f2328">Statement CSV</text>
+  <text x="226" y="352" text-anchor="middle" font-size="11.5" fill="#5b6370">imported file</text>
+
+  <!-- reconciliation job -->
+  <rect x="336" y="312" width="180" height="56" rx="8" fill="none" stroke="#6b7280" stroke-width="1.25"/>
+  <text x="426" y="336" text-anchor="middle" font-weight="600" fill="#1f2328">Reconciliation job</text>
+  <text x="426" y="352" text-anchor="middle" font-size="11.5" fill="#5b6370">cached vs entries</text>
+</svg>
