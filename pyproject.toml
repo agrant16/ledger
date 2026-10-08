@@ -1,0 +1,37 @@
+[project]
+name = "ledger"
+version = "0.1.0"
+description = "A double-entry ledger service"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "psycopg[binary]",
+    "psycopg-pool",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "hypothesis",
+    "ruff",
+    "locust",
+    # Required by FastAPI's TestClient.
+    "httpx",
+]
+
+[tool.uv]
+# An application, not a library: run from src/ via pythonpath instead of installing it.
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
