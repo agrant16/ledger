@@ -22,11 +22,26 @@ Amounts are stored as integers in minor units (for example, cents) with a curren
 
 ## Running locally
 
-_TODO: added once Docker Compose is set up (Milestone 1)._
+```bash
+docker compose up --build
+```
+
+This starts PostgreSQL 18 and the service on http://localhost:8000. The first start of an empty database creates two roles (`docker/roles/roles.sql`): `ledger_owner`, which owns the schema and runs the migrations, and `ledger_app`, which the service connects as and which owns nothing. The container applies pending migrations from `migrations/` before serving. The passwords in `compose.yaml` are development-only defaults; override them with the `POSTGRES_PASSWORD`, `LEDGER_OWNER_PASSWORD`, and `LEDGER_APP_PASSWORD` environment variables.
+
+To apply migrations by hand against the local database: `PYTHONPATH=src uv run python -m ledger.migrate`.
 
 ## Running tests
 
-_TODO: added once pytest is set up against Postgres (Milestone 1)._
+Tests run against a real PostgreSQL, never mocks. Start the database, then run pytest:
+
+```bash
+docker compose up -d --wait db
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+```
+
+The defaults point at the Compose database on `localhost:5432`. Set `DATABASE_OWNER_URL` and `DATABASE_APP_URL` to use another one. Test fixtures connect as the owner role to migrate, reset, and seed data, and as the app role for everything under test.
 
 ## API
 
