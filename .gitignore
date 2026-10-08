@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# PyCharm / JetBrains
+.idea/
+*.iml
+*.iws
+out/
+
+# Claude Code (personal/local only; CLAUDE.md itself is committed)
+CLAUDE.local.md
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Locust and local data
+*.log
+*.csv
+!tests/fixtures/*.csv
