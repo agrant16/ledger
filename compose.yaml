@@ -1,0 +1,25 @@
+services:
+  db:
+    image: postgres:18
+    environment:
+      # Superuser: only used by the init script to create roles. The service never uses it.
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres-dev-only}
+      POSTGRES_DB: ledger
+      LEDGER_OWNER_PASSWORD: ${LEDGER_OWNER_PASSWORD:-owner-dev-only}
+      LEDGER_APP_PASSWORD: ${LEDGER_APP_PASSWORD:-app-dev-only}
+    ports:
+      - "5432:5432"
+    volumes:
+      # PostgreSQL 18 images keep data in a versioned subdirectory of /var/lib/postgresql.
+      - pgdata:/var/lib/postgresql
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+      - ./docker/roles:/docker-roles:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ledger"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:
