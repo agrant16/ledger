@@ -4,7 +4,7 @@ A double-entry ledger service I'm building as an interview-prep portfolio projec
 
 ## Read first
 
-The project scope, architecture, data model, API design, milestones, and testing plan are in `docs/ledger-scope.md`. Read it before starting any work, and follow its milestone order. The copy in this repo is the source of truth; I sync the shared copy elsewhere from it, so don't assume the two match. If the repo layout or stack differs from the scope doc, tell me instead of silently diverging. If we change a design decision, update the scope doc in the same change.
+The project scope, architecture, data model, API design, milestones, and testing plan are in `docs/design.md`. Read it before starting any work, and follow its milestone order. The copy in this repo is the source of truth; I sync the shared copy elsewhere from it, so don't assume the two match. If the repo layout or stack differs from the scope doc, tell me instead of silently diverging. If we change a design decision, update the scope doc in the same change.
 
 ## Stack and conventions
 
@@ -52,7 +52,7 @@ These properties must always hold. Tests should check them directly, preferably 
 - The cached balance always equals the sum of that account's entries.
 - Every entry's currency matches its account's currency.
 
-These mirror the invariants list in `docs/ledger-scope.md`. If the two ever disagree, tell me and we'll fix both.
+These mirror the invariants list in `docs/design.md`. If the two ever disagree, tell me and we'll fix both.
 
 Write tests against these properties, not against whatever the current code happens to do. If a test fails, don't change the test to match the code without telling me why.
 
