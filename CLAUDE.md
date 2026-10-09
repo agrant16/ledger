@@ -18,6 +18,8 @@ The stack below is decided and pre-approved. Don't substitute alternatives.
 - Ids are `bigint GENERATED ALWAYS AS IDENTITY`.
 - Validation errors return 400, not FastAPI's default 422. 422 means insufficient funds.
 - Tests run against a real Postgres, not mocks.
+- Service functions take the request's connection and never commit; the caller owns the database transaction, so a retry wraps the key claim and the posting together.
+- Expected failures are `LedgerError` subclasses in `ledger/errors.py`, and the API layer maps each to an HTTP status. Bugs (`LedgerInvariantError`, database safety-net violations) are not `LedgerError`s and return a logged 500.
 
 ## How we split the work
 
@@ -63,12 +65,16 @@ Write tests against these properties, not against whatever the current code happ
 - Before writing code for a non-trivial feature, briefly state the approach and any tradeoffs so I can weigh in.
 - Explain any non-obvious design choice in plain terms. I should be able to defend every decision in an interview.
 - Dependencies beyond the stack above, schema changes, and changes to the public API need my approval first. Adding the pre-approved stack's own packages during scaffolding is fine.
+- Every change goes on its own branch and a pull request, never straight to `main`. Both CI checks (`lint-and-test` and `compose-smoke`) must pass, and PRs are squash-merged, so intermediate commits on a branch may be red.
+- For the items on my "I write myself" list, Claude writes the tests first from `docs/design.md` and I write the implementation; the tests stay red until it exists.
 
 ## Commands
 
-These are the expected commands. Verify them in milestone 1 and correct any that differ.
+These were verified in milestone 1.
 
-- Run tests: `uv run pytest`
+- Start the database the tests need: `docker compose up -d --wait db`
+- Run tests: `uv run pytest` (CI runs `uv run pytest --cov`, which also enforces the coverage floor)
 - Run linter: `uv run ruff check .`
 - Run formatter: `uv run ruff format .`
-- Run the service locally: `docker compose up`
+- Run the service locally: `docker compose up --build` (a one-shot `migrate` service applies migrations first)
+- Apply migrations by hand: `PYTHONPATH=src uv run python -m ledger.migrate`
