@@ -42,4 +42,4 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres-ci-only
           PGDATABASE: ledger
-      - run: uv run pytest
+      - run: uv run pytest --cov

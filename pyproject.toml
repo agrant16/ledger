@@ -30,6 +30,17 @@ package = false
 pythonpath = ["src"]
 testpaths = ["tests"]
 
+[tool.coverage.run]
+source = ["src/ledger"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+# Enforced in CI (`pytest --cov`). A safety net against untested code, not a goal in itself:
+# the invariant, property-based and concurrency tests are the evidence of correctness.
+# Set just below the measured baseline; raise it as the ledger code lands.
+fail_under = 85
+
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
