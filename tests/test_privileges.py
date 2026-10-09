@@ -14,6 +14,8 @@ EXPECTED_APP_PRIVILEGES: dict[str, set[str]] = {
     "schema_migrations": set(),
     # Insert and select only: currency and allow_negative are fixed for life.
     "accounts": {"SELECT", "INSERT"},
+    # Insert and select only: request_hash and reverses_transaction_id cannot change afterwards.
+    "transactions": {"SELECT", "INSERT"},
 }
 
 # Every non-owner entry in the table's ACL, including the PUBLIC pseudo-role.
