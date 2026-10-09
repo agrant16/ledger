@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # Local defaults match compose.yaml (dev-only passwords, Postgres published on 5432).
-DEFAULT_OWNER_URL = "postgresql://ledger_owner:owner-dev-only@localhost:5432/ledger"
-DEFAULT_APP_URL = "postgresql://ledger_app:app-dev-only@localhost:5432/ledger"
+DEFAULT_OWNER_URL = "postgresql://ledger_owner:owner-dev-only@127.0.0.1:5432/ledger"
+DEFAULT_APP_URL = "postgresql://ledger_app:app-dev-only@127.0.0.1:5432/ledger"
 DEFAULT_MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
 
 

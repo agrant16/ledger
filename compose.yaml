@@ -9,7 +9,8 @@ services:
       LEDGER_OWNER_PASSWORD: ${LEDGER_OWNER_PASSWORD:-owner-dev-only}
       LEDGER_APP_PASSWORD: ${LEDGER_APP_PASSWORD:-app-dev-only}
     ports:
-      - "5432:5432"
+      # Bound to loopback only: the dev passwords are public, so never expose this to a network.
+      - "127.0.0.1:5432:5432"
     volumes:
       # PostgreSQL 18 images keep data in a versioned subdirectory of /var/lib/postgresql.
       - pgdata:/var/lib/postgresql
@@ -42,6 +43,6 @@ services:
     environment:
       DATABASE_APP_URL: postgresql://ledger_app:${LEDGER_APP_PASSWORD:-app-dev-only}@db:5432/ledger
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 volumes:
   pgdata:
