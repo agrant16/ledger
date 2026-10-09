@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: read
-  code-quality: write-all
+  code-quality: write
 
 jobs:
   lint-and-test:
