@@ -21,16 +21,27 @@ services:
       timeout: 3s
       retries: 30
 
-  app:
+  # One-shot: applies migrations as the owner role, then exits. The only service that
+  # is given the owner credentials.
+  migrate:
     build: .
+    image: ledger:local
+    command: ["python", "-m", "ledger.migrate"]
     depends_on:
       db:
         condition: service_healthy
     environment:
       DATABASE_OWNER_URL: postgresql://ledger_owner:${LEDGER_OWNER_PASSWORD:-owner-dev-only}@db:5432/ledger
+
+  app:
+    build: .
+    image: ledger:local
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
       DATABASE_APP_URL: postgresql://ledger_app:${LEDGER_APP_PASSWORD:-app-dev-only}@db:5432/ledger
     ports:
       - "8000:8000"
-
 volumes:
   pgdata:

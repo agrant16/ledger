@@ -13,5 +13,6 @@ COPY src ./src
 COPY migrations ./migrations
 
 EXPOSE 8000
-# Apply migrations (as the owner role), then serve (as the app role).
-CMD ["sh", "-c", "python -m ledger.migrate && exec uvicorn ledger.main:app --host 0.0.0.0 --port 8000"]
+# Serves as the app role. Migrations run in the separate `migrate` Compose service, which
+# overrides this command, so this process never holds the owner credentials.
+CMD ["uvicorn", "ledger.main:app", "--host", "0.0.0.0", "--port", "8000"]
