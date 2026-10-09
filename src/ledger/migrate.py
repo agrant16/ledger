@@ -1,6 +1,6 @@
 """Applies numbered plain-SQL migrations, in filename order, as the owner role.
 
-Run with: uv run python -m ledger.migrate
+Run with: PYTHONPATH=src uv run python -m ledger.migrate
 """
 
 import re
@@ -17,14 +17,15 @@ ADVISORY_LOCK_KEY = 7_262_001
 
 
 def find_migrations(directory: Path) -> list[Path]:
-    """Return migration files sorted by name. Fails on a stray .sql file with a bad name."""
+    """Return migration files in numeric-prefix order. Fails on a .sql file with a bad name."""
     if not directory.is_dir():
         return []
-    files = sorted(directory.glob("*.sql"))
+    files = list(directory.glob("*.sql"))
     for f in files:
         if not MIGRATION_NAME.match(f.name):
             raise ValueError(f"migration file name must look like 001_create_x.sql: {f.name}")
-    return files
+    # Sort by the integer prefix, so 2_x runs before 10_x; the name breaks ties.
+    return sorted(files, key=lambda f: (int(f.name.split("_", 1)[0]), f.name))
 
 
 def run_migrations(owner_url: str, directory: Path) -> list[str]:

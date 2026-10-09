@@ -49,6 +49,12 @@ def test_failed_migration_rolls_back_and_is_retried(scratch_url: str, tmp_path: 
     assert run_migrations(scratch_url, tmp_path) == ["001_bad.sql"]
 
 
+def test_sorts_by_numeric_prefix_not_lexically(tmp_path: Path) -> None:
+    for name in ("10_c.sql", "2_b.sql", "001_a.sql"):
+        write(tmp_path, name, "SELECT 1;")
+    assert [f.name for f in find_migrations(tmp_path)] == ["001_a.sql", "2_b.sql", "10_c.sql"]
+
+
 def test_missing_directory_means_no_migrations(tmp_path: Path) -> None:
     assert find_migrations(tmp_path / "nope") == []
 
