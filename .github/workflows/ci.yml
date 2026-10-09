@@ -11,6 +11,7 @@ permissions:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:18
@@ -48,3 +49,21 @@ jobs:
 
       - name: Run tests with coverage
         run: uv run pytest --cov --cov-report=xml:coverage.xml --cov-report=markdown-append:$GITHUB_STEP_SUMMARY
+  compose-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start the stack
+        run: docker compose up --build --wait
+
+      - name: Check the app answers and can reach Postgres
+        run: >-
+          curl --fail --silent --show-error
+          --retry 10 --retry-delay 2 --retry-connrefused --retry-all-errors
+          http://127.0.0.1:8000/health
+
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs
