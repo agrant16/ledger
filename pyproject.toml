@@ -18,7 +18,7 @@ dev = [
     "ruff",
     "locust",
     # Required by FastAPI's TestClient.
-    "httpx",
+    "httpx2",
 ]
 
 [tool.uv]
