@@ -1,5 +1,7 @@
+import threading
 import uuid
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import psycopg
@@ -60,6 +62,30 @@ def test_duplicate_numbers_are_rejected_even_if_padded_differently(tmp_path: Pat
     write(tmp_path, "2_add_index.sql", "SELECT 1;")
     with pytest.raises(ValueError, match="duplicate migration number 2"):
         find_migrations(tmp_path)
+
+
+def test_concurrent_runners_apply_each_migration_exactly_once(
+    scratch_url: str, tmp_path: Path
+) -> None:
+    # The sleep keeps the first runner inside its migration long enough that the second
+    # would, without the advisory lock, read an empty schema_migrations and apply it too.
+    write(
+        tmp_path,
+        "001_slow.sql",
+        "CREATE TABLE t (x int); INSERT INTO t VALUES (1); SELECT pg_sleep(1);",
+    )
+    start = threading.Barrier(2)
+
+    def runner() -> list[str]:
+        start.wait()
+        return run_migrations(scratch_url, tmp_path)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = [f.result() for f in [pool.submit(runner), pool.submit(runner)]]
+
+    assert sorted(results) == [[], ["001_slow.sql"]]
+    with psycopg.connect(scratch_url) as conn:
+        assert conn.execute("SELECT count(*) FROM t").fetchone() == (1,)
 
 
 def test_missing_directory_means_no_migrations(tmp_path: Path) -> None:
