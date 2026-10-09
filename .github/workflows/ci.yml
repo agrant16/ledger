@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  code-quality: write-all
 
 jobs:
   lint-and-test:
@@ -45,4 +46,13 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres-ci-only
           PGDATABASE: ledger
-      - run: uv run pytest --cov
+
+      - name: Run tests with coverage
+        run: uv run pytest --cov --cov-report=xml:coverage.xml
+
+      - name: Upload coverage report to GitHub
+        uses: actions/upload-code-coverage@v1
+        with:
+          file: coverage.xml
+          language: python
+          label: backend-unit-tests # Required identifier if you ever add multiple test suites
