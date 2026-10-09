@@ -17,15 +17,21 @@ ADVISORY_LOCK_KEY = 7_262_001
 
 
 def find_migrations(directory: Path) -> list[Path]:
-    """Return migration files in numeric-prefix order. Fails on a .sql file with a bad name."""
+    """Return migration files in numeric-prefix order. Fails on a bad name or repeated number."""
     if not directory.is_dir():
         return []
     files = list(directory.glob("*.sql"))
     for f in files:
         if not MIGRATION_NAME.match(f.name):
             raise ValueError(f"migration file name must look like 001_create_x.sql: {f.name}")
-    # Sort by the integer prefix, so 2_x runs before 10_x; the name breaks ties.
-    return sorted(files, key=lambda f: (int(f.name.split("_", 1)[0]), f.name))
+    seen: dict[int, str] = {}
+    for f in sorted(files):
+        number = int(f.name.split("_", 1)[0])
+        if number in seen:
+            raise ValueError(f"duplicate migration number {number}: {seen[number]} and {f.name}")
+        seen[number] = f.name
+    # Sort by the integer prefix, so 2_x runs before 10_x.
+    return sorted(files, key=lambda f: int(f.name.split("_", 1)[0]))
 
 
 def run_migrations(owner_url: str, directory: Path) -> list[str]:
