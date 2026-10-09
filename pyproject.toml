@@ -19,6 +19,7 @@ dev = [
     "locust",
     # Required by FastAPI's TestClient.
     "httpx2",
+    "pytest-cov",
 ]
 
 [tool.uv]
