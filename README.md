@@ -26,7 +26,7 @@ Amounts are stored as integers in minor units (for example, cents) with a curren
 docker compose up --build
 ```
 
-This starts PostgreSQL 18 and the service on http://localhost:8000. The first start of an empty database creates two roles (`docker/roles/roles.sql`): `ledger_owner`, which owns the schema and runs the migrations, and `ledger_app`, which the service connects as and which owns nothing. The container applies pending migrations from `migrations/` before serving. The passwords in `compose.yaml` are development-only defaults; override them with the `POSTGRES_PASSWORD`, `LEDGER_OWNER_PASSWORD`, and `LEDGER_APP_PASSWORD` environment variables.
+This starts PostgreSQL 18 and the service on http://localhost:8000. The first start of an empty database creates two roles (`docker/roles/roles.sql`): `ledger_owner`, which owns the schema and runs the migrations, and `ledger_app`, which the service connects as and which owns nothing. A one-shot `migrate` service applies pending migrations from `migrations/` as the owner role and exits; the `app` service starts only after it succeeds and receives only the app role's credentials. The passwords in `compose.yaml` are development-only defaults; override them with the `POSTGRES_PASSWORD`, `LEDGER_OWNER_PASSWORD`, and `LEDGER_APP_PASSWORD` environment variables.
 
 To apply migrations by hand against the local database: `PYTHONPATH=src uv run python -m ledger.migrate`.
 
