@@ -86,3 +86,5 @@ Known by design so far; more will be added in Milestone 7.
 - Creating an account is not idempotent: retrying after a lost response returns 409 for the duplicate name, and there is no lookup endpoint.
 - The balance endpoint reads a cache, so it may not include a transfer still in flight.
 - A single transfer is capped at 99,900,000,000 minor units, regardless of the currency's minor-unit size.
+- Account names reject only ASCII whitespace (space, tab, newline, vertical tab, form feed, carriage return) at either end. A name that starts or ends with a Unicode space such as a non-breaking space is accepted as a different, visually similar name, as with names that differ only by case.
+- `created_at` columns are filled by a database default (`now()`), but the app role has plain INSERT on those tables and could supply its own value. The service never does, and no invariant depends on it. Enforcing it would take a column-level INSERT grant or a trigger.
