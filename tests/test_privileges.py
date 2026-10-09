@@ -16,6 +16,8 @@ EXPECTED_APP_PRIVILEGES: dict[str, set[str]] = {
     "accounts": {"SELECT", "INSERT"},
     # Insert and select only: request_hash and reverses_transaction_id cannot change afterwards.
     "transactions": {"SELECT", "INSERT"},
+    # Append-only: the app role can never UPDATE, DELETE or TRUNCATE ledger entries.
+    "entries": {"SELECT", "INSERT"},
 }
 
 # Every non-owner entry in the table's ACL, including the PUBLIC pseudo-role.
