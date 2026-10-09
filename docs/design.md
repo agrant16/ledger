@@ -116,6 +116,7 @@ The `from` account gets an entry of `-amount_minor` and the `to` account gets `+
 
 - Same idempotency key with the same body: return the original response, rebuilt from the stored transaction and its entries, and move nothing.
 - Same key with a different request (method, path, or body): reject with 409, since the client has a bug.
+- A retried reversal (same key, same target) violates both the key's and the reversal link's unique constraints, and Postgres does not guarantee which one it reports. The claim therefore resolves a key conflict first (for example `INSERT ... ON CONFLICT (idempotency_key) DO NOTHING`), so the retry replays the original response; only a conflict on the reversal link under a different key is `AlreadyReversedError`.
 - Same key while the first request is still running: the second request waits on the unique key, then replays the result or returns 409 on a different body.
 - A failed attempt does not consume the key: the key row and the transfer share one database transaction, so a failure rolls both back. Error responses (400, 404, 422) are not stored, and a retry is evaluated against current balances.
 - Insufficient funds: 422, and no entries are written.
@@ -136,6 +137,23 @@ The `from` account gets an entry of `-amount_minor` and the `to` account gets `+
 - Reversal that would overdraw a protected account because the money has moved on: 422, and no entries are written. A reversal follows the same rules as any transfer.
 - Lock timeout, deadlock retries exhausted, or a wait for a database connection that times out: 503 with a Retry-After header. The transaction rolled back, so retrying with the same key is safe. The same holds if the connection drops during commit: the client cannot know whether the transfer happened, and retrying with the same key is safe either way. A request rejected by the overall concurrency cap also gets a 503 with Retry-After; no transaction has started, so retrying is safe.
 - A violation of a database safety net, which signals a bug rather than a normal outcome: the balances CHECK (a normal overdraft is a 422), or the zero-sum or no-entries constraint trigger (a normal transfer is balanced by construction). The response is a 500, the transaction rolled back, and the error logged. The triggers fire at commit, so the key row rolls back with the transfer and the key stays free to reuse. These errors are not retried.
+
+**Error model**
+
+Expected failures are `LedgerError` subclasses in `ledger/errors.py`. The API layer owns the HTTP status for each, in one table resolved through the class hierarchy, so the domain code stays free of HTTP; a completeness test asserts that every concrete `LedgerError` subclass has a status. Bugs are not `LedgerError`s: `LedgerInvariantError` (with `UnbalancedEntriesError` under it) and the database safety-net violations (the balances CHECK and the two triggers) are never treated as expected outcomes; they return a 500 and are logged.
+
+| Error | Status | Raised by |
+| --- | --- | --- |
+| `InvalidRequestError` | 400 | The API layer only: Pydantic validation (strict types, unknown fields, ranges, id bounds, same-account), with `RequestValidationError` remapped to 400, plus checks Pydantic cannot express (cursor decoding, no body on reverse). The service layer never raises it |
+| `UnknownAccountError` | 404 | The service layer |
+| `UnknownTransferError` | 404 | The service layer (`GET /transfers/{id}` and reverse) |
+| `CurrencyMismatchError` | 400 | `post_transaction` |
+| `InsufficientFundsError` | 422 | `post_transaction`; carries the account, its balance and the amount |
+| `IdempotencyConflictError` | 409 | `claim_transaction` |
+| `AlreadyReversedError` | 409 | The claim, from the unique link on `reverses_transaction_id` |
+| `ReversalOfReversalError` | 409 | The service layer, because the target has a non-null `reverses_transaction_id`; the schema allows such a row, so this is not a database rule |
+| `DuplicateAccountNameError` | 409 | `create_account`, from the unique name |
+| `ServiceBusyError` | 503 | The retry wrapper: lock timeout, deadlock retries exhausted, pool wait timeout |
 
 **Request hash (`request_hash`)**
 
@@ -168,10 +186,10 @@ Seven milestones, built in order. Finish each milestone before starting the next
 
 ### 2. Double-entry core
 
-- [ ] `post_transaction(entries)` rejects any set of entries that does not sum to zero per currency
+- [ ] `claim_transaction(conn, idempotency_key, request_hash, reverses_transaction_id=None)` inserts the `transactions` row and returns its id (milestone 3 adds the conflict handling that makes it the idempotency claim), and `post_transaction(conn, transaction_id, entries)` rejects any set of entries that does not sum to zero per currency (raising `UnbalancedEntriesError`, a bug that maps to a 500; see Error model), checks the accounts and currencies, locks the touched balances rows, and writes the entries and balance updates. Both take the request's connection, never commit, and assume the caller has opened the database transaction (`post_transaction` raises if the connection is in autocommit mode), so the claim and the posting share one transaction and a failure rolls both back
 - [ ] Entries are append-only; no update or delete path exists in the code, and the database refuses them too
 - [ ] Balance computed from entries, with a cached balance in a separate balances table (account\_id as primary key; allow\_negative copied from the account, with a composite foreign key (account\_id, allow\_negative) to accounts and a CHECK (allow\_negative OR balance\_minor >= 0); added by a new migration that backfills a row for every existing account from its entries and the account's allow\_negative), kept in the same database transaction
-- [ ] Overdraft rule for accounts where `allow_negative` is false: checked in the transfer code against the balance returned by the locking statement (422), with the CHECK on balances as a backstop. If the CHECK ever fires, the request rolls back and returns 500 with the error logged, because it signals a bug and is not retried
+- [ ] Overdraft rule for accounts where `allow_negative` is false: checked in `post_transaction` against the balance returned by the locking statement, which locks each distinct touched balances row with `SELECT ... FOR UPDATE` in ascending account id order (422), with the CHECK on balances as a backstop. If the CHECK ever fires, the request rolls back and returns 500 with the error logged, because it signals a bug and is not retried
 - [ ] `create_account(name, currency, allow_negative)` service function, which also creates the balances row (copying allow\_negative); the seed script or fixture uses it to create one allow\_negative funding account per currency, and the API endpoint calls it with `allow_negative` fixed to false
 - [ ] Deferred constraint trigger on entries that checks each transaction's per-currency sum at commit, as a second line of defense behind post\_transaction, plus a deferred check on transactions that rejects a transaction with no entries. Fixtures insert only balanced sets of entries from here on. If either trigger fires through the API, the request returns 500 (see Error behavior)
 - [ ] Failure injection: raise an error between the inserts and the balance update inside `post_transaction` and assert the database is unchanged
@@ -195,7 +213,7 @@ Seven milestones, built in order. Finish each milestone before starting the next
 
 ### 4. Concurrency
 
-- [ ] Lock all touched balances rows (distinct accounts) with SELECT ... FOR UPDATE in a fixed order (ascending account id) so opposing transfers cannot deadlock; the overdraft check reads the balance returned by that same statement, never an earlier plain SELECT
+- [ ] Prove under concurrency that the ascending-account-id row locking built in milestone 2 (`SELECT ... FOR UPDATE` on distinct accounts, with the overdraft check reading the balance that same statement returns, never an earlier plain SELECT) stops opposing transfers from deadlocking
 - [ ] Use row locks at the default READ COMMITTED isolation, and write down why serializable was not chosen
 - [ ] Bounded retry on deadlock (3 attempts with a randomized delay of roughly 10 to 50 ms, retrying the whole transaction including the key claim), plus a `SET LOCAL lock_timeout` of 2 seconds so a stuck request fails with a 503 instead of hanging; exhausting the deadlock retries also returns 503. A connection-pool wait timeout of 2 seconds returns the same 503. These are starting values to tune from load-test results
 - [ ] Test: 50 concurrent transfers across a few accounts never overdraw and never change the total; opposing transfers (A to B and B to A) never deadlock. These call the service layer directly from 50 threads, each with its own connection from a test pool of at least 50, released together with a barrier, with no sleeps; the database is reset between the 20 runs and the random seed is logged. After each run, check the per-currency total, that no protected account is negative, that every balance equals the sum of its entries, and that the entry count matches the successful transfers
