@@ -1,6 +1,6 @@
 FROM python:3.13-slim
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12.23 /uv /usr/local/bin/uv
 
 WORKDIR /app
 ENV PYTHONPATH=/app/src PYTHONUNBUFFERED=1 UV_PROJECT_ENVIRONMENT=/opt/venv
