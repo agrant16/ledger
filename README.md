@@ -86,3 +86,4 @@ Known by design so far; more will be added in Milestone 7.
 - Creating an account is not idempotent: retrying after a lost response returns 409 for the duplicate name, and there is no lookup endpoint.
 - The balance endpoint reads a cache, so it may not include a transfer still in flight.
 - A single transfer is capped at 99,900,000,000 minor units, regardless of the currency's minor-unit size.
+- The rule "no leading or trailing whitespace" for account names is only defined for ASCII whitespace (space, tab, newline). Whether Unicode whitespace such as a non-breaking space counts is not yet decided, and the API check and the database CHECK could disagree on it until it is. To be settled before milestone 1 ends.
