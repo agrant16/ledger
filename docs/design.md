@@ -86,7 +86,7 @@ Every id the API accepts, whether in a request body, a path, or a decoded cursor
 { "name": "customer:alice", "currency": "USD" }
 ```
 
-- **`name`:** a string of 1 to 100 characters with no leading or trailing whitespace (rejected, not stripped). Names are unique, exact and case-sensitive, enforced by a unique constraint on `accounts.name`; a duplicate returns 409. The database enforces it, so two concurrent creates cannot both succeed.
+- **`name`:** a string of 1 to 100 characters with no leading or trailing whitespace (rejected, not stripped). Whitespace here means the six ASCII whitespace characters only: space, tab, newline, vertical tab, form feed, and carriage return. Unicode spaces such as a non-breaking space are ordinary characters and are allowed. The API checks this with an explicit character set, not Python's `str.strip()`, and the database repeats the same rule in a CHECK so the two cannot disagree. Names are unique, exact and case-sensitive, enforced by a unique constraint on `accounts.name`; a duplicate returns 409. The database enforces it, so two concurrent creates cannot both succeed.
 - **`currency`:** the same rule as transfers: three uppercase letters, lowercase rejected.
 - **Strict types and unknown fields:** the same rules as transfers, so `allow_negative` in the body is a 400.
 - **Response:** `201 Created` with `{ "id": 12, "name": "customer:alice", "currency": "USD", "allow_negative": false }`. It does not include a balance, which is always 0 at creation and is read through `GET /accounts/{id}/balance`.
