@@ -41,7 +41,7 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-The defaults point at the Compose database on `localhost:5432`. Set `DATABASE_OWNER_URL` and `DATABASE_APP_URL` to use another one. Test fixtures connect as the owner role to migrate, reset, and seed data, and as the app role for everything under test.
+The defaults point at the Compose database on `127.0.0.1:5432`. Set `DATABASE_OWNER_URL` and `DATABASE_APP_URL` to use another one. Test fixtures connect as the owner role to migrate, reset, and seed data, and as the app role for everything under test.
 
 ## API
 
