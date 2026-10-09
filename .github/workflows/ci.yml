@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  code-quality: write
 
 jobs:
   lint-and-test:
@@ -45,4 +46,6 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres-ci-only
           PGDATABASE: ledger
-      - run: uv run pytest --cov
+
+      - name: Run tests with coverage
+        run: uv run pytest --cov --cov-report=xml:coverage.xml --cov-report=markdown-append:$GITHUB_STEP_SUMMARY
