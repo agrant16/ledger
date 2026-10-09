@@ -137,12 +137,45 @@ def test_name_must_be_1_to_100_characters(
 
 @pytest.mark.parametrize(
     "name",
-    [" alice", "alice ", "\talice", "alice\t", "\nalice", "alice\n", " "],
+    [
+        " alice",
+        "alice ",
+        "\talice",
+        "alice\t",
+        "\nalice",
+        "alice\n",
+        "\x0balice",
+        "alice\x0b",
+        "\x0calice",
+        "alice\x0c",
+        "\ralice",
+        "alice\r",
+        " ",
+    ],
     ids=repr,
 )
 def test_name_must_not_have_leading_or_trailing_whitespace(
     clean_db: None, app_conn: psycopg.Connection, name: str
 ) -> None:
-    """Rejected, not stripped, so what was sent is exactly what is stored."""
+    """Rejected, not stripped, so what was sent is exactly what is stored.
+
+    Whitespace means the six ASCII whitespace characters: space, tab, newline, vertical tab,
+    form feed and carriage return.
+    """
     with pytest.raises(psycopg.errors.CheckViolation):
         app_conn.execute(INSERT, (name, "USD", False))
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["alice ", " alice", "alice ", "　alice"],
+    ids=["trailing NBSP", "leading NBSP", "trailing em space", "leading ideographic space"],
+)
+def test_unicode_whitespace_is_not_treated_as_whitespace(
+    clean_db: None, app_conn: psycopg.Connection, name: str
+) -> None:
+    """Pins the decided rule: only ASCII whitespace is rejected at the ends of a name.
+
+    Names are compared exactly, so a name with a Unicode space is simply a different name.
+    """
+    app_conn.execute(INSERT, (name, "USD", False))
