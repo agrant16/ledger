@@ -95,3 +95,54 @@ def test_accounts_are_immutable_to_the_app_role(
     app_conn.commit()
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
         app_conn.execute(statement)
+
+
+# The API validates these too (docs/design.md, Account request); the database repeats the rules
+# so no writer can bypass them.
+@pytest.mark.parametrize("currency", ["USD", "EUR", "JPY"])
+def test_valid_currency_is_accepted(
+    clean_db: None, app_conn: psycopg.Connection, currency: str
+) -> None:
+    app_conn.execute(INSERT, ("customer:alice", currency, False))
+
+
+@pytest.mark.parametrize(
+    "currency",
+    ["usd", "Usd", "US", "USDX", "U5D", "US$", "U D", "", " USD", "USD\n"],
+    ids=repr,
+)
+def test_currency_must_be_three_uppercase_letters(
+    clean_db: None, app_conn: psycopg.Connection, currency: str
+) -> None:
+    with pytest.raises(psycopg.errors.CheckViolation):
+        app_conn.execute(INSERT, ("customer:alice", currency, False))
+
+
+@pytest.mark.parametrize("name", ["a", "customer:alice", "x" * 100, "with inner space"])
+def test_valid_name_is_accepted(clean_db: None, app_conn: psycopg.Connection, name: str) -> None:
+    app_conn.execute(INSERT, (name, "USD", False))
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["", "x" * 101],
+    ids=["empty", "101 characters"],
+)
+def test_name_must_be_1_to_100_characters(
+    clean_db: None, app_conn: psycopg.Connection, name: str
+) -> None:
+    with pytest.raises(psycopg.errors.CheckViolation):
+        app_conn.execute(INSERT, (name, "USD", False))
+
+
+@pytest.mark.parametrize(
+    "name",
+    [" alice", "alice ", "\talice", "alice\t", "\nalice", "alice\n", " "],
+    ids=repr,
+)
+def test_name_must_not_have_leading_or_trailing_whitespace(
+    clean_db: None, app_conn: psycopg.Connection, name: str
+) -> None:
+    """Rejected, not stripped, so what was sent is exactly what is stored."""
+    with pytest.raises(psycopg.errors.CheckViolation):
+        app_conn.execute(INSERT, (name, "USD", False))
