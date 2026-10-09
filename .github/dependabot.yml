@@ -1,0 +1,36 @@
+version: 2
+
+# Weekly update PRs. They go through the same merge gate as any other change.
+updates:
+  # Keeps the SHA-pinned actions in the workflows current. One grouped PR per week.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Python dependencies and uv.lock. Deliberately ungrouped so a breaking update is isolated.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Dockerfile base images. The stack is fixed at Python 3.13, so only ignore newer minors/majors.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: python
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+
+  # compose.yaml images. The stack is fixed at PostgreSQL 18, so ignore new majors.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
