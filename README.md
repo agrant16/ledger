@@ -2,7 +2,7 @@
 
 A small double-entry ledger service that keeps money correct under retries, concurrency, and failures. It records money movements between accounts and guarantees they balance; it does not move real money.
 
-> **Status:** early development (Milestone 1 of 7: Foundation). Most of what's described below is planned, not yet built. See [docs/design.md](docs/design.md) for the full scope, API contract, and milestone plan.
+> **Status:** early development. Milestone 1 (foundation: schema for accounts, transactions and entries, role setup, CI) is complete and milestone 2 (the double-entry core) is next. Most of what's described below is still planned. See [docs/design.md](docs/design.md) for the full scope, API contract, and milestone plan.
 
 ## What it does
 
