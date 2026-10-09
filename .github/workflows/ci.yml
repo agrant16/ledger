@@ -30,8 +30,8 @@ jobs:
       DATABASE_OWNER_URL: postgresql://ledger_owner:owner-ci-only@localhost:5432/ledger
       DATABASE_APP_URL: postgresql://ledger_app:app-ci-only@localhost:5432/ledger
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
       - run: uv sync --frozen
       - run: uv run ruff check .
       - run: uv run ruff format --check .
@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build and start the stack
         run: docker compose up --build --wait
