@@ -24,6 +24,7 @@ UPDATE_BALANCE_SQL = """UPDATE
                             WHERE account_id = %s;
                      """
 
+
 @dataclass(frozen=True)
 class Entry:
     account_id: int
