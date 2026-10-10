@@ -81,7 +81,7 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
     if any(total != 0 for total in totals.values()):
         raise UnbalancedEntriesError(f"Entries for transaction {transaction_id} are not balanced")
 
-    deltas = defaultdict(int)
+    deltas: dict[int, int] = defaultdict(int)
     for entry in entries:
         deltas[entry.account_id] += entry.amount_minor
 
