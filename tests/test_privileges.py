@@ -18,6 +18,9 @@ EXPECTED_APP_PRIVILEGES: dict[str, set[str]] = {
     "transactions": {"SELECT", "INSERT"},
     # Append-only: the app role can never UPDATE, DELETE or TRUNCATE ledger entries.
     "entries": {"SELECT", "INSERT"},
+    # A cache of the entries: rows are created with the account and updated with every posting,
+    # but never deleted or truncated.
+    "balances": {"SELECT", "INSERT", "UPDATE"},
 }
 
 # Every non-owner entry in the table's ACL, including the PUBLIC pseudo-role.

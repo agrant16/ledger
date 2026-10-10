@@ -5,6 +5,7 @@ Two roles, as in production:
 - app_pool / app_conn: the role the service connects as. Everything under test uses these.
 """
 
+import uuid
 from collections.abc import Iterator
 
 import psycopg
@@ -48,6 +49,17 @@ def migrated_database(settings: Settings) -> None:
 def owner_conn(settings: Settings) -> Iterator[psycopg.Connection]:
     with psycopg.connect(settings.owner_url, autocommit=True) as conn:
         yield conn
+
+
+@pytest.fixture
+def scratch_url(settings: Settings, owner_conn: psycopg.Connection) -> Iterator[str]:
+    """Owner-role URL whose search_path is a throwaway schema, so the runner's bookkeeping
+    and the test migrations never touch the real tables."""
+    schema = f"mig_test_{uuid.uuid4().hex[:8]}"
+    owner_conn.execute(f"CREATE SCHEMA {schema}")
+    sep = "&" if "?" in settings.owner_url else "?"
+    yield f"{settings.owner_url}{sep}options=-csearch_path%3D{schema}"
+    owner_conn.execute(f"DROP SCHEMA {schema} CASCADE")
 
 
 @pytest.fixture
