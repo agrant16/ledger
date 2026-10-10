@@ -536,7 +536,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
-    { name = "sqlfluff", specifier = ">=4.4.0" },
+    { name = "sqlfluff" },
 ]
 
 [[package]]
