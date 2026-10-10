@@ -1,3 +1,5 @@
+import psycopg
+from ledger.errors import LedgerInvariantError
 from psycopg_pool import ConnectionPool
 
 from ledger.config import Settings
@@ -17,3 +19,11 @@ def create_pool(settings: Settings) -> ConnectionPool:
         timeout=settings.pool_timeout_seconds,
         open=False,
     )
+
+"""Caller makes commit so disallow autocommit in service methods.
+"""
+def require_transaction(conn: psycopg.Connection, method_name: str):
+    if conn.autocommit:
+        raise LedgerInvariantError(
+            f"{method_name} needs a connection with a transaction in progress")
+
