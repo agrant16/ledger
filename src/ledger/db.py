@@ -21,7 +21,7 @@ def create_pool(settings: Settings) -> ConnectionPool:
     )
 
 
-def require_transaction(conn: psycopg.Connection, method_name: str):
+def require_transaction(conn: psycopg.Connection, method_name: str) -> None:
     """Caller makes commit so disallow autocommit in service methods."""
     if conn.autocommit:
         raise LedgerInvariantError(
