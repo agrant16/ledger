@@ -1,8 +1,8 @@
 import psycopg
-from ledger.errors import LedgerInvariantError
 from psycopg_pool import ConnectionPool
 
 from ledger.config import Settings
+from ledger.errors import LedgerInvariantError
 
 
 def create_pool(settings: Settings) -> ConnectionPool:
