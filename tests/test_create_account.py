@@ -36,7 +36,7 @@ def failing_balances_insert(owner_conn: psycopg.Connection):
 
 
 def count_accounts(conn: psycopg.Connection, name: str) -> int:
-    row = conn.execute("SELECT count(*) FROM accounts WHERE name = %s", (name,)).fetchone()
+    row = conn.execute("SELECT count(*) FROM accounts WHERE account_name = %s", (name,)).fetchone()
     assert row is not None
     return row[0]
 
@@ -44,7 +44,7 @@ def count_accounts(conn: psycopg.Connection, name: str) -> int:
 def test_returns_the_new_account(clean_db: None, app_conn: psycopg.Connection) -> None:
     account = create_account(app_conn, "customer:alice", "USD", False)
     assert account.id >= 1
-    assert (account.name, account.currency, account.allow_negative) == (
+    assert (account.account_name, account.currency, account.allow_negative) == (
         "customer:alice",
         "USD",
         False,
@@ -54,7 +54,8 @@ def test_returns_the_new_account(clean_db: None, app_conn: psycopg.Connection) -
 def test_writes_the_accounts_row(clean_db: None, app_conn: psycopg.Connection) -> None:
     account = create_account(app_conn, "customer:alice", "EUR", False)
     row = app_conn.execute(
-        "SELECT name, currency, allow_negative FROM accounts WHERE id = %s", (account.id,)
+        "SELECT account_name, currency, allow_negative FROM accounts WHERE id = %s",
+        (account.id,),
     ).fetchone()
     assert row == ("customer:alice", "EUR", False)
 
@@ -77,8 +78,16 @@ def test_the_funding_account_fixture_makes_an_allow_negative_account(
 ) -> None:
     usd = make_funding_account("USD")
     eur = make_funding_account("EUR")
-    assert (usd.name, usd.currency, usd.allow_negative) == ("funding:USD", "USD", True)
-    assert (eur.name, eur.currency, eur.allow_negative) == ("funding:EUR", "EUR", True)
+    assert (usd.account_name, usd.currency, usd.allow_negative) == (
+        "funding:USD",
+        "USD",
+        True,
+    )
+    assert (eur.account_name, eur.currency, eur.allow_negative) == (
+        "funding:EUR",
+        "EUR",
+        True,
+    )
     assert usd.id != eur.id
     rows = app_conn.execute(
         "SELECT account_id, allow_negative, balance_minor FROM balances ORDER BY account_id"

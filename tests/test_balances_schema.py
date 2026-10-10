@@ -28,7 +28,8 @@ def insert_account(
     allow_negative: bool = False,
 ) -> int:
     row = conn.execute(
-        "INSERT INTO accounts (account_name, currency, allow_negative) VALUES (%s, %s, %s) RETURNING id",
+        "INSERT INTO accounts (account_name, currency, allow_negative)"
+        " VALUES (%s, %s, %s) RETURNING id",
         (name, currency, allow_negative),
     ).fetchone()
     assert row is not None
@@ -196,7 +197,11 @@ def migration_before_balances(
 
 def seed(scratch_url: str, accounts: list[tuple[str, bool]], postings: list[list[tuple[int, int]]]):
     """Insert USD accounts (ids 1, 2, ... in order) and one transaction per posting, where each
-    posting is a list of (account_id, amount_minor) entries that sum to zero."""
+    posting is a list of (account_id, amount_minor) entries that sum to zero.
+
+    The scratch schema only has migrations 001 to 003 here, before migration 005 renamed the
+    column, so this insert deliberately still says "name".
+    """
     with psycopg.connect(scratch_url, autocommit=True) as conn:
         for name, allow_negative in accounts:
             conn.execute(
