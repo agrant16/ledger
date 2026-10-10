@@ -26,7 +26,8 @@ class LedgerInvariantError(Exception):
     currency (UnbalancedEntriesError).
     """
 
-    pass
+    def __init__(self, message: str):
+        super().__init__(message)
 
 
 class DuplicateAccountNameError(LedgerError):

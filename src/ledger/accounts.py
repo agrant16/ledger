@@ -1,8 +1,9 @@
-import psycopg
-
 from dataclasses import dataclass
-from ledger.errors import LedgerInvariantError, DuplicateAccountNameError
+
+import psycopg
 from psycopg import errors
+
+from ledger.errors import DuplicateAccountNameError, LedgerInvariantError
 
 insert_accounts_sql = """ 
                       INSERT INTO 
@@ -20,7 +21,7 @@ insert_balances_sql = """
 
 @dataclass(frozen=True)
 class Account:
-    id: int
+    account_id: int
     name: str
     currency: str
     allow_negative: bool
@@ -28,19 +29,17 @@ class Account:
 
 def create_account(
     conn: psycopg.Connection, name: str, currency: str, allow_negative: bool
-) -> Account | None:
+) -> Account:
     if conn.autocommit:
-        raise LedgerInvariantError()
+        raise LedgerInvariantError("create_account needs a connection with a transaction in progress")
 
     with conn.cursor() as cursor:
         try:
             cursor.execute(insert_accounts_sql, (name, currency, allow_negative))
             record = cursor.fetchone()
-            account_id, name, currency, allow_negative = record
-            cursor.execute(insert_balances_sql, (account_id, allow_negative))
-            return Account(
-                id=account_id, name=name, currency=currency, allow_negative=allow_negative
-            )
+            account = Account(**record)
+            cursor.execute(insert_balances_sql, (account.account_id, account.allow_negative))
+            return account
         except errors.UniqueViolation as e:
             constraint = e.diag.constraint_name
             if constraint == 'account_name_key':
