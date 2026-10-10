@@ -174,7 +174,6 @@ def test_balances_cannot_be_deleted_by_the_app_role(
     """Every account must keep its row, because every transfer locks it. Rows are never removed."""
     account = insert_account(app_conn)
     app_conn.execute(INSERT_BALANCE, (account, False, 0))
-    app_conn.commit()
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
         app_conn.execute(statement)
 
