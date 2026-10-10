@@ -1,4 +1,4 @@
-from dataclasses import dataclass, astuple
+from dataclasses import astuple, dataclass
 
 import psycopg
 
@@ -16,6 +16,7 @@ INSERT_ENTRY_SQL = """
                        entries (transaction_id, account_id, amount_minor, currency) 
                        VALUES (%s, %s, %s, %s);
                    """
+
 
 @dataclass(frozen=True)
 class Entry:
@@ -46,12 +47,8 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
 
 def _insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
     with conn.cursor() as cursor:
-        params = [
-            (transaction_id, *astuple(entry))
-            for entry in entries
-        ]
+        params = [(transaction_id, *astuple(entry)) for entry in entries]
         cursor.executemany(INSERT_ENTRY_SQL, params)
-
 
 
 def _apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> None:
