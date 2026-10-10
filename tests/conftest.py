@@ -12,6 +12,7 @@ import psycopg
 import pytest
 from psycopg_pool import ConnectionPool
 
+from ledger.accounts import create_account
 from ledger.config import Settings, load_settings
 from ledger.migrate import run_migrations
 
@@ -88,3 +89,17 @@ def app_conn(app_pool: ConnectionPool) -> Iterator[psycopg.Connection]:
             yield conn
         finally:
             conn.rollback()
+
+
+@pytest.fixture
+def make_funding_account(app_conn: psycopg.Connection):
+    """Create the allow_negative account that issues money in a currency, through create_account.
+
+    There is no deposit endpoint: money enters through transfers out of one funding account per
+    currency, which goes negative by exactly what it has issued.
+    """
+
+    def make(currency: str = "USD"):
+        return create_account(app_conn, f"funding:{currency}", currency, True)
+
+    return make
