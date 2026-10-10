@@ -54,5 +54,5 @@ class LockedAccount:
     balance_minor: int
 
 
-def _lock_accounts(conn: psycopg.Connection, account_ids: list[int]):
+def _lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int, LockedAccount]:
     pass
