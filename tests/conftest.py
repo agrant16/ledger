@@ -6,7 +6,7 @@ Two roles, as in production:
 """
 
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 
 import psycopg
 import pytest
@@ -103,3 +103,19 @@ def make_funding_account(app_conn: psycopg.Connection):
         return create_account(app_conn, f"funding:{currency}", currency, True)
 
     return make
+
+
+@pytest.fixture
+def commit_setup(
+    app_conn: psycopg.Connection, owner_conn: psycopg.Connection
+) -> Iterator[Callable[[], None]]:
+    """Return a function that commits what the test has written so far, so another connection can
+    see it (a second connection cannot see uncommitted accounts).
+
+    Use it only for accounts and balances rows. Transactions and entries are checked at commit by
+    triggers, so tests must not commit those. Everything is truncated again afterwards, after
+    releasing whatever locks the test still holds, or the truncate would wait for them.
+    """
+    yield app_conn.commit
+    app_conn.rollback()
+    reset_database(owner_conn)
