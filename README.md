@@ -16,7 +16,7 @@ Out of scope: user login, any UI, real payment networks, currency conversion, an
 
 ## Stack
 
-Python 3.13, FastAPI (synchronous handlers), PostgreSQL 18 accessed with raw SQL (no ORM) through `psycopg` and `psycopg_pool`, plain numbered SQL migration files, `uv` for dependencies, `ruff` for linting, pytest with Hypothesis, Locust for load tests, Docker Compose, GitHub Actions.
+Python 3.13, FastAPI (synchronous handlers), PostgreSQL 18 accessed with raw SQL (no ORM) through `psycopg` and `psycopg_pool`, plain numbered SQL migration files, `uv` for dependencies, `ruff` for Python linting, SQLFluff for the SQL migrations, pytest with Hypothesis, Locust for load tests, Docker Compose, GitHub Actions.
 
 Amounts are stored as integers in minor units (for example, cents) with a currency code, never as floats.
 
@@ -39,6 +39,7 @@ docker compose up -d --wait db
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
+uv run sqlfluff lint migrations/
 ```
 
 CI runs `uv run pytest --cov`, which also measures branch coverage and fails below the floor set in `pyproject.toml`; run the same command locally to see which lines are missed.
@@ -49,7 +50,7 @@ The defaults point at the Compose database on `127.0.0.1:5432`. Set `DATABASE_OW
 
 | Endpoint | Purpose | Planned in |
 | --- | --- | --- |
-| `POST /accounts` | Create an account (`name` and `currency`; names are unique) | Milestone 3 |
+| `POST /accounts` | Create an account (`account_name` and `currency`; names are unique) | Milestone 3 |
 | `GET /accounts/{id}/balance` | Cached balance; reflects committed transfers and never shows part of one | Milestone 3 |
 | `POST /transfers` | Move money between two accounts (requires `Idempotency-Key`) | Milestone 3 |
 | `GET /transfers/{id}` | Fetch one transfer with its entries | Milestone 3 |

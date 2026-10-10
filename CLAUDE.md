@@ -10,11 +10,12 @@ The project scope, architecture, data model, API design, milestones, and testing
 
 The stack below is decided and pre-approved. Don't substitute alternatives.
 
-- Python 3.13, FastAPI with synchronous handlers, PostgreSQL 18, raw SQL via psycopg (no ORM), `psycopg_pool`, `uv` with `pyproject.toml`, `ruff`, pytest with Hypothesis, Locust, Docker Compose, GitHub Actions.
+- Python 3.13, FastAPI with synchronous handlers, PostgreSQL 18, raw SQL via psycopg (no ORM), `psycopg_pool`, `uv` with `pyproject.toml`, `ruff`, SQLFluff, pytest with Hypothesis, Locust, Docker Compose, GitHub Actions.
 - Amounts are integers in minor units (cents) plus a currency code. Never floats.
 - Every write is one database transaction. A request uses one connection for its whole transaction and never takes a second one while holding the first.
 - Lock `balances` rows with `SELECT ... FOR UPDATE` in ascending account id, at READ COMMITTED. Check overdraft against the balance returned by that same locking statement.
-- Migrations are numbered plain SQL files applied by a small runner (no Alembic), run as the owner role. The service connects as the app role, which owns no tables and has explicit per-table grants written in the migration that creates each table. Never connect as the superuser or owner, and never use `ALTER DEFAULT PRIVILEGES`.
+- Migrations are numbered plain SQL files applied by a small runner (no Alembic), run as the owner role. The service connects as the app role, which owns no tables and has explicit per-table grants written in the migration that creates each table. Never connect as the superuser or owner, and never use `ALTER DEFAULT PRIVILEGES`. Once a migration is merged, never edit it except for formatting and comments; a schema change is a new migration.
+- SQL is linted with SQLFluff (PostgreSQL dialect). Do not use SQL keywords as identifiers: the account name column is `account_name`, not `name`.
 - Ids are `bigint GENERATED ALWAYS AS IDENTITY`.
 - Validation errors return 400, not FastAPI's default 422. 422 means insufficient funds.
 - Tests run against a real Postgres, not mocks.
@@ -76,5 +77,6 @@ These were verified in milestone 1.
 - Run tests: `uv run pytest` (CI runs `uv run pytest --cov`, which also enforces the coverage floor)
 - Run linter: `uv run ruff check .`
 - Run formatter: `uv run ruff format .`
+- Lint the SQL migrations: `uv run sqlfluff lint migrations/` (CI runs it; `uv run sqlfluff fix migrations/` applies the safe fixes)
 - Run the service locally: `docker compose up --build` (a one-shot `migrate` service applies migrations first)
 - Apply migrations by hand: `PYTHONPATH=src uv run python -m ledger.migrate`

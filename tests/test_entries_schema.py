@@ -16,7 +16,8 @@ def insert_account(
     conn: psycopg.Connection, name: str = "customer:alice", currency: str = "USD"
 ) -> int:
     row = conn.execute(
-        "INSERT INTO accounts (name, currency, allow_negative) VALUES (%s, %s, false) RETURNING id",
+        "INSERT INTO accounts (account_name, currency, allow_negative)"
+        " VALUES (%s, %s, false) RETURNING id",
         (name, currency),
     ).fetchone()
     assert row is not None

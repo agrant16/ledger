@@ -20,6 +20,7 @@ dev = [
     # Required by FastAPI's TestClient.
     "httpx2",
     "pytest-cov",
+    "sqlfluff",
 ]
 
 [tool.uv]
@@ -47,3 +48,8 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
+
+[tool.sqlfluff.core]
+dialect = "postgres"
+templater = "raw"
+sql_file_exts = ".sql"
