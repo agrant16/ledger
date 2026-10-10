@@ -85,4 +85,3 @@ class ServiceBusyError(LedgerError):
 class UnbalancedEntriesError(LedgerInvariantError):
     def __init__(self, message):
         super().__init__(message)
-

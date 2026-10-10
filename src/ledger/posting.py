@@ -4,8 +4,13 @@ from dataclasses import dataclass
 import psycopg
 
 from ledger.db import require_transaction
-from ledger.errors import LedgerInvariantError, UnbalancedEntriesError, UnknownAccountError, CurrencyMismatchError, \
-    InsufficientFundsError
+from ledger.errors import (
+    CurrencyMismatchError,
+    InsufficientFundsError,
+    LedgerInvariantError,
+    UnbalancedEntriesError,
+    UnknownAccountError,
+)
 
 INSERT_TRANSACTION_SQL = """
                          INSERT INTO 
@@ -83,12 +88,16 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
     # lock accounts in entries and check for unknown accounts
     locked_accounts = _lock_accounts(conn, list(deltas.keys()))
     if len(locked_accounts) != len(deltas.keys()):
-        raise UnknownAccountError(f"Entries for transaction {transaction_id} include an unknown Account")
+        raise UnknownAccountError(
+            f"Entries for transaction {transaction_id} include an unknown Account"
+        )
 
     # check that accounts in entries have matching currencies with the accounts table.
     for entry in entries:
         if locked_accounts[entry.account_id].currency != entry.currency:
-            raise CurrencyMismatchError(f"Currency mismatch for account {account_id} on transaction {transaction_id}")
+            raise CurrencyMismatchError(
+                f"Currency mismatch for account {entry.account_id} on transaction {transaction_id}"
+            )
 
     # check that account has enough balance to cover transactions
     for account_id, delta in deltas.items():
@@ -98,8 +107,6 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
 
     _insert_entries(conn, transaction_id, entries)
     _apply_balance_deltas(conn, deltas)
-
-
 
 
 def _insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
