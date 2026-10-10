@@ -10,6 +10,7 @@ class LedgerError(Exception):
     Bugs are not LedgerErrors. See LedgerInvariantError, which returns a 500
     and is logged.
     """
+
     pass
 
 
@@ -24,6 +25,7 @@ class LedgerInvariantError(Exception):
     Example: the entries passed to post_transaction do not sum to zero per
     currency (UnbalancedEntriesError).
     """
+
     pass
 
 
