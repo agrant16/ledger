@@ -7,6 +7,7 @@ class LedgerInvariantError(Exception):
 class DuplicateAccountNameError(LedgerError):
     def __init__(self, name: str):
         self.name = name
+        super().__init__(f"Account with '{self.name}' already exists")
 
 class InvalidRequestError(LedgerError):
     pass
@@ -35,6 +36,6 @@ class ReversalOfReversalError(LedgerError):
 class ServiceBusyError(LedgerError):
     pass
 
-class UnbalancedEntriesError(LedgerError):
+class UnbalancedEntriesError(LedgerInvariantError):
     pass
 
