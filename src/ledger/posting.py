@@ -63,7 +63,7 @@ def _insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list
 def _apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> None:
     with conn.cursor() as cursor:
         for account_id, delta in deltas.items():
-            cursor.execute(UPDATE_BALANCE_SQL, (account_id, delta))
+            cursor.execute(UPDATE_BALANCE_SQL, (delta, account_id))
             if cursor.rowcount != 1:
                 raise LedgerInvariantError(f"No balances row exists for account {account_id}")
 
