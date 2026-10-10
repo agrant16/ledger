@@ -8,7 +8,7 @@ from ledger.errors import DuplicateAccountNameError, LedgerInvariantError
 insert_accounts_sql = """ 
                       INSERT INTO 
                           accounts (name, currency, allow_negative) 
-                          VALUES(%s, %s, %s, %s) 
+                          VALUES(%s, %s, %s) 
                           RETURNING id, name, currency, allow_negative;
                       """
 
