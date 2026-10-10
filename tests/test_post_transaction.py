@@ -229,6 +229,21 @@ def test_an_unknown_account_is_rejected(clean_db: None, app_conn: psycopg.Connec
     assert_nothing_written(app_conn, before)
 
 
+def test_the_unknown_account_error_names_every_missing_account(
+    clean_db: None, app_conn: psycopg.Connection, api
+) -> None:
+    funding = make(app_conn, "funding:usd", allow_negative=True)
+    entries = [
+        api.Entry(funding.id, -300, "USD"),
+        api.Entry(999_998, 100, "USD"),
+        api.Entry(999_999, 200, "USD"),
+    ]
+    with pytest.raises(UnknownAccountError) as failure:
+        post(api, app_conn, entries)
+    assert "999998" in str(failure.value)
+    assert "999999" in str(failure.value)
+
+
 def test_an_entry_in_the_wrong_currency_for_its_account_is_rejected(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
@@ -255,6 +270,26 @@ def test_insufficient_funds_reports_the_account_balance_and_amount(
     assert failure.value.account_id == alice.id
     assert failure.value.balance_minor == 0
     assert failure.value.amount_minor == -1
+    assert_nothing_written(app_conn, before)
+
+
+def test_when_several_accounts_overdraw_the_lowest_account_id_is_reported(
+    clean_db: None, app_conn: psycopg.Connection, api
+) -> None:
+    """Which account the error names must not depend on the order of the entries."""
+    alice = make(app_conn, "customer:alice")
+    bob = make(app_conn, "customer:bob")
+    carol = make(app_conn, "customer:carol")
+    assert alice.id < bob.id < carol.id
+    entries = [
+        api.Entry(bob.id, -50, "USD"),  # bob comes first in the entries, but alice has the lower id
+        api.Entry(alice.id, -50, "USD"),
+        api.Entry(carol.id, 100, "USD"),
+    ]
+    before = snapshot(app_conn)
+    with pytest.raises(InsufficientFundsError) as failure:
+        post(api, app_conn, entries)
+    assert failure.value.account_id == alice.id
     assert_nothing_written(app_conn, before)
 
 
