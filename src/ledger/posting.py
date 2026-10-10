@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import psycopg
 
 from ledger.db import require_transaction
+from ledger.errors import LedgerInvariantError
 
 INSERT_TRANSACTION_SQL = """
                          INSERT INTO 
@@ -17,6 +18,11 @@ INSERT_ENTRY_SQL = """
                        VALUES (%s, %s, %s, %s);
                    """
 
+UPDATE_BALANCE_SQL = """UPDATE 
+                            balances 
+                            SET balance_minor = balance_minor + %s 
+                            WHERE account_id = %s;
+                     """
 
 @dataclass(frozen=True)
 class Entry:
@@ -55,7 +61,11 @@ def _insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list
 
 
 def _apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> None:
-    pass
+    with conn.cursor() as cursor:
+        for account_id, delta in deltas.items():
+            cursor.execute(UPDATE_BALANCE_SQL, (account_id, delta))
+            if cursor.rowcount != 1:
+                raise LedgerInvariantError(f"No balances row exists for account {account_id}")
 
 
 @dataclass(frozen=True)
