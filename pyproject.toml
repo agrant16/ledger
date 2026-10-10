@@ -20,7 +20,7 @@ dev = [
     # Required by FastAPI's TestClient.
     "httpx2",
     "pytest-cov",
-    "sqlfluff>=4.4.0",
+    "sqlfluff",
 ]
 
 [tool.uv]
