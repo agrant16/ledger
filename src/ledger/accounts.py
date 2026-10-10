@@ -34,12 +34,15 @@ def create_account(
 
     with conn.cursor() as cursor:
         try:
-            cursor.execute(insert_accounts_sql, (id, name, currency, allow_negative))
+            cursor.execute(insert_accounts_sql, (name, currency, allow_negative))
             record = cursor.fetchone()
             account_id, name, currency, allow_negative = record
-            cursor.execute(insert_balances_sql, (id, allow_negative))
+            cursor.execute(insert_balances_sql, (account_id, allow_negative))
             return Account(
                 id=account_id, name=name, currency=currency, allow_negative=allow_negative
             )
         except errors.UniqueViolation as e:
-            raise DuplicateAccountNameError(name)
+            constraint = e.diag.constraint_name
+            if constraint == 'account_name_key':
+                raise DuplicateAccountNameError(name) from e
+            raise e
