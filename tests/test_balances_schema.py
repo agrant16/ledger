@@ -357,3 +357,30 @@ def test_backfill_caps_the_listed_accounts_but_still_reports_the_total(
     listed = {n for n in numbers if clean < n <= clean + offenders}
     assert listed == set(range(clean + 1, clean + 21)), "the first 20 offenders, in id order"
     assert offenders in numbers, "the total number of offenders should be stated"
+
+
+def test_backfill_failure_shows_each_offenders_projected_balance(
+    settings: Settings, scratch_url: str, tmp_path: Path
+) -> None:
+    """The operator needs to know by how much each account would be overdrawn, not just which
+    accounts. Each offender's id must be followed by its own balance; the punctuation is free."""
+    name, path = migration_before_balances(settings, scratch_url, tmp_path)
+    seed(
+        scratch_url,
+        accounts=[
+            ("customer:alice", False),  # id 1: ends at +5000, fine
+            ("customer:bob", False),  # id 2: ends at -700
+            ("customer:carol", False),  # id 3: ends at -1250
+            ("funding:usd", True),  # id 4
+        ],
+        postings=[[(4, -5000), (1, 5000)], [(2, -700), (4, 700)], [(3, -1250), (4, 1250)]],
+    )
+
+    with pytest.raises(psycopg.errors.RaiseException) as failure:
+        apply_balances_migration(scratch_url, tmp_path, name, path)
+
+    message = failure.value.diag.message_primary or ""
+    for account_id, balance in [(2, "-700"), (3, "-1250")]:
+        pattern = f"(?<![0-9]){account_id}[^0-9-]*{balance}(?![0-9])"
+        assert re.search(pattern, message), f"account {account_id} should be shown with {balance}"
+    assert "5000" not in message, "a healthy account's balance must not appear"

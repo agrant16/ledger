@@ -74,6 +74,23 @@ def test_concurrent_runners_apply_each_migration_exactly_once(
         assert conn.execute("SELECT count(*) FROM t").fetchone() == (1,)
 
 
+def test_dollar_quoted_blocks_are_not_split_at_their_semicolons(
+    scratch_url: str, tmp_path: Path
+) -> None:
+    """A DO block holds several statements and a '%' in a RAISE message, and sits in the same file
+    as a CREATE TABLE. The runner sends the whole file as one string and Postgres does the parsing,
+    so the block must run as one statement and the table must still be created after it."""
+    write(
+        tmp_path,
+        "001_block_then_table.sql",
+        "DO $$ BEGIN PERFORM 1; PERFORM 2; RAISE NOTICE 'value %', 42; END $$;\n"
+        "CREATE TABLE t (x int);",
+    )
+    assert run_migrations(scratch_url, tmp_path) == ["001_block_then_table.sql"]
+    with psycopg.connect(scratch_url) as conn:
+        assert conn.execute("SELECT to_regclass('t') IS NOT NULL").fetchone() == (True,)
+
+
 def test_missing_directory_means_no_migrations(tmp_path: Path) -> None:
     assert find_migrations(tmp_path / "nope") == []
 
