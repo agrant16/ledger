@@ -212,7 +212,7 @@ def test_the_name_constraints_follow_the_column_name(owner_conn: psycopg.Connect
     assert {
         "accounts_account_name_key",
         "accounts_account_name_length",
-        "accounts_account_name_whitespace",
+        "accounts_account_name_whitespace"
     } <= names
     assert not {n for n in names if n.startswith("accounts_name_")}
 

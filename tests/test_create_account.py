@@ -103,7 +103,7 @@ def test_a_duplicate_name_raises_duplicate_account_name_error(
     with pytest.raises(DuplicateAccountNameError) as failure:
         with app_conn.transaction():  # a savepoint, so the first account survives the failure
             create_account(app_conn, "customer:alice", "EUR", False)
-    assert failure.value.name == "customer:alice"
+    assert failure.value.account_name == "customer:alice"
 
 
 def test_a_failed_duplicate_leaves_nothing_behind(
