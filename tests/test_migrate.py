@@ -1,25 +1,11 @@
 import threading
-import uuid
-from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import psycopg
 import pytest
 
-from ledger.config import Settings
 from ledger.migrate import find_migrations, run_migrations
-
-
-@pytest.fixture
-def scratch_url(settings: Settings, owner_conn: psycopg.Connection) -> Iterator[str]:
-    """Owner-role URL whose search_path is a throwaway schema, so the runner's bookkeeping
-    and the test migrations never touch the real tables."""
-    schema = f"mig_test_{uuid.uuid4().hex[:8]}"
-    owner_conn.execute(f"CREATE SCHEMA {schema}")
-    sep = "&" if "?" in settings.owner_url else "?"
-    yield f"{settings.owner_url}{sep}options=-csearch_path%3D{schema}"
-    owner_conn.execute(f"DROP SCHEMA {schema} CASCADE")
 
 
 def write(directory: Path, name: str, sql: str) -> None:
