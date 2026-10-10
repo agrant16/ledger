@@ -25,6 +25,19 @@ UPDATE_BALANCE_SQL = """UPDATE
                      """
 
 
+LOCK_ACCOUNTS_SQL = """
+                    SELECT 
+                        b.account_id, 
+                        a.currency, 
+                        b.allow_negative, 
+                        b.balance_minor 
+                    FROM balances b
+                    JOIN accounts a 
+                    ON a.id = b.account_id
+                    WHERE b.account_id = ANY(%s::bigint[])
+                    ORDER BY b.account_id ASC
+                    FOR UPDATE OF b;"""
+
 @dataclass(frozen=True)
 class Entry:
     account_id: int
@@ -77,4 +90,7 @@ class LockedAccount:
 
 
 def _lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int, LockedAccount]:
-    pass
+    with conn.cursor() as cursor:
+        cursor.execute(LOCK_ACCOUNTS_SQL, account_ids)
+        rows = cursor.fetchall()
+        return {row[0]: LockedAccount(row[1], row[2], row[3]) for row in rows}
