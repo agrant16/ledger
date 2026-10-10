@@ -50,7 +50,7 @@ The defaults point at the Compose database on `127.0.0.1:5432`. Set `DATABASE_OW
 
 | Endpoint | Purpose | Planned in |
 | --- | --- | --- |
-| `POST /accounts` | Create an account (`name` and `currency`; names are unique) | Milestone 3 |
+| `POST /accounts` | Create an account (`account_name` and `currency`; names are unique) | Milestone 3 |
 | `GET /accounts/{id}/balance` | Cached balance; reflects committed transfers and never shows part of one | Milestone 3 |
 | `POST /transfers` | Move money between two accounts (requires `Idempotency-Key`) | Milestone 3 |
 | `GET /transfers/{id}` | Fetch one transfer with its entries | Milestone 3 |
