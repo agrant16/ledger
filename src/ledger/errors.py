@@ -53,7 +53,13 @@ class CurrencyMismatchError(LedgerError):
 
 
 class InsufficientFundsError(LedgerError):
-    pass
+    def __init(self, account_id, balance_minor, amount_minor):
+        self.account_id = account_id
+        self.balance_minor = balance_minor
+        self.amount_minor = amount_minor
+        super().__init__(
+            f"Insufficient funds: account {self.account_id}, balance {balance_minor}, {amount_minor}"
+        )
 
 
 class IdempotencyConflictError(LedgerError):
