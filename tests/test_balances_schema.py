@@ -5,6 +5,7 @@ a protected account (allow_negative false) can never hold a negative balance, an
 allow_negative can never disagree with its account's.
 """
 
+import re
 from pathlib import Path
 
 import psycopg
@@ -178,50 +179,125 @@ def test_balances_cannot_be_deleted_by_the_app_role(
         app_conn.execute(statement)
 
 
-def test_migration_backfills_a_row_for_every_existing_account(
+def migration_before_balances(
     settings: Settings, scratch_url: str, tmp_path: Path
-) -> None:
-    """The balances migration runs on a database that already has accounts and entries, so it must
-    build each row from the entries and copy the account's allow_negative.
-
-    Applies migrations 001 to 003, inserts data, then applies the balances migration (004).
-    """
+) -> tuple[str, Path]:
+    """Apply migrations 001 to 003 to the scratch schema, as they exist on a real database before
+    the balances migration runs. Returns the 004 file's name and path, not yet applied."""
     migrations = sorted(settings.migrations_dir.glob("*.sql"))
     before = [m for m in migrations if int(m.name.split("_", 1)[0]) < 4]
     balances = [m for m in migrations if int(m.name.split("_", 1)[0]) == 4]
     assert len(before) == 3, "expected migrations 001 to 003 to exist"
     assert len(balances) == 1, "the balances migration (004) does not exist yet"
-
     for m in before:
         (tmp_path / m.name).write_text(m.read_text(encoding="utf-8"), encoding="utf-8")
     run_migrations(scratch_url, tmp_path)
+    return balances[0].name, balances[0]
 
+
+def seed(scratch_url: str, accounts: list[tuple[str, bool]], postings: list[list[tuple[int, int]]]):
+    """Insert USD accounts (ids 1, 2, ... in order) and one transaction per posting, where each
+    posting is a list of (account_id, amount_minor) entries that sum to zero."""
     with psycopg.connect(scratch_url, autocommit=True) as conn:
-        conn.execute(
-            "INSERT INTO accounts (name, currency, allow_negative) VALUES"
-            " ('customer:alice', 'USD', false),"  # id 1: receives and spends
-            " ('customer:bob', 'USD', false),"  # id 2: has no entries
-            " ('funding:usd', 'USD', true)"  # id 3: issues the money
-        )
-        conn.execute(
-            "INSERT INTO transactions (idempotency_key, request_hash)"
-            " VALUES ('k1', 'h'), ('k2', 'h')"
-        )
-        conn.execute(
-            "INSERT INTO entries (transaction_id, account_id, amount_minor, currency) VALUES"
-            " (1, 3, -5000, 'USD'), (1, 1, 5000, 'USD'),"  # fund alice with 5000
-            " (2, 1, -1200, 'USD'), (2, 3, 1200, 'USD')"  # alice pays 1200 back
-        )
+        for name, allow_negative in accounts:
+            conn.execute(
+                "INSERT INTO accounts (name, currency, allow_negative) VALUES (%s, 'USD', %s)",
+                (name, allow_negative),
+            )
+        for n, entries in enumerate(postings, start=1):
+            assert sum(amount for _, amount in entries) == 0
+            conn.execute(
+                "INSERT INTO transactions (idempotency_key, request_hash) VALUES (%s, 'h')",
+                (f"k{n}",),
+            )
+            for account_id, amount in entries:
+                conn.execute(
+                    "INSERT INTO entries (transaction_id, account_id, amount_minor, currency)"
+                    " VALUES (%s, %s, %s, 'USD')",
+                    (n, account_id, amount),
+                )
 
-    (tmp_path / balances[0].name).write_text(balances[0].read_text(encoding="utf-8"), "utf-8")
-    assert run_migrations(scratch_url, tmp_path) == [balances[0].name]
 
+def apply_balances_migration(scratch_url: str, tmp_path: Path, name: str, path: Path) -> list[str]:
+    (tmp_path / name).write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    return run_migrations(scratch_url, tmp_path)
+
+
+def backfilled(scratch_url: str) -> list[tuple[int, bool, int]]:
     with psycopg.connect(scratch_url) as conn:
-        rows = conn.execute(
+        return conn.execute(
             "SELECT account_id, allow_negative, balance_minor FROM balances ORDER BY account_id"
         ).fetchall()
-    assert rows == [
-        (1, False, 3800),  # 5000 - 1200
-        (2, False, 0),  # no entries at all
-        (3, True, -3800),  # the funding account is negative by what it issued
-    ]
+
+
+def test_backfill_sums_each_accounts_entries_and_copies_allow_negative(
+    settings: Settings, scratch_url: str, tmp_path: Path
+) -> None:
+    """The migration runs on a database that already has accounts and entries."""
+    name, path = migration_before_balances(settings, scratch_url, tmp_path)
+    seed(
+        scratch_url,
+        accounts=[("customer:alice", False), ("funding:usd", True)],
+        postings=[[(2, -5000), (1, 5000)], [(1, -1200), (2, 1200)]],  # fund alice, alice pays back
+    )
+    assert apply_balances_migration(scratch_url, tmp_path, name, path) == [name]
+    assert backfilled(scratch_url) == [(1, False, 3800), (2, True, -3800)]
+
+
+def test_backfill_gives_an_account_without_entries_a_zero_balance(
+    settings: Settings, scratch_url: str, tmp_path: Path
+) -> None:
+    """Every account needs a row to lock, including one that has never been used, and one whose
+    entries net to exactly zero."""
+    name, path = migration_before_balances(settings, scratch_url, tmp_path)
+    seed(
+        scratch_url,
+        accounts=[("customer:unused", False), ("customer:netzero", False), ("funding:usd", True)],
+        postings=[[(3, -100), (2, 100)], [(2, -100), (3, 100)]],  # netzero: +100 then -100
+    )
+    apply_balances_migration(scratch_url, tmp_path, name, path)
+    assert backfilled(scratch_url) == [(1, False, 0), (2, False, 0), (3, True, 0)]
+
+
+def test_backfill_lets_a_funding_account_be_negative(
+    settings: Settings, scratch_url: str, tmp_path: Path
+) -> None:
+    name, path = migration_before_balances(settings, scratch_url, tmp_path)
+    seed(
+        scratch_url,
+        accounts=[("funding:usd", True), ("customer:alice", False)],
+        postings=[[(1, -250_000), (2, 250_000)]],
+    )
+    apply_balances_migration(scratch_url, tmp_path, name, path)
+    assert backfilled(scratch_url) == [(1, True, -250_000), (2, False, 250_000)]
+
+
+def test_backfill_fails_readably_when_a_protected_account_would_be_negative(
+    settings: Settings, scratch_url: str, tmp_path: Path
+) -> None:
+    """Existing entries that leave a protected account below zero mean the data already breaks an
+    invariant. The migration must stop with a message that says so and names the account, not with
+    the CHECK's generic error, and must leave nothing behind."""
+    name, path = migration_before_balances(settings, scratch_url, tmp_path)
+    seed(
+        scratch_url,
+        accounts=[
+            ("customer:alice", False),  # id 1: fine
+            ("customer:bob", False),  # id 2: ends at -700, the problem
+            ("customer:carol", False),  # id 3: fine
+            ("funding:usd", True),  # id 4
+        ],
+        postings=[[(4, -5000), (1, 5000)], [(2, -700), (3, 700)]],
+    )
+
+    with pytest.raises(psycopg.errors.RaiseException) as failure:
+        apply_balances_migration(scratch_url, tmp_path, name, path)
+
+    message = failure.value.diag.message_primary or ""
+    assert "negative" in message.lower()
+    assert re.search(r"(?<!\d)2(?!\d)", message), f"the message should name account 2: {message!r}"
+
+    with psycopg.connect(scratch_url) as conn:
+        assert conn.execute("SELECT to_regclass('balances')").fetchone() == (None,)
+        recorded = conn.execute("SELECT name FROM schema_migrations ORDER BY name").fetchall()
+    assert name not in [r[0] for r in recorded]
