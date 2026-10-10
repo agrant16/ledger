@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import psycopg
+
 from ledger.db import require_transaction
 
 INSERT_TRANSACTION_SQL = """
@@ -27,7 +28,9 @@ def claim_transaction(
     require_transaction(conn, "claim_transaction")
 
     with conn.cursor() as cursor:
-        cursor.execute(INSERT_TRANSACTION_SQL, (idempotency_key, request_hash, reverses_transaction_id))
+        cursor.execute(
+            INSERT_TRANSACTION_SQL, (idempotency_key, request_hash, reverses_transaction_id)
+        )
         row = cursor.fetchone()
         return row[0]
 
