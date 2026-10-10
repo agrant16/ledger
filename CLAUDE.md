@@ -1,10 +1,10 @@
 # Ledger Service
 
-A double-entry ledger service I'm building as an interview-prep portfolio project. The goal is a correct, well-tested system I can explain in depth, not just working code.
+A double-entry ledger service I'm building as a portfolio project, working with Claude Code. The goal is a correct, well-tested system I can explain in depth, not just working code.
 
 ## Read first
 
-The project scope, architecture, data model, API design, milestones, and testing plan are in `docs/design.md`. Read it before starting any work, and follow its milestone order. The copy in this repo is the source of truth; I sync the shared copy elsewhere from it, so don't assume the two match. If the repo layout or stack differs from the scope doc, tell me instead of silently diverging. If we change a design decision, update the scope doc in the same change.
+The project scope, architecture, data model, API design, milestones, and testing plan are in `docs/design.md`. Read it before starting any work, and follow its milestone order. It is the source of truth for the design. I keep some planning notes elsewhere, so don't assume anything outside this repo matches it. If the repo layout or stack differs from the design doc, tell me instead of silently diverging. If we change a design decision, update the design doc in the same change.
 
 ## Stack and conventions
 
@@ -63,7 +63,7 @@ Write tests against these properties, not against whatever the current code happ
 - Work one milestone at a time, and keep each change small enough for me to review. A milestone's "Done when" line is its acceptance check.
 - Make small, focused commits with clear messages. Don't bundle unrelated changes.
 - Before writing code for a non-trivial feature, briefly state the approach and any tradeoffs so I can weigh in.
-- Explain any non-obvious design choice in plain terms. I should be able to defend every decision in an interview.
+- Explain any non-obvious design choice in plain terms, so I can explain and defend my decisions.
 - Dependencies beyond the stack above, schema changes, and changes to the public API need my approval first. Adding the pre-approved stack's own packages during scaffolding is fine.
 - Every change goes on its own branch and a pull request, never straight to `main`. Both CI checks (`lint-and-test` and `compose-smoke`) must pass, and PRs are squash-merged, so intermediate commits on a branch may be red.
 - For the items on my "I write myself" list, Claude writes the tests first from `docs/design.md` and I write the implementation; the tests stay red until it exists.
