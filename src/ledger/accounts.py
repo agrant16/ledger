@@ -41,6 +41,6 @@ def create_account(
             return account
         except errors.UniqueViolation as e:
             constraint = e.diag.constraint_name
-            if constraint == 'accounts_name_key':
+            if constraint == "accounts_name_key":
                 raise DuplicateAccountNameError(name) from e
             raise
