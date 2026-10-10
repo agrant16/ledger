@@ -48,3 +48,13 @@ CREATE TABLE balances
     CONSTRAINT balances_protected_nonnegative CHECK (allow_negative OR balance_minor >= 0)
 );
 
+INSERT INTO balances (account_id, allow_negative, balance_minor)
+SELECT a.id                             AS account_id,
+       a.allow_negative,
+       COALESCE(sum(e.amount_minor), 0) AS balance_minor
+FROM accounts a
+         LEFT JOIN entries e
+                   ON a.id = e.account_id
+GROUP BY a.id, a.allow_negative;
+
+GRANT SELECT, INSERT, UPDATE ON balances TO ledger_app;
