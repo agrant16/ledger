@@ -3,7 +3,7 @@
 import psycopg
 import pytest
 
-INSERT = "INSERT INTO accounts (name, currency, allow_negative) VALUES (%s, %s, %s) RETURNING id"
+INSERT = "INSERT INTO accounts (account_name, currency, allow_negative) VALUES (%s, %s, %s) RETURNING id"
 
 
 def unique_column_sets(conn: psycopg.Connection) -> set[tuple[str, ...]]:
@@ -36,7 +36,7 @@ def test_account_can_be_created_and_gets_an_id(clean_db: None, app_conn: psycopg
 def test_caller_cannot_choose_the_id(clean_db: None, app_conn: psycopg.Connection) -> None:
     with pytest.raises(psycopg.errors.GeneratedAlways):
         app_conn.execute(
-            "INSERT INTO accounts (id, name, currency, allow_negative)"
+            "INSERT INTO accounts (id, account_name, currency, allow_negative)"
             " VALUES (7, 'x', 'USD', false)"
         )
 
@@ -56,7 +56,7 @@ def test_unique_keys_back_the_composite_foreign_keys(owner_conn: psycopg.Connect
     """(id, currency) backs entries' foreign key; (id, allow_negative) backs balances'."""
     sets = unique_column_sets(owner_conn)
     assert ("id",) in sets
-    assert ("name",) in sets
+    assert ("account_name",) in sets
     assert ("currency", "id") in sets
     assert ("allow_negative", "id") in sets
 
