@@ -38,6 +38,7 @@ LOCK_ACCOUNTS_SQL = """
                     ORDER BY b.account_id ASC
                     FOR UPDATE OF b;"""
 
+
 @dataclass(frozen=True)
 class Entry:
     account_id: int
@@ -91,6 +92,6 @@ class LockedAccount:
 
 def _lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int, LockedAccount]:
     with conn.cursor() as cursor:
-        cursor.execute(LOCK_ACCOUNTS_SQL, account_ids)
+        cursor.execute(LOCK_ACCOUNTS_SQL, (account_ids,))
         rows = cursor.fetchall()
         return {row[0]: LockedAccount(row[1], row[2], row[3]) for row in rows}
