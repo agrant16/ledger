@@ -1,4 +1,4 @@
-from dataclasses import astuple, dataclass
+from dataclasses import dataclass
 
 import psycopg
 
@@ -47,7 +47,10 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
 
 def _insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
     with conn.cursor() as cursor:
-        params = [(transaction_id, *astuple(entry)) for entry in entries]
+        params = [
+            (transaction_id, entry.account_id, entry.amount_minor, entry.currency)
+            for entry in entries
+        ]
         cursor.executemany(INSERT_ENTRY_SQL, params)
 
 
