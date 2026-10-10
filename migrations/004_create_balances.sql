@@ -35,3 +35,16 @@ ELSIF bad_count > 0 THEN
 END IF;
 END $$;
 
+CREATE TABLE balances
+(
+    account_id     BIGINT PRIMARY KEY,
+    allow_negative BOOLEAN NOT NULL,
+    balance_minor  BIGINT  NOT NULL,
+
+    CONSTRAINT balances_accounts_id_allow_negative_fkey
+        FOREIGN KEY (account_id, allow_negative)
+            REFERENCES accounts (id, allow_negative),
+
+    CONSTRAINT balances_protected_nonnegative CHECK (allow_negative OR balance_minor >= 0)
+);
+
