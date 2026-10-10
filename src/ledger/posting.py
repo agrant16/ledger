@@ -88,7 +88,7 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
     # lock accounts in entries and check for unknown accounts
     locked_accounts = _lock_accounts(conn, list(deltas.keys()))
     if len(locked_accounts) != len(deltas.keys()):
-        missing = sorted(deltas.keys()) - locked_accounts.keys()
+        missing = sorted(deltas.keys() - locked_accounts.keys())
         raise UnknownAccountError(
             f"Entries for transaction {transaction_id} include unknown accounts: {missing}"
         )
