@@ -4,7 +4,7 @@
 CREATE TABLE accounts
 (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name VARCHAR NOT NULL,
+    name VARCHAR NOT NULL, -- noqa: RF04
     currency VARCHAR NOT NULL,
     allow_negative BOOLEAN NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

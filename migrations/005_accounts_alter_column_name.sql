@@ -14,6 +14,6 @@ ALTER TABLE accounts
 RENAME CONSTRAINT accounts_name_whitespace
 TO accounts_account_name_whitespace;
 
-ALTER TABLE accounts R
-ENAME CONSTRAINT accounts_name_not_null
+ALTER TABLE accounts
+RENAME CONSTRAINT accounts_name_not_null
 TO accounts_account_name_not_null;
