@@ -4,7 +4,10 @@ import psycopg
 from ledger.db import require_transaction
 
 INSERT_TRANSACTION_SQL = """
-                         INSERT INTO transactions (idempotency_key, request_hash, reverses_transaction_id) VALUES (%s, %s, %s) RETURNING id;
+                         INSERT INTO 
+                            transactions (idempotency_key, request_hash, reverses_transaction_id) 
+                            VALUES (%s, %s, %s) 
+                            RETURNING id;
                          """
 
 
@@ -39,12 +42,14 @@ def _insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list
 def _apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> None:
     pass
 
+
 @dataclass(frozen=True)
 class LockedAccount:
     account_id: int
     account_name: str
     currency: str
     allow_negative: bool
+
 
 def _lock_accounts(conn: psycopg.Connection, account_id: list[int]):
     pass
