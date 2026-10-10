@@ -183,6 +183,5 @@ def test_entries_are_append_only_for_the_app_role(
     account = insert_account(app_conn)
     tx = insert_transaction(app_conn)
     insert_entry(app_conn, tx, account, 100)
-    app_conn.commit()
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
         app_conn.execute(statement)

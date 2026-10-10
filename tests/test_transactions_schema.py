@@ -136,6 +136,5 @@ def test_transactions_are_immutable_to_the_app_role(
 ) -> None:
     """request_hash and reverses_transaction_id cannot change after the fact."""
     insert_transaction(app_conn)
-    app_conn.commit()
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
         app_conn.execute(statement)

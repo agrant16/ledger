@@ -76,5 +76,15 @@ def app_pool(settings: Settings) -> Iterator[ConnectionPool]:
 
 @pytest.fixture
 def app_conn(app_pool: ConnectionPool) -> Iterator[psycopg.Connection]:
+    """An app-role connection whose work is rolled back when the test ends.
+
+    The pool would otherwise commit on a clean exit. Rolling back leaves no data behind, and keeps
+    tests clear of the commit-time triggers that reject a transaction with no entries or with
+    entries that do not sum to zero. A test that really needs committed data must call
+    conn.commit() itself, and commit only balanced postings.
+    """
     with app_pool.connection() as conn:
-        yield conn
+        try:
+            yield conn
+        finally:
+            conn.rollback()

@@ -92,7 +92,6 @@ def test_accounts_are_immutable_to_the_app_role(
 ) -> None:
     """Currency and allow_negative are fixed for life because the app role cannot change rows."""
     app_conn.execute(INSERT, ("customer:alice", "USD", False))
-    app_conn.commit()
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
         app_conn.execute(statement)
 
