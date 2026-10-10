@@ -1,8 +1,29 @@
 class LedgerError(Exception):
+    """Base class for expected, domain-level failures.
+
+    These are normal outcomes of a request, not defects: unknown account,
+    insufficient funds, a currency mismatch, an idempotency conflict, a busy
+    database. The service layer raises them without any HTTP knowledge, and
+    the API layer maps each subclass to a status code (4xx, or 503 for
+    ServiceBusyError).
+
+    Bugs are not LedgerErrors. See LedgerInvariantError, which returns a 500
+    and is logged.
+    """
     pass
 
 
 class LedgerInvariantError(Exception):
+    """A ledger invariant was violated by our own code, which means a bug.
+
+    Deliberately not a LedgerError. LedgerError subclasses are expected
+    outcomes (bad input, insufficient funds, a busy database) that the API
+    maps to a 4xx or 503. This one signals a defect, so the API returns a
+    500, the error is logged, and it is never retried.
+
+    Example: the entries passed to post_transaction do not sum to zero per
+    currency (UnbalancedEntriesError).
+    """
     pass
 
 
