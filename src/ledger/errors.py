@@ -1,0 +1,2 @@
+class LedgerError(Exception):
+    pass
