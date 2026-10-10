@@ -28,7 +28,7 @@ def insert_account(
     allow_negative: bool = False,
 ) -> int:
     row = conn.execute(
-        "INSERT INTO accounts (name, currency, allow_negative) VALUES (%s, %s, %s) RETURNING id",
+        "INSERT INTO accounts (account_name, currency, allow_negative) VALUES (%s, %s, %s) RETURNING id",
         (name, currency, allow_negative),
     ).fetchone()
     assert row is not None
