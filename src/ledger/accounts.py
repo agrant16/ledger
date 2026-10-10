@@ -10,7 +10,7 @@ INSERT_ACCOUNTS_SQL = """
                       INSERT INTO 
                           accounts (account_name, currency, allow_negative) 
                           VALUES(%s, %s, %s) 
-                          RETURNING id, name, currency, allow_negative;
+                          RETURNING id, account_name, currency, allow_negative;
                       """
 
 INSERT_BALANCES_SQL = """
