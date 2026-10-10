@@ -79,7 +79,7 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
     for entry in entries:
         totals[entry.currency] += entry.amount_minor
     if any(total != 0 for total in totals.values()):
-        raise UnbalancedEntriesError(f"Entries for transaction{transaction_id} are not balanced")
+        raise UnbalancedEntriesError(f"Entries for transaction {transaction_id} are not balanced")
 
     deltas = defaultdict(int)
     for entry in entries:
@@ -88,8 +88,9 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
     # lock accounts in entries and check for unknown accounts
     locked_accounts = _lock_accounts(conn, list(deltas.keys()))
     if len(locked_accounts) != len(deltas.keys()):
+        missing = sorted(deltas.keys()) - locked_accounts.keys()
         raise UnknownAccountError(
-            f"Entries for transaction {transaction_id} include an unknown Account"
+            f"Entries for transaction {transaction_id} include unknown accounts: {missing}"
         )
 
     # check that accounts in entries have matching currencies with the accounts table.
@@ -100,7 +101,7 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
             )
 
     # check that account has enough balance to cover transactions
-    for account_id, delta in deltas.items():
+    for account_id, delta in sorted(deltas.items()):
         account = locked_accounts[account_id]
         if not account.allow_negative and account.balance_minor + delta < 0:
             raise InsufficientFundsError(account_id, account.balance_minor, delta)
