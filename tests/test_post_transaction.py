@@ -121,6 +121,12 @@ def test_cached_balances_equal_the_sum_of_entries_after_several_postings(
     post(api, app_conn, transfer(api, 5000, funding, alice))
     post(api, app_conn, transfer(api, 1200, alice, bob))
     post(api, app_conn, transfer(api, 300, bob, alice))
+    assert count(app_conn, "entries") == 6
+    assert (balance(app_conn, funding), balance(app_conn, alice), balance(app_conn, bob)) == (
+        -5000,
+        4100,
+        900,
+    )
     mismatches = app_conn.execute(
         "SELECT b.account_id FROM balances b"
         " LEFT JOIN (SELECT account_id, sum(amount_minor) AS total FROM entries"
@@ -351,6 +357,10 @@ def test_it_never_commits(
     alice = make(app_conn, "customer:alice")
     commit_setup()
     post(api, app_conn, transfer(api, 5000, funding, alice))
+    assert (
+        count(app_conn, "entries") == 2
+    )  # the work happened, so the rollback below means something
+    assert balance(app_conn, alice) == 5000
     app_conn.rollback()
     assert count(owner_conn, "entries") == 0
     assert count(owner_conn, "transactions") == 0

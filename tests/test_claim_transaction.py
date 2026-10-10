@@ -59,6 +59,7 @@ def test_it_never_commits(
 ) -> None:
     """The caller owns the transaction, so a rollback must undo the claim."""
     claim_transaction(app_conn, "key-1", "hash-1")
+    assert app_conn.execute("SELECT count(*) FROM transactions").fetchone() == (1,)
     app_conn.rollback()
     assert owner_conn.execute("SELECT count(*) FROM transactions").fetchone() == (0,)
 

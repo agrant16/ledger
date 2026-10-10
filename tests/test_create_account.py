@@ -120,6 +120,7 @@ def test_it_never_commits(
 ) -> None:
     """The caller owns the transaction, so a rollback must undo the account and its balance."""
     create_account(app_conn, "customer:alice", "USD", False)
+    assert count_accounts(app_conn, "customer:alice") == 1  # it happened, so the rollback counts
     app_conn.rollback()
     assert count_accounts(owner_conn, "customer:alice") == 0
     assert owner_conn.execute("SELECT count(*) FROM balances").fetchone() == (0,)
