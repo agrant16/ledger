@@ -31,9 +31,9 @@ class LedgerInvariantError(Exception):
 
 
 class DuplicateAccountNameError(LedgerError):
-    def __init__(self, name: str):
-        self.name = name
-        super().__init__(f"Account with '{self.name}' already exists")
+    def __init__(self, account_name: str):
+        self.account_name = account_name
+        super().__init__(f"Account with '{self.account_name}' already exists")
 
 
 class InvalidRequestError(LedgerError):

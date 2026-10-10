@@ -1,9 +1,16 @@
 """Properties of the accounts table (docs/design.md, Tables) checked through the app role."""
 
+from pathlib import Path
+
 import psycopg
 import pytest
 
-INSERT = "INSERT INTO accounts (name, currency, allow_negative) VALUES (%s, %s, %s) RETURNING id"
+from ledger.config import Settings
+from ledger.migrate import run_migrations
+
+INSERT = (
+    "INSERT INTO accounts (account_name, currency, allow_negative) VALUES (%s, %s, %s) RETURNING id"
+)
 
 
 def unique_column_sets(conn: psycopg.Connection) -> set[tuple[str, ...]]:
@@ -36,7 +43,7 @@ def test_account_can_be_created_and_gets_an_id(clean_db: None, app_conn: psycopg
 def test_caller_cannot_choose_the_id(clean_db: None, app_conn: psycopg.Connection) -> None:
     with pytest.raises(psycopg.errors.GeneratedAlways):
         app_conn.execute(
-            "INSERT INTO accounts (id, name, currency, allow_negative)"
+            "INSERT INTO accounts (id, account_name, currency, allow_negative)"
             " VALUES (7, 'x', 'USD', false)"
         )
 
@@ -56,7 +63,7 @@ def test_unique_keys_back_the_composite_foreign_keys(owner_conn: psycopg.Connect
     """(id, currency) backs entries' foreign key; (id, allow_negative) backs balances'."""
     sets = unique_column_sets(owner_conn)
     assert ("id",) in sets
-    assert ("name",) in sets
+    assert ("account_name",) in sets
     assert ("currency", "id") in sets
     assert ("allow_negative", "id") in sets
 
@@ -69,7 +76,7 @@ def test_unique_keys_back_the_composite_foreign_keys(owner_conn: psycopg.Connect
         # A NULL allow_negative would slip past CHECK (allow_negative OR balance_minor >= 0).
         ("customer:alice", "USD", None),
     ],
-    ids=["name", "currency", "allow_negative"],
+    ids=["account_name", "currency", "allow_negative"],
 )
 def test_columns_are_not_null(
     clean_db: None, app_conn: psycopg.Connection, values: tuple[str | None, str | None, bool | None]
@@ -178,3 +185,87 @@ def test_unicode_whitespace_is_not_treated_as_whitespace(
     Names are compared exactly, so a name with a Unicode space is simply a different name.
     """
     app_conn.execute(INSERT, (name, "USD", False))
+
+
+# --- migration 005 renamed accounts.name to account_name ("name" is a keyword SQLFluff flags) ---
+
+
+def migration_number(path: Path) -> int:
+    return int(path.name.split("_", 1)[0])
+
+
+def test_the_name_column_is_called_account_name(owner_conn: psycopg.Connection) -> None:
+    rows = owner_conn.execute(
+        "SELECT column_name FROM information_schema.columns"
+        " WHERE table_schema = 'public' AND table_name = 'accounts'"
+    ).fetchall()
+    columns = {r[0] for r in rows}
+    assert "account_name" in columns
+    assert "name" not in columns
+
+
+def test_the_name_constraints_follow_the_column_name(owner_conn: psycopg.Connection) -> None:
+    rows = owner_conn.execute(
+        "SELECT conname FROM pg_constraint WHERE conrelid = 'public.accounts'::regclass"
+    ).fetchall()
+    names = {r[0] for r in rows}
+    assert {
+        "accounts_account_name_key",
+        "accounts_account_name_length",
+        "accounts_account_name_whitespace",
+    } <= names
+    assert not {n for n in names if n.startswith("accounts_name_")}
+
+
+def test_the_unique_name_index_follows_the_constraint_name(owner_conn: psycopg.Connection) -> None:
+    rows = owner_conn.execute(
+        "SELECT indexname FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'accounts'"
+    ).fetchall()
+    indexes = {r[0] for r in rows}
+    assert "accounts_account_name_key" in indexes
+    assert "accounts_name_key" not in indexes
+
+
+def test_migration_005_keeps_existing_accounts_and_their_rules(
+    settings: Settings, scratch_url: str, tmp_path: Path
+) -> None:
+    """The rename runs on a database that already has accounts: the rows must survive under the
+    new column name, and the unique and CHECK rules must still apply, under their new names."""
+    migrations = sorted(settings.migrations_dir.glob("*.sql"))
+    before = [m for m in migrations if migration_number(m) < 5]
+    rename = [m for m in migrations if migration_number(m) == 5]
+    assert len(before) == 4, "expected migrations 001 to 004 to exist"
+    assert len(rename) == 1, "the rename migration (005) does not exist yet"
+
+    for m in before:
+        (tmp_path / m.name).write_text(m.read_text(encoding="utf-8"), encoding="utf-8")
+    run_migrations(scratch_url, tmp_path)
+    with psycopg.connect(scratch_url, autocommit=True) as conn:
+        conn.execute(
+            "INSERT INTO accounts (name, currency, allow_negative)"  # still "name" before 005
+            " VALUES ('customer:alice', 'USD', false), ('funding:usd', 'USD', true)"
+        )
+
+    rename_file = rename[0]
+    (tmp_path / rename_file.name).write_text(
+        rename_file.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    assert run_migrations(scratch_url, tmp_path) == [rename_file.name]
+
+    insert = (
+        "INSERT INTO accounts (account_name, currency, allow_negative) VALUES (%s, 'EUR', false)"
+    )
+    with psycopg.connect(scratch_url, autocommit=True) as conn:
+        rows = conn.execute(
+            "SELECT id, account_name, currency, allow_negative FROM accounts ORDER BY id"
+        ).fetchall()
+        assert rows == [(1, "customer:alice", "USD", False), (2, "funding:usd", "USD", True)]
+
+        for value, error, constraint in [
+            ("customer:alice", psycopg.errors.UniqueViolation, "accounts_account_name_key"),
+            ("x" * 101, psycopg.errors.CheckViolation, "accounts_account_name_length"),
+            (" padded", psycopg.errors.CheckViolation, "accounts_account_name_whitespace"),
+        ]:
+            with pytest.raises(error) as failure:
+                conn.execute(insert, (value,))
+            assert failure.value.diag.constraint_name == constraint

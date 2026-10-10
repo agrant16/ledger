@@ -8,9 +8,9 @@ from ledger.errors import DuplicateAccountNameError
 
 INSERT_ACCOUNTS_SQL = """ 
                       INSERT INTO 
-                          accounts (name, currency, allow_negative) 
+                          accounts (account_name, currency, allow_negative) 
                           VALUES(%s, %s, %s) 
-                          RETURNING id, name, currency, allow_negative;
+                          RETURNING id, account_name, currency, allow_negative;
                       """
 
 INSERT_BALANCES_SQL = """
@@ -23,24 +23,24 @@ INSERT_BALANCES_SQL = """
 @dataclass(frozen=True)
 class Account:
     id: int
-    name: str
+    account_name: str
     currency: str
     allow_negative: bool
 
 
 def create_account(
-    conn: psycopg.Connection, name: str, currency: str, allow_negative: bool
+    conn: psycopg.Connection, account_name: str, currency: str, allow_negative: bool
 ) -> Account:
     require_transaction(conn, "create_account")
 
     with conn.cursor() as cursor:
         try:
-            cursor.execute(INSERT_ACCOUNTS_SQL, (name, currency, allow_negative))
+            cursor.execute(INSERT_ACCOUNTS_SQL, (account_name, currency, allow_negative))
             account = Account(*cursor.fetchone())
             cursor.execute(INSERT_BALANCES_SQL, (account.id, account.allow_negative))
             return account
         except errors.UniqueViolation as e:
             constraint = e.diag.constraint_name
-            if constraint == "accounts_name_key":
-                raise DuplicateAccountNameError(name) from e
+            if constraint == "accounts_account_name_key":
+                raise DuplicateAccountNameError(account_name) from e
             raise
