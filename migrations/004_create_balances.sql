@@ -1,5 +1,9 @@
--- Pre-check on migration for protected accounts (account.allow_negative = false) that would end in a negative balance
--- after the migration. Fails loudly with information about the account IDs and balances.
+-- migrations/004_create_balances.sql
+-- Run as the owner role. App role gets only specified grants.
+
+-- Pre-check for protected accounts (account.allow_negative = false) that
+-- would end in a negative balance after the migration. Fails loudly with
+-- information about the account IDs and balances.
 DO
 $$
 DECLARE
@@ -37,24 +41,27 @@ END $$;
 
 CREATE TABLE balances
 (
-    account_id     BIGINT PRIMARY KEY,
+    account_id BIGINT PRIMARY KEY,
     allow_negative BOOLEAN NOT NULL,
-    balance_minor  BIGINT  NOT NULL,
+    balance_minor BIGINT NOT NULL,
 
     CONSTRAINT balances_accounts_id_allow_negative_fkey
-        FOREIGN KEY (account_id, allow_negative)
-            REFERENCES accounts (id, allow_negative),
+    FOREIGN KEY (account_id, allow_negative)
+    REFERENCES accounts (id, allow_negative),
 
-    CONSTRAINT balances_protected_nonnegative CHECK (allow_negative OR balance_minor >= 0)
+    CONSTRAINT balances_protected_nonnegative CHECK (
+        allow_negative OR balance_minor >= 0
+    )
 );
 
 INSERT INTO balances (account_id, allow_negative, balance_minor)
-SELECT a.id                             AS account_id,
-       a.allow_negative,
-       COALESCE(sum(e.amount_minor), 0) AS balance_minor
-FROM accounts a
-         LEFT JOIN entries e
-                   ON a.id = e.account_id
+SELECT
+    a.id AS account_id,
+    a.allow_negative,
+    COALESCE(SUM(e.amount_minor), 0) AS balance_minor
+FROM accounts AS a
+LEFT JOIN entries AS e
+    ON a.id = e.account_id
 GROUP BY a.id, a.allow_negative;
 
 GRANT SELECT, INSERT, UPDATE ON balances TO ledger_app;
