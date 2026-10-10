@@ -1,9 +1,11 @@
+from collections import defaultdict
 from dataclasses import dataclass
 
 import psycopg
 
 from ledger.db import require_transaction
-from ledger.errors import LedgerInvariantError
+from ledger.errors import LedgerInvariantError, UnbalancedEntriesError, UnknownAccountError, CurrencyMismatchError, \
+    InsufficientFundsError
 
 INSERT_TRANSACTION_SQL = """
                          INSERT INTO 
@@ -63,7 +65,41 @@ def claim_transaction(
 
 
 def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
-    pass
+    require_transaction(conn, "post_transaction")
+    if not entries:
+        raise LedgerInvariantError(f"No entries for transaction {transaction_id}")
+
+    # check that entries for each account and currency sum to 0
+    totals: dict[str, int] = defaultdict(int)
+    for entry in entries:
+        totals[entry.currency] += entry.amount_minor
+    if any(total != 0 for total in totals.values()):
+        raise UnbalancedEntriesError(f"Entries for transaction{transaction_id} are not balanced")
+
+    deltas = defaultdict(int)
+    for entry in entries:
+        deltas[entry.account_id] += entry.amount_minor
+
+    # lock accounts in entries and check for unknown accounts
+    locked_accounts = _lock_accounts(conn, list(deltas.keys()))
+    if len(locked_accounts) != len(deltas.keys()):
+        raise UnknownAccountError(f"Entries for transaction {transaction_id} include an unknown Account")
+
+    # check that accounts in entries have matching currencies with the accounts table.
+    for entry in entries:
+        if locked_accounts[entry.account_id].currency != entry.currency:
+            raise CurrencyMismatchError(f"Currency mismatch for account {account_id} on transaction {transaction_id}")
+
+    # check that account has enough balance to cover transactions
+    for account_id, delta in deltas.items():
+        account = locked_accounts[account_id]
+        if not account.allow_negative and account.balance_minor + delta < 0:
+            raise InsufficientFundsError(account_id, account.balance_minor, delta)
+
+    _insert_entries(conn, transaction_id, entries)
+    _apply_balance_deltas(conn, deltas)
+
+
 
 
 def _insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:

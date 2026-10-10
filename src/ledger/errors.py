@@ -11,7 +11,8 @@ class LedgerError(Exception):
     and is logged.
     """
 
-    pass
+    def __init__(self, message: str):
+        super().__init__(message)
 
 
 class LedgerInvariantError(Exception):
@@ -41,7 +42,8 @@ class InvalidRequestError(LedgerError):
 
 
 class UnknownAccountError(LedgerError):
-    pass
+    def __init__(self, message):
+        super().__init__(message)
 
 
 class UnknownTransferError(LedgerError):
@@ -49,7 +51,8 @@ class UnknownTransferError(LedgerError):
 
 
 class CurrencyMismatchError(LedgerError):
-    pass
+    def __init__(self, message):
+        super().__init__(message)
 
 
 class InsufficientFundsError(LedgerError):
@@ -59,7 +62,7 @@ class InsufficientFundsError(LedgerError):
         self.amount_minor = amount_minor
         super().__init__(
             f"Insufficient funds: account {self.account_id}, current balance {self.balance_minor},"
-            f" resulting balance {self.amount_minor}"
+            f" net change {self.amount_minor}"
         )
 
 
@@ -80,4 +83,6 @@ class ServiceBusyError(LedgerError):
 
 
 class UnbalancedEntriesError(LedgerInvariantError):
-    pass
+    def __init__(self, message):
+        super().__init__(message)
+
