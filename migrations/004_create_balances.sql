@@ -1,3 +1,5 @@
+-- Pre-check on migration for protected accounts (account.allow_negative = false) that would end in a negative balance
+-- after the migration. Fails loudly with information about the account IDs and balances.
 DO $$
 DECLARE
     max_reported CONSTANT int := 20;
