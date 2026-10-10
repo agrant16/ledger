@@ -301,3 +301,59 @@ def test_backfill_fails_readably_when_a_protected_account_would_be_negative(
         assert conn.execute("SELECT to_regclass('balances')").fetchone() == (None,)
         recorded = conn.execute("SELECT name FROM schema_migrations ORDER BY name").fetchall()
     assert name not in [r[0] for r in recorded]
+
+
+def numbers_in(message: str) -> set[int]:
+    return {int(n) for n in re.findall(r"[0-9]+", message)}
+
+
+def test_backfill_names_every_offender_and_the_count_when_there_are_few(
+    settings: Settings, scratch_url: str, tmp_path: Path
+) -> None:
+    """One run should show the whole problem, so the operator is not left fixing accounts one
+    migration attempt at a time."""
+    name, path = migration_before_balances(settings, scratch_url, tmp_path)
+    seed(
+        scratch_url,
+        accounts=[
+            ("customer:alice", False),  # id 1: fine
+            ("customer:bob", False),  # id 2: fine
+            ("customer:carol", False),  # id 3: ends at -100, a problem
+            ("customer:dave", False),  # id 4: ends at -200, a problem
+            ("funding:usd", True),  # id 5
+        ],
+        postings=[[(3, -100), (5, 100)], [(4, -200), (5, 200)]],
+    )
+
+    with pytest.raises(psycopg.errors.RaiseException) as failure:
+        apply_balances_migration(scratch_url, tmp_path, name, path)
+
+    numbers = numbers_in(failure.value.diag.message_primary or "")
+    assert {3, 4} <= numbers, "both offending accounts should be named"
+    assert 2 in numbers, "the total number of offending accounts should be stated"
+    assert not {1, 5} & numbers, "accounts that are fine must not be named"
+
+
+def test_backfill_caps_the_listed_accounts_but_still_reports_the_total(
+    settings: Settings, scratch_url: str, tmp_path: Path
+) -> None:
+    """A badly broken database must not produce an unreadable message: at most 20 accounts are
+    listed, in id order, and the total says how many there really are."""
+    name, path = migration_before_balances(settings, scratch_url, tmp_path)
+    clean, offenders = 30, 23  # ids 1-30 are fine, ids 31-53 go negative, id 54 is the funder
+    funding = clean + offenders + 1
+    seed(
+        scratch_url,
+        accounts=[(f"customer:clean{i}", False) for i in range(clean)]
+        + [(f"customer:bad{i}", False) for i in range(offenders)]
+        + [("funding:usd", True)],
+        postings=[[(clean + 1 + i, -100), (funding, 100)] for i in range(offenders)],
+    )
+
+    with pytest.raises(psycopg.errors.RaiseException) as failure:
+        apply_balances_migration(scratch_url, tmp_path, name, path)
+
+    numbers = numbers_in(failure.value.diag.message_primary or "")
+    listed = {n for n in numbers if clean < n <= clean + offenders}
+    assert listed == set(range(clean + 1, clean + 21)), "the first 20 offenders, in id order"
+    assert offenders in numbers, "the total number of offenders should be stated"
