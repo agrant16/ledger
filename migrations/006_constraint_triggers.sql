@@ -24,7 +24,8 @@ DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
 EXECUTE FUNCTION verify_transaction_entries_record();
 
-
+-- Verifies that amount_minor values of a transaction's records in entries
+-- sum to zero when grouped by currency.
 CREATE FUNCTION verify_zero_sum_entries()
 RETURNS TRIGGER AS $$
 BEGIN
