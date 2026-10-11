@@ -35,7 +35,7 @@ BEGIN
           FROM entries
           WHERE transaction_id = NEW.transaction_id
           GROUP BY currency) AS zero_sum
-    WHERE zero_sum.total_sum != 0)
+    WHERE zero_sum.total_sum <> 0)
     THEN
        RAISE EXCEPTION 'Entries integrity violation: entries for transaction % do not sum to zero.', NEW.transaction_id
        USING ERRCODE = 'check_violation';
