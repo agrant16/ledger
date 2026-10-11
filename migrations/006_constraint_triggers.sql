@@ -1,4 +1,8 @@
-CREATE OR REPLACE FUNCTION verify_transaction_entries_record()
+-- migrations/006_constraint_triggers.sql
+
+-- Adds constraint triggers for verifying a new transaction record has at least
+-- one record in entries.
+CREATE FUNCTION verify_transaction_entries_record()
 RETURNS TRIGGER AS $$
 BEGIN
 IF NOT EXISTS (
@@ -6,7 +10,8 @@ IF NOT EXISTS (
    FROM entries
    WHERE entries.id = NEW.id
 ) THEN
-   RAISE EXCEPTION 'Transaction integrity violated: Transaction %s must have at least one record in transactions', NEW.id;
+   RAISE EXCEPTION 'Transaction integrity violated: Transaction % must have at least one record in entries', NEW.id
+    USING ERRCODE = 'check_violation';
    END IF;
 
    RETURN NEW;
