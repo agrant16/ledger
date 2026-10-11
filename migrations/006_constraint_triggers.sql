@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION verify_transactions_has_record()
+CREATE OR REPLACE FUNCTION verify_transaction_has_record()
 RETURNS TRIGGER AS $$
 BEGIN
 IF NOT EXISTS (
@@ -11,7 +11,7 @@ IF NOT EXISTS (
 
    RETURN NEW;
 END;
-$$ LANGUAGE plpgsql
+$$ LANGUAGE plpgsql;
 
 CREATE CONSTRAINT TRIGGER tbl_transaction_has_record_integrity
 AFTER INSERT OR UPDATE ON transactions
