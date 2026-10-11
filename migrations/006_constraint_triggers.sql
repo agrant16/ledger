@@ -19,7 +19,33 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE CONSTRAINT TRIGGER tbl_transaction_entries_integrity
-AFTER INSERT ON entries
+AFTER INSERT ON transactions
 DEFERRABLE INITIALLY DEFERRED
 FOR EACH ROW
 EXECUTE FUNCTION verify_transaction_entries_record();
+
+
+CREATE FUNCTION verify_zero_sum_entries()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF EXISTS (
+       SELECT 1
+    FROM (SELECT currency, sum(amount_minor) as total_sum
+          FROM entries
+          WHERE transaction_id = NEW.transaction_id
+          GROUP BY currency) AS zero_sum
+    WHERE zero_sum.total_sum != 0)
+    THEN
+       RAISE EXCEPTION 'Entries integrity violation: entries for transaction % do not sum to zero.', NEW.transaction_id
+       USING ERRCODE = 'check_violation';
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER tbl_entries_zero_sum_integrity
+AFTER INSERT ON entries
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION verify_zero_sum_entries();
