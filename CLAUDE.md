@@ -68,6 +68,10 @@ Write tests against these properties, not against whatever the current code happ
 - Dependencies beyond the stack above, schema changes, and changes to the public API need my approval first. Adding the pre-approved stack's own packages during scaffolding is fine.
 - Every change goes on its own branch and a pull request, never straight to `main`. Both CI checks (`lint-and-test` and `compose-smoke`) must pass, and PRs are squash-merged, so intermediate commits on a branch may be red.
 - For the items on my "I write myself" list, Claude writes the tests first from `docs/design.md` and I write the implementation; the tests stay red until it exists.
+- **AI Collaboration & PR Summaries:** For any work package Claude assists with, Claude must generate a structured Pull Request summary block at the end of the session. This summary must include:
+  - **Milestone & Scope:** Which milestone item or component this PR addresses.
+  - **Test Contract & Invariants:** What tests were generated or run, and what core ledger properties or design doc sections they enforce.
+  - **Human Review & Implementation Notes:** A clear breakdown of what Claude scaffolded versus what remains for human implementation, noting any edge cases discussed.
 
 ## Commands
 
