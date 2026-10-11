@@ -113,7 +113,8 @@ def commit_setup(
     see it (a second connection cannot see uncommitted accounts).
 
     Use it only for accounts and balances rows. Transactions and entries are checked at commit by
-    triggers, so tests must not commit those. Everything is truncated again afterwards, after
+    the deferred constraint triggers, so a test must not commit those unless the commit is the
+    thing under test (test_constraint_triggers.py). Everything is truncated again afterwards, after
     releasing whatever locks the test still holds, or the truncate would wait for them.
     """
     yield app_conn.commit
