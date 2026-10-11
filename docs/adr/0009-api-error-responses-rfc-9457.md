@@ -15,7 +15,7 @@ ADR 0007 decides which failures are expected (`LedgerError`) and which are bugs,
 - **HTTP errors from Starlette or a route** (an unknown route, a wrong method) use the same shape with type `about:blank`, the HTTP status phrase as the `title`, and any headers the error carries, such as `Allow` on a 405.
 - **Bugs.** One catch-all handler takes everything that is not a `LedgerError` or a 503 class, including non-database exceptions. It returns status 500 with type `about:blank`, the title "Internal Server Error" and a fixed generic `detail`.
 - **Request id.** Each request gets a server-generated UUID, returned in the `X-Request-ID` header and as `instance` (`urn:uuid:…`), and attached to every log record made during the request. A client-supplied id is ignored.
-- **Minimal logging.** A bug is logged once at ERROR with the exception and the request id, and a 503 at WARNING with its cause. Expected 4xx errors and successes are not logged. One startup line records the effective pool and concurrency settings. There is no logging library beyond the standard library.
+- **Minimal logging.** A bug is logged once at ERROR with the exception and the request id, and a 503 at WARNING with its cause. Expected 4xx errors and successes are not logged. One startup line records the effective pool and concurrency settings; it arrives with the pool wiring, because the concurrency cap does not exist before then. There is no logging library beyond the standard library.
 
 ## Consequences
 * **Positive:**
