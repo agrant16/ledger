@@ -24,7 +24,7 @@ The service has to turn failures into HTTP responses, and not every failure is t
 
 * **Negative / Trade-offs:**
   - Adding an error means remembering to add a table row; the completeness test turns a forgotten row into a failing test.
-  - The error response body shape is still undecided and belongs to milestone 3; it will shape what each class carries.
+  - The shape of the error response body is decided separately, in ADR 0009.
 
 * **Alternatives Considered:**
   - **Unbalanced entries as a `LedgerError` mapped to 500:** rejected. It would break the meaning of `LedgerError` as an expected outcome.

@@ -142,18 +142,33 @@ The `from` account gets an entry of `-amount_minor` and the `to` account gets `+
 
 Expected failures are `LedgerError` subclasses in `ledger/errors.py`. The API layer owns the HTTP status for each, in one table resolved through the class hierarchy, so the domain code stays free of HTTP; a completeness test asserts that every concrete `LedgerError` subclass has a status. Bugs are not `LedgerError`s: `LedgerInvariantError` (with `UnbalancedEntriesError` under it) and the database safety-net violations (the balances CHECK and the two triggers) are never treated as expected outcomes; they return a 500 and are logged.
 
-| Error | Status | Raised by |
-| --- | --- | --- |
-| `InvalidRequestError` | 400 | The API layer only: Pydantic validation (strict types, unknown fields, ranges, id bounds, same-account), with `RequestValidationError` remapped to 400, plus checks Pydantic cannot express (cursor decoding, no body on reverse). The service layer never raises it |
-| `UnknownAccountError` | 404 | The service layer |
-| `UnknownTransferError` | 404 | The service layer (`GET /transfers/{id}` and reverse) |
-| `CurrencyMismatchError` | 400 | `post_transaction` |
-| `InsufficientFundsError` | 422 | `post_transaction`; carries the account, its balance and the amount |
-| `IdempotencyConflictError` | 409 | `claim_transaction` |
-| `AlreadyReversedError` | 409 | The claim, from the unique link on `reverses_transaction_id` |
-| `ReversalOfReversalError` | 409 | The service layer, because the target has a non-null `reverses_transaction_id`; the schema allows such a row, so this is not a database rule |
-| `DuplicateAccountNameError` | 409 | `create_account`, from the unique name |
-| `ServiceBusyError` | 503 | The retry wrapper: lock timeout, deadlock retries exhausted, pool wait timeout |
+| Error | Status | `type` (after `urn:ledger:error:`) | `title` | Raised by |
+| --- | --- | --- | --- | --- |
+| `InvalidRequestError` | 400 | `invalid-request` | Invalid request | The API layer only: Pydantic validation (strict types, unknown fields, ranges, id bounds, same-account), with `RequestValidationError` remapped to 400, plus checks Pydantic cannot express (cursor decoding, no body on reverse). The service layer never raises it |
+| `UnknownAccountError` | 404 | `unknown-account` | Unknown account | The service layer |
+| `UnknownTransferError` | 404 | `unknown-transfer` | Unknown transfer | The service layer (`GET /transfers/{id}` and reverse) |
+| `CurrencyMismatchError` | 400 | `currency-mismatch` | Currency mismatch | `post_transaction` |
+| `InsufficientFundsError` | 422 | `insufficient-funds` | Insufficient funds | `post_transaction`; carries the account, its balance and the amount |
+| `IdempotencyConflictError` | 409 | `idempotency-conflict` | Idempotency key reused | `claim_transaction` |
+| `AlreadyReversedError` | 409 | `already-reversed` | Transfer already reversed | The claim, from the unique link on `reverses_transaction_id` |
+| `ReversalOfReversalError` | 409 | `reversal-of-reversal` | A reversal cannot be reversed | The service layer, because the target has a non-null `reverses_transaction_id`; the schema allows such a row, so this is not a database rule |
+| `DuplicateAccountNameError` | 409 | `duplicate-account-name` | Duplicate account name | `create_account`, from the unique name |
+| `ServiceBusyError` | 503 | `service-busy` | Service busy | The retry wrapper: lock timeout, deadlock retries exhausted, pool wait timeout |
+
+**Error response format**
+
+Every error response is an RFC 9457 problem (`application/problem+json`), described in ADR 0009.
+
+- **Members:** `type`, `title`, `status`, `detail` and `instance`, plus extension members. There is no `code` member. `type` is the URN `urn:ledger:error:` plus the name in the table, stored in the API-layer table and not derived from the class name; `title` is the fixed string from the table.
+- **Domain errors:** `detail` is the exception's message. Extension members carry the data the error already holds: `account_id`, `balance_minor` and `amount_minor` for `InsufficientFundsError`, and `account_name` for `DuplicateAccountNameError`. A `ServiceBusyError` also sends a `Retry-After` header.
+- **Validation errors** (400): an `errors` list. A body problem has a `pointer` (an RFC 6901 JSON Pointer such as `/amount_minor`, or the empty pointer for a problem with the whole body, including malformed JSON); a path, query or header problem has a `parameter` naming it. The client's input is never echoed back.
+- **HTTP errors** from Starlette or a route (an unknown route, a wrong method): the same shape, with type `about:blank` and the HTTP status phrase as the `title`; a 405 keeps its `Allow` header.
+- **Bugs:** one catch-all handler for anything that is not a `LedgerError` or a 503 class returns 500 with type `about:blank`, the title "Internal Server Error" and a fixed generic `detail` that never repeats the exception.
+
+**Request id and logging**
+
+- **Request id:** the server generates a UUID for every request and returns it in the `X-Request-ID` header and as `instance` (`urn:uuid:<id>`). It is attached to every log record made during the request. A client-supplied id is ignored, because ids are normally set by a gateway or load balancer and there is none in front of this service.
+- **Logging is minimal:** a bug is logged once at ERROR with the exception and the request id; a 503 is logged at WARNING with its cause; expected 4xx errors and successful requests are not logged. One line at startup records the effective pool and concurrency settings. Only the standard library is used.
 
 **Request hash (`request_hash`)**
 
@@ -204,7 +219,7 @@ Seven milestones, built in order. Finish each milestone before starting the next
 - [ ] `psycopg_pool` wiring: a fixed pool of 10 connections, the handler thread limit set to 20 at startup, both read from environment variables, an overall concurrency cap that returns 503 above it (also from an environment variable), and pool wait and lock timeouts mapped to 503 (the values and retry behavior are tuned in milestone 4)
 - [ ] `Idempotency-Key` stored with a hash of the normalized request (see Request hash in the API section), so a reversal's target transfer is part of the hash; tests cover key order, whitespace, and explicit-default variants hashing the same
 - [ ] Request validation per the Transfer request section: strict types, unknown fields rejected, the amount cap, the id bounds on bodies, paths, and cursors, and validation errors mapped to 400 instead of FastAPI's default 422, with integration tests for the fixed order of checks
-- [ ] Error mapping: each `LedgerError` subclass returns its status from the Error model table, and a bug returns a logged 500 with the transaction rolled back and no retry: a `LedgerInvariantError`, the balances CHECK firing (a normal overdraft is a 422), or the zero-sum or no-entries trigger from milestone 2. Tests fire each safety net through the API
+- [ ] Error mapping: each `LedgerError` subclass returns its status, `type` and `title` from the Error model table as an RFC 9457 problem with a request id (see Error response format), HTTP errors from Starlette use the same shape, and a bug returns a logged 500 with the transaction rolled back and no retry: a `LedgerInvariantError`, the balances CHECK firing (a normal overdraft is a 422), or the zero-sum or no-entries trigger from milestone 2. Tests fire each safety net through the API
 - [ ] Entries pagination per the API table: default 50, maximum 200, out-of-range `limit` and undecodable `cursor` both 400, `limit + 1` to detect a next page, and tests that walking every page of an account returns each entry exactly once, including the exact-multiple-of-limit case
 - [ ] The OpenAPI description of the balance endpoint states that it reads the cached balance, may not include a transfer still in flight, and never shows part of a transfer
 - [ ] Replay, mismatched-body, and failed-then-retried cases all behave as specified

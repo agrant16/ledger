@@ -84,6 +84,7 @@ Known by design so far; more will be added in Milestone 7.
 
 - There is no authentication or authorization, so anyone who knows a funding account's id can transfer out of it with `POST /transfers` and effectively mint money. The API cannot create such accounts; only the seed script can. That is acceptable for this scope, but a real deployment would need authentication and per-account authorization first.
 - Idempotency keys are stored for the life of the data and never expire.
+- Error responses include the data an error carries (for example the account id, balance and amount for insufficient funds). With no authentication that exposes nothing new here, but a production service would trim them.
 - Creating an account is not idempotent: retrying after a lost response returns 409 for the duplicate name, and there is no lookup endpoint.
 - The balance endpoint reads a cache, so it may not include a transfer still in flight.
 - A single transfer is capped at 99,900,000,000 minor units, regardless of the currency's minor-unit size.

@@ -12,5 +12,6 @@ Short records of the larger decisions behind the ledger service, in the format o
 | [0006](0006-row-locking-and-overdraft-check.md) | Ascending row locks at READ COMMITTED, overdraft check on the locked balance | 2026-10-09 |
 | [0007](0007-error-taxonomy.md) | Expected failures versus bugs, status mapping in the API layer | 2026-10-09 |
 | [0008](0008-defense-in-depth-and-property-testing.md) | Layered enforcement of the invariants, state-machine property test | 2026-10-10 |
+| [0009](0009-api-error-responses-rfc-9457.md) | RFC 9457 error responses, request id, minimal logging (draft) | 2026-10-11 |
 
-Decisions still to come are noted where they belong: the SERIALIZABLE write-up (milestone 4), the error response body (milestone 3), and the idempotency claim's conflict handling (milestone 3).
+Decisions still to come are noted where they belong: the SERIALIZABLE write-up (milestone 4), and the idempotency claim's conflict handling (milestone 3).
