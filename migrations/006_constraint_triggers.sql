@@ -8,7 +8,7 @@ BEGIN
 IF NOT EXISTS (
    SELECT 1
    FROM entries
-   WHERE entries.id = NEW.id
+   WHERE entries.transaction_id = NEW.id
 ) THEN
    RAISE EXCEPTION 'Transaction integrity violated: Transaction % must have at least one record in entries', NEW.id
     USING ERRCODE = 'check_violation';
