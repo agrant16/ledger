@@ -11,10 +11,10 @@ from ledger.logging_config import configure_logging
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    configure_logging()
     pool = create_pool(load_settings())
     pool.open(wait=True)
     app.state.pool = pool
-    configure_logging()
     try:
         yield
     finally:
