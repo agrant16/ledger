@@ -1,6 +1,12 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
+from request_id import RequestIDMiddleware
+
+import logging
+
+
+from fastapi import FastAPI
 
 from ledger.errors import (
     AlreadyReversedError,
@@ -101,3 +107,6 @@ def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
         transformed_errors.append(error_dict)
 
     return transformed_errors
+
+def install_error_handling(app: FastAPI) -> None:
+    app.add_middleware(RequestIDMiddleware)
