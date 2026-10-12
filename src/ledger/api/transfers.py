@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ledger.api.types import AccountId, AmountMinor, Currency
+from ledger.posting import Entry
 
 
 class TransferRequest(BaseModel):
@@ -15,3 +16,18 @@ class TransferRequest(BaseModel):
         if self.from_account_id == self.to_account_id:
             raise ValueError("from and to must be different accounts")
         return self
+
+
+def entries_for_transfer(transfer: TransferRequest) -> list[Entry]:
+    return [
+        Entry(
+            account_id=transfer.from_account_id,
+            amount_minor=-transfer.amount_minor,
+            currency=transfer.currency,
+        ),
+        Entry(
+            account_id=transfer.to_account_id,
+            amount_minor=transfer.amount_minor,
+            currency=transfer.currency,
+        ),
+    ]
