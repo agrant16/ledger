@@ -9,7 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi import utils as http_utils
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 from ledger.api.request_id import (
     RequestIDMiddleware,
@@ -183,19 +183,18 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
     )
 
 
-async def http_error_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    title = None
+async def http_error_handler(
+    request: Request, exc: StarletteHTTPException
+) -> JSONResponse | Response:
     try:
         title = HTTPStatus(exc.status_code).phrase
     except ValueError:
-        title = "HTTP Error"
+        title = "HTTP Error"  # generic title for anything not recognized
 
     if not http_utils.is_body_allowed_for_status_code(exc.status_code):
-        return JSONResponse(
+        return Response(
             status_code=exc.status_code,
             headers=exc.headers,
-            media_type="application/problem+json",
-            content=None,
         )
     else:
         return problem_response(

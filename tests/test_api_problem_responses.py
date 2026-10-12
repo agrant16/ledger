@@ -96,6 +96,14 @@ def client() -> TestClient:
     def teapot() -> None:
         raise HTTPException(status_code=418, detail="short and stout")
 
+    @app.get("/http-error/{status}")
+    def http_error(status: int) -> None:
+        raise HTTPException(status_code=status, detail="raised by a route")
+
+    @app.get("/http-error-with-a-dict")
+    def http_error_with_a_dict() -> None:
+        raise HTTPException(status_code=400, detail={"why": "because"})
+
     @app.get("/log")
     def log_something() -> dict[str, bool]:
         logging.getLogger("ledger.test").info("inside a request")
@@ -331,6 +339,35 @@ def test_an_http_error_is_a_problem_with_the_status_phrase_as_its_title(
     assert set(body) == STANDARD_MEMBERS
     assert body["instance"] == f"urn:uuid:{request_id(response)}"
     assert not at_least(caplog, logging.ERROR)
+
+
+@pytest.mark.parametrize("status", [204, 304])
+def test_a_status_that_cannot_carry_a_body_is_sent_with_none(client, status) -> None:
+    """HTTP forbids a body on 1xx, 204, 205 and 304. TestClient would not object to one, so the
+    test checks the bytes. A real server can fail on it."""
+    response = client.get(f"/http-error/{status}")
+    assert response.status_code == status
+    assert response.content == b""
+
+
+@pytest.mark.parametrize("status", [499, 599])
+def test_a_status_code_python_has_no_name_for_still_gets_a_problem(client, status) -> None:
+    response = client.get(f"/http-error/{status}")
+    body = problem(response)
+    assert response.status_code == status
+    assert body["status"] == status
+    assert body["type"] == "about:blank"
+    assert body["title"], "the title falls back to a generic one"
+    assert body["detail"] == "raised by a route"
+    assert body["instance"] == f"urn:uuid:{request_id(response)}"
+
+
+def test_a_detail_that_is_not_a_string_comes_back_as_a_string(client) -> None:
+    response = client.get("/http-error-with-a-dict")
+    body = problem(response)
+    assert response.status_code == 400
+    assert isinstance(body["detail"], str)
+    assert "because" in body["detail"]
 
 
 def test_a_405_keeps_its_allow_header(client) -> None:
