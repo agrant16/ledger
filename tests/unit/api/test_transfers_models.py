@@ -29,6 +29,20 @@ def error_types(failure) -> set[tuple[tuple, str]]:
     return {(error["loc"], error["type"]) for error in failure.value.errors()}
 
 
+def value_errors(failure, field: str) -> set[str]:
+    """The error types reported for a field's value. 'missing' and 'extra_forbidden' are about the
+    field's name, not its value, so a test about a bad value must not be satisfied by them."""
+    return {t for loc, t in error_types(failure) if loc == (field,)} - {
+        "missing",
+        "extra_forbidden",
+    }
+
+
+def test_the_model_has_exactly_the_documented_fields(model) -> None:
+    """The API's field names, from the design doc's example body."""
+    assert set(model.model_fields) == set(VALID)
+
+
 def test_a_valid_request(model) -> None:
     request = model.model_validate(VALID)
     assert (
@@ -53,7 +67,7 @@ def test_integers_are_never_converted_from_other_kinds(model, field, value) -> N
     """Strings, floats (even whole ones), booleans and null are rejected, not coerced."""
     with pytest.raises(ValidationError) as failure:
         model.model_validate({**VALID, field: value})
-    assert any(loc == (field,) for loc, _ in error_types(failure))
+    assert value_errors(failure, field)
 
 
 @pytest.mark.parametrize(
@@ -75,7 +89,7 @@ def test_integers_are_never_converted_from_other_kinds(model, field, value) -> N
 def test_the_fields_use_the_shared_rules(model, field, value) -> None:
     with pytest.raises(ValidationError) as failure:
         model.model_validate({**VALID, field: value})
-    assert any(loc == (field,) for loc, _ in error_types(failure))
+    assert value_errors(failure, field)
 
 
 @pytest.mark.parametrize(
@@ -112,8 +126,11 @@ def test_a_body_that_is_not_an_object_is_rejected(model, body) -> None:
 
 
 def test_moving_money_to_the_same_account_is_rejected(model) -> None:
-    with pytest.raises(ValidationError):
+    """The error is about the whole body, so its location is empty, and it is not about any one
+    field (which would mean a field name or value was wrong instead)."""
+    with pytest.raises(ValidationError) as failure:
         model.model_validate({**VALID, "to_account_id": VALID["from_account_id"]})
+    assert error_types(failure) == {((), "value_error")}
 
 
 def test_every_problem_is_reported_together(model) -> None:
