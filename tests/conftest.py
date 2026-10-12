@@ -8,6 +8,7 @@ Two roles, as in production:
 - app_pool / app_conn: the role the service connects as. Everything under test uses these.
 """
 
+import dataclasses
 import uuid
 from collections.abc import Callable, Iterator
 
@@ -18,12 +19,18 @@ from psycopg_pool import ConnectionPool
 from ledger.accounts import create_account
 from ledger.config import Settings, load_settings
 from ledger.migrate import run_migrations
-from tests.db_helpers import reset_database
+from tests.db_helpers import reset_database, with_connect_timeout
 
 
 @pytest.fixture(scope="session")
 def settings() -> Settings:
-    return load_settings()
+    """The settings with a short connect timeout, so a stopped database fails in seconds."""
+    configured = load_settings()
+    return dataclasses.replace(
+        configured,
+        owner_url=with_connect_timeout(configured.owner_url),
+        app_url=with_connect_timeout(configured.app_url),
+    )
 
 
 @pytest.fixture(scope="session")
