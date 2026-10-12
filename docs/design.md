@@ -78,7 +78,7 @@ Six endpoints cover the whole service; the transfer endpoint carries the interes
 
 **Id bounds**
 
-Every id the API accepts, whether in a request body, a path, or a decoded cursor, must be an integer from 1 to 9,223,372,036,854,775,807, the `bigint` maximum. Anything outside that range, or not an integer, is rejected with a 400 before it reaches the database, so an oversized id never turns into a database error and a 500. A well-formed id that does not exist is still a 404.
+Every id the API accepts, whether in a request body, a path, or a decoded cursor, must be an integer from 1 to 9,223,372,036,854,775,807, the `bigint` maximum. Anything outside that range, or not an integer, is rejected with a 400 before it reaches the database, so an oversized id never turns into a database error and a 500. A well-formed id that does not exist is still a 404. In a JSON body an id must be a JSON integer, never a string or a float such as `12.0`. In a URL it must be written as plain decimal digits, so a sign, spaces, underscores, a decimal point or a leading zero (`+12`, ` 12`, `1_000`, `12.0`, `012`) is a 400, not a different way of writing 12.
 
 **Account request and response (`POST /accounts`)**
 
@@ -86,7 +86,7 @@ Every id the API accepts, whether in a request body, a path, or a decoded cursor
 { "account_name": "customer:alice", "currency": "USD" }
 ```
 
-- **`account_name`:** a string of 1 to 100 characters with no leading or trailing whitespace (rejected, not stripped). Whitespace here means the six ASCII whitespace characters only: space, tab, newline, vertical tab, form feed, and carriage return. Unicode spaces such as a non-breaking space are ordinary characters and are allowed. The API checks this with an explicit character set, not Python's `str.strip()`, and the database repeats the same rule in a CHECK so the two cannot disagree. Names are unique, exact and case-sensitive, enforced by a unique constraint on `accounts.account_name`; a duplicate returns 409. The database enforces it, so two concurrent creates cannot both succeed.
+- **`account_name`:** a string of 1 to 100 characters with no leading or trailing whitespace (rejected, not stripped). Whitespace here means the six ASCII whitespace characters only: space, tab, newline, vertical tab, form feed, and carriage return. Unicode spaces such as a non-breaking space are ordinary characters and are allowed. The API checks this with an explicit character set, not Python's `str.strip()`, and the database repeats the same rule in a CHECK so the two cannot disagree. A name that contains a NUL character or a lone surrogate is rejected too, because Postgres cannot store either. Names are unique, exact and case-sensitive, enforced by a unique constraint on `accounts.account_name`; a duplicate returns 409. The database enforces it, so two concurrent creates cannot both succeed.
 - **`currency`:** the same rule as transfers: three uppercase letters, lowercase rejected.
 - **Strict types and unknown fields:** the same rules as transfers, so `allow_negative` in the body is a 400.
 - **Response:** `201 Created` with `{ "id": 12, "account_name": "customer:alice", "currency": "USD", "allow_negative": false }`. It does not include a balance, which is always 0 at creation and is read through `GET /accounts/{id}/balance`.
@@ -124,7 +124,7 @@ The `from` account gets an entry of `-amount_minor` and the `to` account gets `+
 - Amount zero, negative, or above the maximum; currency mismatch; malformed body, wrong types, or unknown fields: 400.
 - Transfer from an account to itself: 400.
 - Account created with a name that already exists: 409.
-- Missing `Idempotency-Key` header, or one outside 1 to 255 characters: 400.
+- Missing `Idempotency-Key` header, or one outside 1 to 255 characters (or containing a NUL character or a lone surrogate): 400.
 - An id in a body, path, or cursor that is not an integer from 1 to 9,223,372,036,854,775,807: 400.
 - Checks run in a fixed order so a request with several problems always gets the same error:
   1. Stateless checks, which never touch the database: header and body validation (400) and the same-account check (400).
@@ -279,6 +279,8 @@ The tests are the proof that the ledger is correct. Each kind of test targets a 
 | Load | Throughput and latency claims | Locust against a local Postgres; record the machine spec and the workload shape |
 
 The tests are laid out by kind: `tests/unit` (no database), `tests/integration` with `db`, `service` and `api`, and `tests/property`, with a `tests/concurrency` folder to come in milestone 4. Only tests that use a database fixture need a running Postgres (ADR 0010).
+
+Request validation is checked against the database: a property test generates arbitrary names, currencies, keys and numbers, including NUL characters, lone surrogates, a trailing newline and values just outside the `bigint` range, and requires that anything the API accepts can be stored. The API may be stricter than the database's CHECK constraints, never looser, so a valid-looking request cannot become a logged 500. Another test lists every CHECK constraint in the schema, so a new one cannot be added without deciding who guards its values.
 
 Every benchmark number quoted in the README comes with the command that produced it. A number nobody can reproduce is worse than no number.
 
