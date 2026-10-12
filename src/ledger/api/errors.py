@@ -2,9 +2,11 @@ import logging
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
+from fastapi import utils as http_utils
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse
@@ -181,8 +183,29 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
     )
 
 
-async def http_error_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    pass
+async def http_error_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    title = None
+    try:
+        title = HTTPStatus(exc.status_code).phrase
+    except ValueError:
+        title = "HTTP Error"
+
+    if not http_utils.is_body_allowed_for_status_code(exc.status_code):
+        return JSONResponse(
+            status_code=exc.status_code,
+            headers=exc.headers,
+            media_type="application/problem+json",
+            content=None,
+        )
+    else:
+        return problem_response(
+            request,
+            exc.status_code,
+            "about:blank",
+            title,
+            str(exc.detail),
+            dict(exc.headers) if exc.headers else None,
+        )
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
