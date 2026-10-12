@@ -1,34 +1,36 @@
 """Guard for tests/unit: a unit test never touches the database.
 
-`uv run pytest tests/unit` is meant to work with no Postgres running. Nothing stops a later test
-from asking for a database fixture, and CI (which has a Postgres service) would still pass, so
-the mistake would only show up on a machine with the database off. This fails collection instead.
+`uv run pytest tests/unit` is meant to work with no Postgres running. Nothing else stops a later
+test from asking for a database fixture or connecting itself, and CI (which has a Postgres
+service) would still pass, so the mistake would only show up on a machine with the database off.
 
-`item.fixturenames` is the full closure of fixtures a test depends on, so a fixture built on one
-of these (app_conn, clean_db, commit_setup, ...) is caught too. New database fixtures will
-depend on at least one of the base three below.
+- At collection, a unit test that depends on a database fixture stops the whole run with a usage
+  error, so a violation fails CI.
+- While a unit test runs, any attempt to open a psycopg connection raises.
+
+The logic is in tests/db_guard.py; tests/unit/test_disallow_db.py tests both checks.
 """
 
 from pathlib import Path
 
 import pytest
 
-DATABASE_FIXTURES = {"migrated_database", "owner_conn", "app_pool"}
-UNIT_DIR = Path(__file__).parent
+from tests.db_guard import block_database_connections, find_database_users
+
+UNIT_DIR = Path(__file__).resolve().parent
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    offenders = []
-    for item in items:
-        # This hook receives every collected item, not only the ones under tests/unit.
-        if not item.path.is_relative_to(UNIT_DIR):
-            continue
-        used = DATABASE_FIXTURES.intersection(getattr(item, "fixturenames", ()))
-        if used:
-            offenders.append(f"{item.nodeid} (uses {', '.join(sorted(used))})")
+    # This hook receives every collected item, not only the ones under tests/unit.
+    offenders = find_database_users(items, UNIT_DIR)
     if offenders:
         listing = "\n  ".join(offenders)
         raise pytest.UsageError(
-            "Tests under tests/unit must not use the database. Move them to "
-            f"tests/integration:\n  {listing}"
+            "Tests under tests/unit must not use the database. "
+            f"Move them to tests/integration:\n  {listing}"
         )
+
+
+@pytest.fixture(autouse=True)
+def no_database_connections(monkeypatch: pytest.MonkeyPatch) -> None:
+    block_database_connections(monkeypatch)
