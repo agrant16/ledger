@@ -1,5 +1,5 @@
 import logging
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -128,8 +128,8 @@ def problem_response(
     type_: str,
     title: str,
     detail: str,
-    headers=None,
-    extensions=None,
+    headers: dict[str, str] | None = None,
+    extensions: Mapping[str, Any] | None = None,
 ) -> JSONResponse:
     pass
 
