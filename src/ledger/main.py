@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from ledger.api.errors import install_error_handling
 from ledger.config import load_settings
 from ledger.db import create_pool
 
@@ -19,7 +20,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Ledger Service", lifespan=lifespan)
-
+install_error_handling(app)
 
 @app.get("/health", include_in_schema=False)
 def health() -> dict[str, str]:
