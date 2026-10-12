@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -32,7 +33,9 @@ class ProblemSpec:
     extensions: tuple[str, ...] = ()
 
 
-RETRY_AFTER_SECONDS = "10"
+logger: logging.Logger = logging.getLogger(__name__)
+
+RETRY_AFTER_SECONDS = 10
 
 PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
     InvalidRequestError: ProblemSpec(400, "urn:ledger:error:invalid-request", "Invalid request"),
@@ -136,6 +139,7 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
     headers = None
     if problem_spec.status == 503:
         headers = {"Retry-After": str(RETRY_AFTER_SECONDS)}
+        logger.WARNING(f"Retry-After: {RETRY_AFTER_SECONDS}")
     return problem_response(
         request,
         problem_spec.status,
@@ -150,3 +154,4 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
 def install_error_handling(app: FastAPI) -> None:
     install_log_record_factory()
     app.add_middleware(RequestIDMiddleware)
+    app.add_exception_handler(LedgerError, ledger_error_handler)
