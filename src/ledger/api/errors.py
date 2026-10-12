@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 from ledger.errors import (
     AlreadyReversedError,
@@ -47,8 +48,52 @@ PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
     ServiceBusyError: ProblemSpec(503, "urn:ledger:error:service-busy", "Service busy"),
 }
 
+ERROR_LOC_MAPPING: dict[str, str] = {
+    "header": "parameter",
+    "body": "pointer",
+    "query": "parameter",
+    "path": "parameter",
+}
+
+
 def problem_for(error_class: type[Exception]) -> ProblemSpec:
     for cls in error_class.__mro__:
         if cls in PROBLEMS:
             return PROBLEMS[cls]
     raise LookupError(error_class)
+
+
+def escape_pointer_tokens(pointer_tokens: tuple[Any, ...]) -> list[str]:
+    return [str(token).replace("~", "~0").replace("/", "~1") for token in pointer_tokens]
+
+
+def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Converts Pydantic errors into a JSON:API/RFC 9457-style error shape.
+    :param errors: the Pydantic errors to convert.
+    :return: Pydantic error formatted to JSON:API/RFC 9457-style error shape.
+    """
+    transformed_errors: list[dict[str, Any]] = []
+
+    for error in errors:
+        error_dict = {"detail": error.get("msg", "")}
+        type_ = error.get("type", "")
+        loc_ = error.get("loc", [])
+
+        if type_ == "json_invalid":
+            error_dict["pointer"] = ""
+        elif loc_:
+            loc_kind = ERROR_LOC_MAPPING.get(loc_[0], "")
+            if loc_kind == "pointer":
+                if len(loc_) >= 2:
+                    error_dict["pointer"] = "".join(
+                        "/" + token for token in escape_pointer_tokens(loc_[1:])
+                    )
+                else:
+                    error_dict["pointer"] = ""
+            elif loc_kind == "parameter" and len(loc_) >= 2:
+                error_dict["parameter"] = str(loc_[1])
+
+        transformed_errors.append(error_dict)
+
+    return transformed_errors
