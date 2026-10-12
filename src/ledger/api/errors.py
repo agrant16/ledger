@@ -166,7 +166,16 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
 
 
 async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    pass
+    spec = problem_for(InvalidRequestError)
+    return problem_response(
+        request,
+        spec.status,
+        spec.type,
+        spec.title,
+        "The request is not valid.",  # a fixed sentence; the specifics are in `errors`
+        headers=None,
+        extensions={"errors": validation_errors(exc.errors())},
+    )
 
 
 async def http_error_handler(request: Request, exc: HTTPException) -> JSONResponse:
