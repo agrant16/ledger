@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -19,7 +20,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         pool.close()
 
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s [%(request_id)s] %(message)s",
+)
+
 app = FastAPI(title="Ledger Service", lifespan=lifespan)
+
 install_error_handling(app)
 
 
