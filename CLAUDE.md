@@ -65,6 +65,7 @@ Write tests against these properties, not against whatever the current code happ
 - Make small, focused commits with clear messages. Don't bundle unrelated changes.
 - Before writing code for a non-trivial feature, briefly state the approach and any tradeoffs so I can weigh in.
 - Explain any non-obvious design choice in plain terms, so I can explain and defend my decisions.
+- Record the larger design decisions as architecture decision records in `docs/adr/`, using `docs/adr/template.md`. An ADR goes in the same pull request as the code it describes, like the design doc update, starts as `Draft`, is marked `Accepted` in the PR that merges it, and gets a row in the index at `docs/adr/README.md`. One ADR can cover a group of related decisions, so group them by theme and date, not one per decision. Claude drafts them from our discussions and the code, and I review them.
 - Dependencies beyond the stack above, schema changes, and changes to the public API need my approval first. Adding the pre-approved stack's own packages during scaffolding is fine.
 - Every change goes on its own branch and a pull request, never straight to `main`. Both CI checks (`lint-and-test` and `compose-smoke`) must pass, and PRs are squash-merged, so intermediate commits on a branch may be red.
 - For the items on my "I write myself" list, Claude writes the tests first from `docs/design.md` and I write the implementation; the tests stay red until it exists.
