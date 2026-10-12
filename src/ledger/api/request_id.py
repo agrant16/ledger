@@ -33,7 +33,7 @@ class RequestIDMiddleware:
             if message["type"] == "http.response.start":
                 if "headers" not in message:
                     message["headers"] = []
-                message["headers"].append(b"x-request-id", req_id.encode("utf-8"))
+                message["headers"].append(b"X-Request-Id", req_id.encode("utf-8"))
             await send(message)
 
 
