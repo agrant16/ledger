@@ -50,7 +50,9 @@ from ledger.errors import (
     UnknownAccountError,
 )
 from ledger.posting import Entry, claim_transaction, post_transaction
-from tests.conftest import reset_database
+from tests.db_helpers import reset_database
+
+pytestmark = pytest.mark.usefixtures("migrated_database")
 
 CURRENCIES = ("USD", "EUR")
 MAX_AMOUNT = 5_000

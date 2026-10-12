@@ -23,7 +23,7 @@ from ledger.errors import (
     LedgerInvariantError,
     UnbalancedEntriesError,
 )
-from tests.api_cases import EXPECTED, URN_PREFIX
+from tests.unit.api.api_cases import EXPECTED, URN_PREFIX
 
 
 @pytest.fixture
@@ -47,8 +47,8 @@ def domain_ledger_errors() -> set[type[LedgerError]]:
 
 
 def test_the_expected_table_lists_every_ledger_error() -> None:
-    """If this fails, a LedgerError was added or removed: update EXPECTED in tests/api_cases.py
-    and the API table together."""
+    """If this fails, a LedgerError was added or removed: update EXPECTED in
+    tests/unit/api/api_cases.py and the API table together."""
     assert set(EXPECTED) == domain_ledger_errors()
 
 

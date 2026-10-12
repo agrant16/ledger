@@ -41,7 +41,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 from starlette.requests import Request
 
 from ledger.errors import LedgerInvariantError, UnbalancedEntriesError
-from tests.api_cases import EXAMPLES, EXPECTED, EXTENSIONS, STANDARD_MEMBERS
+from tests.unit.api.api_cases import EXAMPLES, EXPECTED, EXTENSIONS, STANDARD_MEMBERS
 
 LEDGER_ERRORS = {error.__name__: error for error in EXPECTED}
 
