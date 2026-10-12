@@ -9,7 +9,10 @@ Contract these tests expect from ledger/api/errors.py:
 
 - a body field: {"detail": msg, "pointer": <RFC 6901 JSON Pointer>}, e.g. "/amount_minor". A
   problem with the whole body has the empty pointer "".
-- a path, query or header parameter: {"detail": msg, "parameter": <its name>}.
+- a path, query, header or cookie parameter: {"detail": msg, "parameter": <its name>}.
+- a location of any other kind, or none: {"detail": msg} alone. Claiming a pointer or a
+  parameter for a place we cannot classify would mislead, and the function must never raise,
+  because an exception inside the validation handler would turn a client's mistake into a 500.
 
 Nothing else is passed on. In particular the client's `input` value is not echoed back.
 """
@@ -59,6 +62,7 @@ def test_malformed_json_points_at_the_whole_body(convert) -> None:
         (("path", "account_id"), "account_id"),
         (("query", "limit"), "limit"),
         (("header", "Idempotency-Key"), "Idempotency-Key"),
+        (("cookie", "session"), "session"),
     ],
 )
 def test_a_parameter_location_is_named_not_pointed_at(convert, loc, name) -> None:
@@ -80,3 +84,28 @@ def test_the_order_is_kept_and_nothing_else_is_passed_on(convert) -> None:
 
 def test_no_errors_gives_an_empty_list(convert) -> None:
     assert convert([]) == []
+
+
+# --- locations we do not expect: no locator, and never an exception -----------------------------
+
+
+@pytest.mark.parametrize("loc", [("form", "username"), ("something-new", "x"), ("what",)])
+def test_an_unknown_kind_of_location_gets_no_locator(convert, loc) -> None:
+    assert convert([error(loc, "Odd")]) == [{"detail": "Odd"}]
+
+
+def test_an_empty_location_gets_no_locator(convert) -> None:
+    assert convert([error((), "Odd")]) == [{"detail": "Odd"}]
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ({}, {"detail": ""}),
+        ({"msg": "Only a message"}, {"detail": "Only a message"}),
+        ({"loc": ("body", "x")}, {"detail": "", "pointer": "/x"}),
+        ({"type": "missing", "msg": "No location"}, {"detail": "No location"}),
+    ],
+)
+def test_an_error_with_missing_keys_does_not_raise(convert, raw, expected) -> None:
+    assert convert([raw]) == [expected]
