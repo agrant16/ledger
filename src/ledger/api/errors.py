@@ -3,7 +3,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse
 
 from ledger.api.request_id import (
@@ -131,15 +132,29 @@ def problem_response(
     headers: dict[str, str] | None = None,
     extensions: Mapping[str, Any] | None = None,
 ) -> JSONResponse:
-    pass
+    body = {
+        "title": title,
+        "type": type_,
+        "detail": detail,
+        "status": status,
+        "instance": f"urn:uuid:{request.state.request_id}",
+        **(extensions or {}),
+    }
+    print(body)
+    return JSONResponse(
+        body, status_code=status, headers=headers, media_type="application/problem+json"
+    )
 
 
 async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONResponse:
     problem_spec = problem_for(exc.__class__)
     headers = None
+    extensions = {name: getattr(exc, name) for name in problem_spec.extensions}
     if problem_spec.status == 503:
         headers = {"Retry-After": str(RETRY_AFTER_SECONDS)}
-        logger.WARNING(f"Retry-After: {RETRY_AFTER_SECONDS}")
+        logger.warning(
+            f"{type(exc).__name__} occurrence, Retry-After header added with {RETRY_AFTER_SECONDS}"
+        )
     return problem_response(
         request,
         problem_spec.status,
@@ -147,11 +162,32 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
         problem_spec.title,
         str(exc),
         headers,
-        problem_spec.extensions,
+        extensions,
     )
+
+
+async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    pass
+
+
+async def http_error_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    pass
+
+
+async def exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    pass
 
 
 def install_error_handling(app: FastAPI) -> None:
     install_log_record_factory()
     app.add_middleware(RequestIDMiddleware)
+    # Starlette passes only LedgerError to this handler
+    # noinspection PyTypeChecker
     app.add_exception_handler(LedgerError, ledger_error_handler)
+    app.add_exception_handler(Exception, exception_handler)
+    # Starlette passes only RequestValidationError to this handler
+    # noinspection PyTypeChecker
+    app.add_exception_handler(RequestValidationError, validation_error_handler)
+    # Starlette passes only HTTPException to this handler
+    # noinspection PyTypeChecker
+    app.add_exception_handler(HTTPException, http_error_handler)
