@@ -9,6 +9,7 @@ POSTGRES_BIG_INT = 9223372036854775807
 
 _CANONICAL_ID = re.compile(r"[1-9][0-9]*")
 
+
 def _no_nul(value: str) -> str:
     if "\x00" in value:
         raise ValueError("must not contain a NUL character")
@@ -21,16 +22,11 @@ def _not_padded(value: str) -> str:
     return value
 
 
-def _account_id_range(value: int) -> int:
-    if not 1 <= value <= POSTGRES_BIG_INT:
-        raise ValueError("ID must be between 1 and 9,223,372,036,854,775,807")
-    return value
-
-
 def _canonical_digits_to_int(value: object) -> int:
     if not isinstance(value, str) or len(value) > 19 or not _CANONICAL_ID.fullmatch(value):
         raise ValueError("must be written as plain decimal digits, without a sign or leading zero")
     return int(value)
+
 
 AccountId = Annotated[
     int,
