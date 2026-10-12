@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from starlette.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ledger.api.request_id import (
     RequestIDMiddleware,
@@ -152,7 +153,7 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
     if problem_spec.status == 503:
         headers = {"Retry-After": str(RETRY_AFTER_SECONDS)}
         logger.warning(
-            f"{type(exc).__name__} occurrence, Retry-After header added with {RETRY_AFTER_SECONDS}"
+            "Service was busy: %s", exc
         )
     return problem_response(
         request,
@@ -198,4 +199,4 @@ def install_error_handling(app: FastAPI) -> None:
     app.add_exception_handler(RequestValidationError, validation_error_handler)
     # Starlette passes only HTTPException to this handler
     # noinspection PyTypeChecker
-    app.add_exception_handler(HTTPException, http_error_handler)
+    app.add_exception_handler(StarletteHTTPException, http_error_handler)
