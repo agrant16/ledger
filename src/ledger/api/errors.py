@@ -1,5 +1,6 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any
 
 from ledger.errors import (
     AlreadyReversedError,
@@ -70,7 +71,9 @@ def escape_pointer_tokens(pointer_tokens: Sequence[Any]) -> list[str]:
 
 def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
-    Converts Pydantic errors into the items of the RFC 9457 errors extension: detail plus a pointer or parameter
+    Converts Pydantic errors into the items of the RFC 9457 errors
+    extension: detail plus a pointer or parameter
+
     :param errors: the Pydantic errors to convert.
     :return: Pydantic error formatted to RFC 9457-style error shape.
     """
