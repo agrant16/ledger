@@ -2,7 +2,7 @@ import logging
 import uuid
 from contextvars import ContextVar
 
-from Starlette import Scope
+from starlette.types import Scope, Receive, Send
 
 request_id_ctx_var: ContextVar[str] = ContextVar("request_id", default="-")
 
@@ -23,7 +23,7 @@ class RequestIDMiddleware:
     def __init__(self, app) -> None:
         self.app = app
 
-    async def __call__(self, scope: Scope, receive, send):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         # not http: pass through. http: make the id, store it, wrap `send`
         # so the "http.response.start" message gets the X-Request-ID header
         if scope["type"] != "http":
