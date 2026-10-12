@@ -5,8 +5,10 @@ from typing import Any
 from fastapi import FastAPI, Request
 from starlette.responses import JSONResponse
 
-from ledger.api.request_id import RequestIDMiddleware, install_log_record_factory, request_id_ctx_var
-
+from ledger.api.request_id import (
+    RequestIDMiddleware,
+    install_log_record_factory,
+)
 from ledger.errors import (
     AlreadyReversedError,
     CurrencyMismatchError,
@@ -29,6 +31,8 @@ class ProblemSpec:
     title: str
     extensions: tuple[str, ...] = ()
 
+
+RETRY_AFTER_SECONDS = "10"
 
 PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
     InvalidRequestError: ProblemSpec(400, "urn:ledger:error:invalid-request", "Invalid request"),
@@ -114,15 +118,34 @@ def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     return transformed_errors
 
-def problem_response(request: Request, status: int, type_: str, title: str, detail:str , headers=None, extensions=None) -> JSONResponse:
+
+def problem_response(
+    request: Request,
+    status: int,
+    type_: str,
+    title: str,
+    detail: str,
+    headers=None,
+    extensions=None,
+) -> JSONResponse:
     pass
+
 
 async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONResponse:
     problem_spec = problem_for(exc.__class__)
     headers = None
     if problem_spec.status == 503:
         headers = {"Retry-After": str(RETRY_AFTER_SECONDS)}
-    return problem_response(request, problem_spec.status, problem_spec.type, problem_spec.title, str(exc), headers, problem_spec.extensions)
+    return problem_response(
+        request,
+        problem_spec.status,
+        problem_spec.type,
+        problem_spec.title,
+        str(exc),
+        headers,
+        problem_spec.extensions,
+    )
+
 
 def install_error_handling(app: FastAPI) -> None:
     install_log_record_factory()
