@@ -26,6 +26,7 @@ Logging is deliberately minimal: a bug is logged at ERROR, a 503 at WARNING, and
 errors are not logged as errors.
 """
 
+import asyncio
 import json
 import logging
 import uuid
@@ -37,6 +38,7 @@ import pytest
 from fastapi import FastAPI, Header, HTTPException, Path, Query
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
+from starlette.requests import Request
 
 from ledger.errors import LedgerInvariantError, UnbalancedEntriesError
 from tests.api_cases import EXAMPLES, EXPECTED, EXTENSIONS, STANDARD_MEMBERS
@@ -195,6 +197,30 @@ def test_a_bug_becomes_a_generic_500_and_is_logged_once(client, caplog, bug) -> 
 def test_the_500_detail_is_the_same_whatever_went_wrong(client) -> None:
     details = {problem(client.get(f"/raise-bug/{name}"))["detail"] for name in BUGS}
     assert len(details) == 1
+
+
+def test_the_catch_all_makes_an_id_when_the_request_has_none(caplog) -> None:
+    """The middleware always runs first, so this cannot happen in the app. The catch-all is the last
+    resort and must not fail itself, so it covers a request that reached it without an id."""
+    from ledger.api.errors import unhandled_exception_handler
+    from ledger.api.request_id import install_log_record_factory
+
+    install_log_record_factory()  # normally done by install_error_handling
+    caplog.set_level(logging.DEBUG)
+    request = Request({"type": "http", "method": "GET", "path": "/x", "headers": []})
+
+    response = asyncio.run(unhandled_exception_handler(request, RuntimeError("secret")))
+    body = json.loads(response.body)
+
+    assert response.status_code == 500
+    assert response.media_type == "application/problem+json"
+    header_id = request_id(response)
+    assert body["instance"] == f"urn:uuid:{header_id}"
+    assert body["type"] == "about:blank"
+    assert "secret" not in response.body.decode()
+    errors = at_least(caplog, logging.ERROR)
+    assert len(errors) == 1
+    assert errors[0].request_id == header_id
 
 
 # --- validation errors -> 400 with an errors list ------------------------------------------------
