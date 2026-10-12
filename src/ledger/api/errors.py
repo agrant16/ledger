@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Sequence
 
 from ledger.errors import (
     AlreadyReversedError,
@@ -53,6 +53,7 @@ ERROR_LOC_MAPPING: dict[str, str] = {
     "body": "pointer",
     "query": "parameter",
     "path": "parameter",
+    "cookie": "parameter",
 }
 
 
@@ -63,15 +64,15 @@ def problem_for(error_class: type[Exception]) -> ProblemSpec:
     raise LookupError(error_class)
 
 
-def escape_pointer_tokens(pointer_tokens: tuple[Any, ...]) -> list[str]:
+def escape_pointer_tokens(pointer_tokens: Sequence[Any]) -> list[str]:
     return [str(token).replace("~", "~0").replace("/", "~1") for token in pointer_tokens]
 
 
 def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
-    Converts Pydantic errors into a JSON:API/RFC 9457-style error shape.
+    Converts Pydantic errors into the items of the RFC 9457 errors extension: detail plus a pointer or parameter
     :param errors: the Pydantic errors to convert.
-    :return: Pydantic error formatted to JSON:API/RFC 9457-style error shape.
+    :return: Pydantic error formatted to RFC 9457-style error shape.
     """
     transformed_errors: list[dict[str, Any]] = []
 
@@ -92,7 +93,7 @@ def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 else:
                     error_dict["pointer"] = ""
             elif loc_kind == "parameter" and len(loc_) >= 2:
-                error_dict["parameter"] = str(loc_[1])
+                error_dict["parameter"] = ".".join(str(token) for token in loc_[1:])
 
         transformed_errors.append(error_dict)
 
