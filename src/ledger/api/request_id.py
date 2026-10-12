@@ -36,7 +36,8 @@ class RequestIDMiddleware:
                 message["headers"].append(b"x-request-id", req_id.encode("utf-8"))
             await send(message)
 
-        try:
-            await self.app(scope, receive, send_wrapper)
-        finally:
-            request_id_ctx_var.reset(token)
+
+        await self.app(scope, receive, send_wrapper)
+
+        # no finally block because the 500 handler runs after this middleware
+        # has exited and still needs the id for its log record
