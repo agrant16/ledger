@@ -2,7 +2,7 @@ import logging
 import uuid
 from contextvars import ContextVar
 
-from starlette.types import Scope, Receive, Send
+from starlette.types import Receive, Scope, Send
 
 request_id_ctx_var: ContextVar[str] = ContextVar("request_id", default="-")
 

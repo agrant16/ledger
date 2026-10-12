@@ -2,9 +2,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from starlette.responses import JSONResponse
 
-from ledger.api.request_id import RequestIDMiddleware, install_log_record_factory
+from ledger.api.request_id import RequestIDMiddleware, install_log_record_factory, request_id_ctx_var
 
 from ledger.errors import (
     AlreadyReversedError,
@@ -26,6 +27,7 @@ class ProblemSpec:
     status: int
     type: str
     title: str
+    extensions: tuple[str, ...] = ()
 
 
 PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
@@ -36,7 +38,10 @@ PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
         400, "urn:ledger:error:currency-mismatch", "Currency mismatch"
     ),
     InsufficientFundsError: ProblemSpec(
-        422, "urn:ledger:error:insufficient-funds", "Insufficient funds"
+        422,
+        "urn:ledger:error:insufficient-funds",
+        "Insufficient funds",
+        extensions=("account_id", "balance_minor", "amount_minor"),
     ),
     IdempotencyConflictError: ProblemSpec(
         409, "urn:ledger:error:idempotency-conflict", "Idempotency key reused"
@@ -48,7 +53,10 @@ PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
         409, "urn:ledger:error:reversal-of-reversal", "A reversal cannot be reversed"
     ),
     DuplicateAccountNameError: ProblemSpec(
-        409, "urn:ledger:error:duplicate-account-name", "Duplicate account name"
+        409,
+        "urn:ledger:error:duplicate-account-name",
+        "Duplicate account name",
+        extensions=("account_name",),
     ),
     ServiceBusyError: ProblemSpec(503, "urn:ledger:error:service-busy", "Service busy"),
 }
@@ -106,6 +114,15 @@ def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     return transformed_errors
 
+def problem_response(request: Request, status: int, type_: str, title: str, detail:str , headers=None, extensions=None) -> JSONResponse:
+    pass
+
+async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONResponse:
+    problem_spec = problem_for(exc.__class__)
+    headers = None
+    if problem_spec.status == 503:
+        headers = {"Retry-After": str(RETRY_AFTER_SECONDS)}
+    return problem_response(request, problem_spec.status, problem_spec.type, problem_spec.title, str(exc), headers, problem_spec.extensions)
 
 def install_error_handling(app: FastAPI) -> None:
     install_log_record_factory()
