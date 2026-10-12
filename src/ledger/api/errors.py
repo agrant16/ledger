@@ -12,6 +12,7 @@ from starlette.responses import JSONResponse
 from ledger.api.request_id import (
     RequestIDMiddleware,
     install_log_record_factory,
+    request_id_ctx_var,
 )
 from ledger.errors import (
     AlreadyReversedError,
@@ -40,7 +41,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 RETRY_AFTER_SECONDS = 10
 
-GENERIC_500_DETAIL = "An unknown internal error occurred"
+GENERIC_500_DETAIL = "An unexpected error occurred. Include the request id when reporting it."
 
 PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
     InvalidRequestError: ProblemSpec(400, "urn:ledger:error:invalid-request", "Invalid request"),
