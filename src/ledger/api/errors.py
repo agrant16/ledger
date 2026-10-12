@@ -6,7 +6,6 @@ from http import HTTPStatus
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi import utils as http_utils
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse, Response
@@ -94,6 +93,11 @@ def problem_for(error_class: type[Exception]) -> ProblemSpec:
 
 def escape_pointer_tokens(pointer_tokens: Sequence[Any]) -> list[str]:
     return [str(token).replace("~", "~0").replace("/", "~1") for token in pointer_tokens]
+
+
+# check for status codes that don't allow bodies.
+def is_body_allowed(status_code: int) -> bool:
+    return not (100 <= status_code < 200 or status_code in (204, 205, 304))
 
 
 def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -191,7 +195,7 @@ async def http_error_handler(
     except ValueError:
         title = "HTTP Error"  # generic title for anything not recognized
 
-    if not http_utils.is_body_allowed_for_status_code(exc.status_code):
+    if not is_body_allowed(exc.status_code):
         return Response(
             status_code=exc.status_code,
             headers=exc.headers,
