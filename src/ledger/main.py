@@ -22,6 +22,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Ledger Service", lifespan=lifespan)
 install_error_handling(app)
 
+
 @app.get("/health", include_in_schema=False)
 def health() -> dict[str, str]:
     """Liveness plus a database round trip, to confirm the app can reach Postgres."""

@@ -1,12 +1,13 @@
 import logging
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from starlette.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import JSONResponse
 
 from ledger.api.request_id import (
     RequestIDMiddleware,
@@ -38,6 +39,8 @@ class ProblemSpec:
 logger: logging.Logger = logging.getLogger(__name__)
 
 RETRY_AFTER_SECONDS = 10
+
+GENERIC_500_DETAIL = "An unknown internal error occurred"
 
 PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
     InvalidRequestError: ProblemSpec(400, "urn:ledger:error:invalid-request", "Invalid request"),
@@ -152,9 +155,7 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
     extensions = {name: getattr(exc, name) for name in problem_spec.extensions}
     if problem_spec.status == 503:
         headers = {"Retry-After": str(RETRY_AFTER_SECONDS)}
-        logger.warning(
-            "Service was busy: %s", exc
-        )
+        logger.warning("Service was busy: %s", exc)
     return problem_response(
         request,
         problem_spec.status,
@@ -183,8 +184,21 @@ async def http_error_handler(request: Request, exc: HTTPException) -> JSONRespon
     pass
 
 
-async def exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    pass
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None)
+    if not request_id:
+        request_id = str(uuid.uuid4())
+        request.state.request_id = request_id
+        request_id_ctx_var.set(request_id)
+    logger.error("unhandled exception", exc_info=exc)
+    return problem_response(
+        request,
+        500,
+        "about:blank",
+        "Internal Server Error",
+        GENERIC_500_DETAIL,
+        headers={"X-Request-Id": str(request_id)},
+    )
 
 
 def install_error_handling(app: FastAPI) -> None:
@@ -193,7 +207,7 @@ def install_error_handling(app: FastAPI) -> None:
     # Starlette passes only LedgerError to this handler
     # noinspection PyTypeChecker
     app.add_exception_handler(LedgerError, ledger_error_handler)
-    app.add_exception_handler(Exception, exception_handler)
+    app.add_exception_handler(Exception, unhandled_exception_handler)
     # Starlette passes only RequestValidationError to this handler
     # noinspection PyTypeChecker
     app.add_exception_handler(RequestValidationError, validation_error_handler)
