@@ -1,11 +1,13 @@
+import re
 from typing import Annotated
 
-from pydantic import AfterValidator, Field
+from pydantic import AfterValidator, BeforeValidator, Field
 
 ASCII_WHITESPACE = " \t\n\v\f\r"
 
 POSTGRES_BIG_INT = 9223372036854775807
 
+_CANONICAL_ID = re.compile(r"[1-9][0-9]*")
 
 def _no_nul(value: str) -> str:
     if "\x00" in value:
@@ -19,12 +21,16 @@ def _not_padded(value: str) -> str:
     return value
 
 
-def _account_id_range(value: str) -> int:
-    int_value = int(value)
-    if not 1 <= int_value <= POSTGRES_BIG_INT:
+def _account_id_range(value: int) -> int:
+    if not 1 <= value <= POSTGRES_BIG_INT:
         raise ValueError("ID must be between 1 and 9,223,372,036,854,775,807")
-    return int_value
+    return value
 
+
+def _canonical_digits_to_int(value: object) -> int:
+    if not isinstance(value, str) or len(value) > 19 or not _CANONICAL_ID.fullmatch(value):
+        raise ValueError("must be written as plain decimal digits, without a sign or leading zero")
+    return int(value)
 
 AccountId = Annotated[
     int,
@@ -32,18 +38,14 @@ AccountId = Annotated[
         strict=True,
         ge=1,
         le=POSTGRES_BIG_INT,
-        description="A strict integer from 1 to 9,223,372,036,854,775,807",
+        description=f"A strict integer from 1 to {POSTGRES_BIG_INT}",
     ),
 ]
 
 AccountIdInPath = Annotated[
-    str,
-    Field(
-        strict=True,
-        pattern=r"^[1-9]+$",
-        description="A strict integer from 1 to 9,223,372,036,854,775,807",
-    ),
-    AfterValidator(_account_id_range),
+    int,
+    BeforeValidator(_canonical_digits_to_int),
+    Field(ge=1, le=POSTGRES_BIG_INT, description=f"A strict integer from 1 to {POSTGRES_BIG_INT}"),
 ]
 
 AmountMinor = Annotated[

@@ -78,8 +78,10 @@ def path_client(types) -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
-@pytest.mark.parametrize("raw", ["1", "12", str(BIGINT_MAX)])
+@pytest.mark.parametrize("raw", ["1", "12", "10", "100", "205", "9000", str(BIGINT_MAX)])
 def test_an_account_id_in_a_path_accepts_canonical_digits(path_client, raw) -> None:
+    """Includes ids with zeros inside and at the end (10, 100, 205, 9000): zero is a valid digit
+    anywhere but the front."""
     response = path_client.get(f"/accounts/{raw}")
     assert response.status_code == 200
     assert response.json() == {"id": int(raw)}
