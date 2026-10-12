@@ -17,20 +17,27 @@ Every test lived in one flat `tests/` folder, 25 files and 339 tests by the end 
 - **`reset_database` lives in `tests/db_helpers.py`,** not in `conftest.py`, so tests no longer import from a conftest.
 - **`test_migrate.py` is split** into `unit/test_migrate_files.py` (finding and ordering files) and `integration/db/test_migrate_runner.py` (applying them).
 - **Files in an area lose their `test_api_` style prefix,** because the folder says it.
+- **The rule is enforced, so CI fails if a unit test breaks it** (`tests/unit/conftest.py`, with the logic in `tests/db_guard.py`):
+  - At collection, a unit test that depends on a database fixture (`migrated_database`, `owner_conn` or `app_pool`, directly or through a fixture built on them) stops the whole run with a usage error that lists the offenders.
+  - While a unit test runs, an autouse fixture makes every way psycopg opens a connection raise.
+  - The guard has its own tests, including a nested pytest run (pytest's `pytester`) that proves the hook and the fixture are wired in, not just that the helper function works.
 
 ## Consequences
 * **Positive:**
   - `uv run pytest tests/unit` runs in about a second with no Docker, and a developer without a database can still check the pure logic.
   - A failing connection now fails the integration tests that need it, not unrelated ones.
+  - A unit test that reaches for the database fails in CI, where a Postgres service would otherwise hide the mistake.
   - Each kind has an obvious home, and the folders match the kinds in the design doc's testing table.
 
 * **Negative / Trade-offs:**
   - New tests need a decision about where they belong, and the boundary is a judgement for files like the real-app tests, which start the app against the database.
   - Property is a technique, not a level, so `property/` holds some tests that need a database and some that do not.
   - Moved files change paths in history and in a few docstrings.
+  - The guard cannot see a connection made in another process (the logging test runs a subprocess, which never connects), or by a driver other than psycopg. A new fixture that opens its own connection must depend on one of the base database fixtures, or be added to `DATABASE_FIXTURES`.
   - Starting the app with the database stopped fails slowly (about two minutes, in the connection pool's wait), which this change does not address.
 
 * **Alternatives Considered:**
   - **Folders by area (`db/`, `service/`, `api/`):** rejected, because it does not separate tests that need a database from those that do.
   - **Markers only, with no move:** rejected. It leaves 25 files in one folder and does nothing for the autouse fixture by itself.
   - **Markers on top of the folders** (`-m unit`): possible later; the folders already give `pytest tests/unit`.
+  - **Only the collection-time check:** rejected, because a test could still open a connection itself. **Only the runtime block:** rejected, because a fixture-based mistake is clearer when it stops the run at collection.

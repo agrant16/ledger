@@ -21,6 +21,10 @@ from ledger.config import Settings, load_settings
 from ledger.migrate import run_migrations
 from tests.db_helpers import reset_database, with_connect_timeout
 
+# pytest's own plugin for testing pytest behavior, used by tests/unit/test_disallow_db.py. It has to
+# be declared in the top-level conftest.
+pytest_plugins = ["pytester"]
+
 
 @pytest.fixture(scope="session")
 def settings() -> Settings:
