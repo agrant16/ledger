@@ -140,7 +140,6 @@ def problem_response(
         "instance": f"urn:uuid:{request.state.request_id}",
         **(extensions or {}),
     }
-    print(body)
     return JSONResponse(
         body, status_code=status, headers=headers, media_type="application/problem+json"
     )
