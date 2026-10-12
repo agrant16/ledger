@@ -42,6 +42,8 @@ uv run ruff format --check .
 uv run sqlfluff lint migrations/
 ```
 
+The tests are laid out by kind: `tests/unit` needs no database (`uv run pytest tests/unit`), `tests/integration` and `tests/property` do. See ADR 0010.
+
 CI runs `uv run pytest --cov`, which also measures branch coverage and fails below the floor set in `pyproject.toml`; run the same command locally to see which lines are missed.
 
 The defaults point at the Compose database on `127.0.0.1:5432`. Set `DATABASE_OWNER_URL` and `DATABASE_APP_URL` to use another one. Test fixtures connect as the owner role to migrate, reset, and seed data, and as the app role for everything under test.
