@@ -4,7 +4,8 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from ledger.api.request_id import RequestIDMiddleware
+from ledger.api.request_id import RequestIDMiddleware, install_log_record_factory
+
 from ledger.errors import (
     AlreadyReversedError,
     CurrencyMismatchError,
@@ -107,4 +108,5 @@ def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def install_error_handling(app: FastAPI) -> None:
+    install_log_record_factory()
     app.add_middleware(RequestIDMiddleware)
