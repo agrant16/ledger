@@ -1,8 +1,20 @@
 import uuid
 from contextvars import ContextVar
+import logging
+
+from fastapi import FastAPI
 
 request_id_ctx_var: ContextVar[str] = ContextVar("request_id", default="")
 
+_original_factory = logging.getLogRecordFactory()
+
+def _factory(*args, **kwargs):
+    record = _original_factory(*args, **kwargs)
+    record.request_id = request_id_ctx_var.get()           # "-" outside a request
+    return record
+
+def install_log_record_factory():
+    logging.setLogRecordFactory(_factory)
 
 class RequestIDMiddleware:
     def __init__(self, app) -> None:
