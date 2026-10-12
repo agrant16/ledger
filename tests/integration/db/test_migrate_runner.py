@@ -5,7 +5,7 @@ from pathlib import Path
 import psycopg
 import pytest
 
-from ledger.migrate import find_migrations, run_migrations
+from ledger.migrate import run_migrations
 
 
 def write(directory: Path, name: str, sql: str) -> None:
@@ -35,19 +35,6 @@ def test_failed_migration_rolls_back_and_is_retried(scratch_url: str, tmp_path: 
 
     write(tmp_path, "001_bad.sql", "CREATE TABLE t (x int);")
     assert run_migrations(scratch_url, tmp_path) == ["001_bad.sql"]
-
-
-def test_sorts_by_numeric_prefix_not_lexically(tmp_path: Path) -> None:
-    for name in ("10_c.sql", "2_b.sql", "001_a.sql"):
-        write(tmp_path, name, "SELECT 1;")
-    assert [f.name for f in find_migrations(tmp_path)] == ["001_a.sql", "2_b.sql", "10_c.sql"]
-
-
-def test_duplicate_numbers_are_rejected_even_if_padded_differently(tmp_path: Path) -> None:
-    write(tmp_path, "002_create_accounts.sql", "SELECT 1;")
-    write(tmp_path, "2_add_index.sql", "SELECT 1;")
-    with pytest.raises(ValueError, match="duplicate migration number 2"):
-        find_migrations(tmp_path)
 
 
 def test_concurrent_runners_apply_each_migration_exactly_once(
@@ -89,13 +76,3 @@ def test_dollar_quoted_blocks_are_not_split_at_their_semicolons(
     assert run_migrations(scratch_url, tmp_path) == ["001_block_then_table.sql"]
     with psycopg.connect(scratch_url) as conn:
         assert conn.execute("SELECT to_regclass('t') IS NOT NULL").fetchone() == (True,)
-
-
-def test_missing_directory_means_no_migrations(tmp_path: Path) -> None:
-    assert find_migrations(tmp_path / "nope") == []
-
-
-def test_badly_named_file_is_rejected(tmp_path: Path) -> None:
-    write(tmp_path, "create_accounts.sql", "SELECT 1;")
-    with pytest.raises(ValueError, match="migration file name"):
-        find_migrations(tmp_path)

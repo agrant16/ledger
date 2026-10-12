@@ -1,6 +1,6 @@
 """The real app (ledger.main.app) has the error handling installed.
 
-test_api_problem_responses.py builds a throwaway app, so it cannot notice if
+unit/api/test_problem_responses.py builds a throwaway app, so it cannot notice if
 `install_error_handling` is never called on the real one. These tests look at the real app: its
 handlers are ours and not FastAPI's defaults, an unknown route comes back as a problem with a
 request id, and /health, which the compose smoke job calls, still works and now carries a request
@@ -10,6 +10,7 @@ id too.
 import json
 import uuid
 
+import pytest
 from fastapi import exception_handlers as defaults
 from fastapi.exceptions import RequestValidationError
 from fastapi.testclient import TestClient
@@ -17,6 +18,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ledger.errors import LedgerError
 from ledger.main import app
+
+pytestmark = pytest.mark.usefixtures("migrated_database")
 
 
 def test_the_real_app_uses_its_own_handlers() -> None:

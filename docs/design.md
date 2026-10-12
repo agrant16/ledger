@@ -278,6 +278,8 @@ The tests are the proof that the ledger is correct. Each kind of test targets a 
 | Reconciliation | Silent drift | Corrupt a cached balance by hand and confirm the job flags it |
 | Load | Throughput and latency claims | Locust against a local Postgres; record the machine spec and the workload shape |
 
+The tests are laid out by kind: `tests/unit` (no database), `tests/integration` with `db`, `service` and `api`, and `tests/property`, with a `tests/concurrency` folder to come in milestone 4. Only tests that use a database fixture need a running Postgres (ADR 0010).
+
 Every benchmark number quoted in the README comes with the command that produced it. A number nobody can reproduce is worse than no number.
 
 ## Stretch goals

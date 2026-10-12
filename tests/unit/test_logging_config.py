@@ -13,7 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[1] / "src"
+SRC = Path(__file__).resolve().parents[2] / "src"
 
 # 2026-10-12 11:03:26,119 WARNING some.logger [-] hello
 LINE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} WARNING some\.logger \[-\] hello$")
