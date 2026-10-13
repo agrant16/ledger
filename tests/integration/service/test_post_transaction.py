@@ -13,7 +13,6 @@ import itertools
 
 import psycopg
 import pytest
-from ledger.infra.config import Settings
 from ledger.models.account_model import Account
 
 from ledger.errors import (
@@ -24,6 +23,7 @@ from ledger.errors import (
     UnbalancedEntriesError,
     UnknownAccountError,
 )
+from ledger.infra.config import Settings
 from tests.db_helpers import VALID_HASH, make_account
 
 KEYS = itertools.count(1)

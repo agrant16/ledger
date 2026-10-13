@@ -5,9 +5,9 @@ from fastapi import FastAPI
 
 from ledger.api import accounts
 from ledger.api.errors import install_error_handling
-from ledger.config import load_settings
-from ledger.db import create_pool
-from ledger.logging_config import configure_logging
+from ledger.infra.config import load_settings
+from ledger.infra.db import create_pool
+from ledger.infra.logging_config import configure_logging
 
 
 @asynccontextmanager

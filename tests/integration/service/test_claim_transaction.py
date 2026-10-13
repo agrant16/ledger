@@ -18,11 +18,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 import psycopg
 import pytest
-from ledger.infra.config import Settings
 from psycopg_pool import ConnectionPool
 
 from ledger.accounts import create_account
 from ledger.errors import IdempotencyConflictError, LedgerInvariantError
+from ledger.infra.config import Settings
 from tests.db_helpers import hash_for, wait_until_waiting_for_a_lock
 
 HASH_A = hash_for("request a")

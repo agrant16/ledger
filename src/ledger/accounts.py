@@ -1,10 +1,9 @@
-from dataclasses import dataclass
-
 import psycopg
 from psycopg import errors
 
-from ledger.db import require_transaction
 from ledger.errors import DuplicateAccountNameError, LedgerInvariantError, UnknownAccountError
+from ledger.models.account_model import Account, Balance
+from ledger.service.decorators import transactional_service_method
 
 INSERT_ACCOUNTS_SQL = """ 
                       INSERT INTO 
@@ -31,25 +30,10 @@ GET_BALANCE_SQL = """
                   """
 
 
-@dataclass(frozen=True)
-class Account:
-    id: int
-    account_name: str
-    currency: str
-    allow_negative: bool
-
-
-@dataclass(frozen=True)
-class Balance:
-    account_id: int
-    currency: str
-    balance_minor: int
-
-
+@transactional_service_method
 def create_account(
     conn: psycopg.Connection, account_name: str, currency: str, allow_negative: bool
 ) -> Account:
-    require_transaction(conn, "create_account")
 
     with conn.cursor() as cursor:
         try:

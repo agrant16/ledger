@@ -10,11 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse, Response
 
-from ledger.api.request_id import (
-    RequestIDMiddleware,
-    install_log_record_factory,
-    request_id_ctx_var,
-)
+from ledger.api.request_id import RequestIDMiddleware
 from ledger.errors import (
     AlreadyReversedError,
     CurrencyMismatchError,
@@ -28,6 +24,7 @@ from ledger.errors import (
     UnknownAccountError,
     UnknownTransferError,
 )
+from ledger.infra.logging_config import install_log_record_factory, request_id_ctx_var
 
 
 @dataclass(frozen=True)

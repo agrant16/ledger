@@ -39,7 +39,6 @@ from hypothesis.stateful import (
     precondition,
     rule,
 )
-from ledger.infra.config import load_settings
 from ledger.models.account_model import Account
 from ledger.models.posting_model import Entry
 
@@ -51,6 +50,7 @@ from ledger.errors import (
     UnbalancedEntriesError,
     UnknownAccountError,
 )
+from ledger.infra.config import load_settings
 from ledger.posting import claim_transaction, post_transaction
 from tests.db_helpers import VALID_HASH, reset_database
 
