@@ -7,11 +7,18 @@ def transactional_service_method(func):
     @wraps(func)
     def require_transaction(*args, **kwargs):
         """Caller makes commit so disallow autocommit in service methods."""
-        conn = kwargs.get("conn")
-        if conn is None and args:
+        if "conn" in kwargs:
+            conn = kwargs["conn"]
+        elif args:
             conn = args[0]
+        else:
+            conn = None
 
-        if conn is not None and getattr(conn, "autocommit", False):
+        if not conn:
+            raise LedgerInvariantError(
+                f"{func.__name__} needs a connection with a transaction in progress"
+            )
+        if conn.autocommit:
             raise LedgerInvariantError(
                 f"{func.__name__} needs a connection with a transaction in progress"
             )
