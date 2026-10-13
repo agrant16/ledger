@@ -13,9 +13,9 @@ import itertools
 
 import psycopg
 import pytest
+from ledger.infra.config import Settings
+from ledger.models.account_model import Account
 
-from ledger.accounts import Account
-from ledger.config import Settings
 from ledger.errors import (
     CurrencyMismatchError,
     InsufficientFundsError,

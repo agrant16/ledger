@@ -32,7 +32,7 @@ def set_cached_balance(conn: psycopg.Connection, account_id: int, balance_minor:
 def test_a_new_account_has_a_zero_balance_in_its_currency(
     clean_db: None, app_conn: psycopg.Connection, get_balance
 ) -> None:
-    from ledger.accounts import Balance
+    from ledger.models.account_model import Balance
 
     account = create_account(app_conn, "customer:alice", "EUR", False)
 

@@ -1,4 +1,4 @@
-"""run_in_transaction (ledger/db.py; docs/design.md, Stack decisions; ADR 0011).
+"""run_in_transaction (ledger/infra/db.py; docs/design.md, Stack decisions; ADRs 0011 and 0013).
 
     run_in_transaction(pool, work, *, read_only=False) -> whatever work returns
 
@@ -11,7 +11,11 @@ milestone 4's deadlock retry run the whole body again without touching any route
 - The connection is not in autocommit mode (the service functions refuse that).
 - On success it commits and returns work's result.
 - If work raises, it rolls back and the same exception propagates.
-- If the commit raises, nothing is kept and that exception propagates.
+- If the commit raises, nothing is kept and the error propagates. A violated database constraint
+  (the deferred triggers fire at commit) is a bug, so it becomes a LedgerInvariantError that is not
+  a LedgerError, chained to the original psycopg error. The same translation covers an integrity
+  error raised inside `work` that nothing below translated. A LedgerError raised by `work` is an
+  expected outcome and passes through untouched, and so does any other database error.
 - Either way the connection goes back to the pool in a usable state.
 - With read_only=True the transaction is read only (SET TRANSACTION READ ONLY, issued first), and
   that setting does not leak onto the next user of the pooled connection.
@@ -22,6 +26,7 @@ import pytest
 from psycopg_pool import ConnectionPool
 
 from ledger.accounts import create_account
+from ledger.errors import DuplicateAccountNameError, LedgerError, LedgerInvariantError
 from tests.db_helpers import VALID_HASH
 
 LONE_TRANSACTION = "INSERT INTO transactions (idempotency_key, request_hash) VALUES ('k', %s)"
@@ -34,7 +39,7 @@ class Boom(Exception):
 @pytest.fixture
 def run():
     """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.db import run_in_transaction
+    from ledger.infra.db import run_in_transaction
 
     return run_in_transaction
 
@@ -83,10 +88,14 @@ def test_a_run_whose_work_raises_rolls_back_and_re_raises(
 def test_a_failed_commit_raises_and_keeps_nothing(
     clean_db: None, owner_conn: psycopg.Connection, single_pool, run
 ) -> None:
-    """A transaction row with no entries is refused by the deferred trigger at commit."""
-    with pytest.raises(psycopg.errors.CheckViolation):
+    """A transaction row with no entries is refused by the deferred trigger at commit. That is a
+    bug, so the caller gets a LedgerInvariantError (never a LedgerError) and the psycopg error
+    is kept as its cause."""
+    with pytest.raises(LedgerInvariantError) as failure:
         run(single_pool, lambda conn: conn.execute(LONE_TRANSACTION, (VALID_HASH,)))
 
+    assert not isinstance(failure.value, LedgerError)
+    assert isinstance(failure.value.__cause__, psycopg.errors.CheckViolation)
     assert count(owner_conn, "transactions") == 0
 
 
@@ -103,7 +112,7 @@ def test_the_connection_is_usable_again_after_each_kind_of_failure(
         run(single_pool, raises)
     assert run(single_pool, lambda conn: conn.execute("SELECT 42").fetchone()) == (42,)
 
-    with pytest.raises(psycopg.errors.CheckViolation):
+    with pytest.raises(LedgerInvariantError):
         run(single_pool, lambda conn: conn.execute(LONE_TRANSACTION, (VALID_HASH,)))
     assert run(single_pool, lambda conn: conn.execute("SELECT 43").fetchone()) == (43,)
 
@@ -153,3 +162,70 @@ def test_the_read_only_setting_does_not_reach_the_next_run(
     run(single_pool, lambda conn: create_account(conn, "customer:alice", "USD", False))
 
     assert count(owner_conn, "accounts") == 1
+
+
+# --- database errors and the error taxonomy (ADR 0013) ----------------------------------------
+
+
+def test_an_integrity_error_inside_the_work_becomes_a_chained_invariant_error(
+    clean_db: None, owner_conn: psycopg.Connection, single_pool, run
+) -> None:
+    """Nothing below translated this duplicate, so it is a bug: the caller never sees a raw
+    psycopg integrity error, and the original is kept as the cause."""
+
+    def work(conn):
+        conn.execute(
+            "INSERT INTO accounts (account_name, currency, allow_negative)"
+            " VALUES ('customer:alice', 'USD', false)"
+        )
+        conn.execute(
+            "INSERT INTO accounts (account_name, currency, allow_negative)"
+            " VALUES ('customer:alice', 'USD', false)"
+        )
+
+    with pytest.raises(LedgerInvariantError) as failure:
+        run(single_pool, work)
+
+    assert not isinstance(failure.value, LedgerError)
+    assert isinstance(failure.value.__cause__, psycopg.errors.UniqueViolation)
+    assert count(owner_conn, "accounts") == 0
+
+
+def test_a_check_violation_inside_the_work_becomes_a_chained_invariant_error(
+    clean_db: None, single_pool, run
+) -> None:
+    def work(conn):
+        conn.execute(
+            "INSERT INTO accounts (account_name, currency, allow_negative)"
+            " VALUES ('customer:alice', 'usd', false)"
+        )
+
+    with pytest.raises(LedgerInvariantError) as failure:
+        run(single_pool, work)
+
+    assert isinstance(failure.value.__cause__, psycopg.errors.CheckViolation)
+
+
+def test_an_expected_ledger_error_passes_through_untouched(
+    clean_db: None, owner_conn: psycopg.Connection, single_pool, run
+) -> None:
+    expected = DuplicateAccountNameError("customer:alice")
+
+    def work(conn):
+        create_account(conn, "customer:bob", "USD", False)
+        raise expected
+
+    with pytest.raises(DuplicateAccountNameError) as failure:
+        run(single_pool, work)
+
+    assert failure.value is expected
+    assert count(owner_conn, "accounts") == 0
+
+
+def test_a_database_error_that_is_not_an_integrity_error_is_not_translated(
+    clean_db: None, single_pool, run
+) -> None:
+    """Only constraint violations are translated. A syntax error is a different kind of failure
+    and keeps its own type."""
+    with pytest.raises(psycopg.errors.SyntaxError):
+        run(single_pool, lambda conn: conn.execute("SELEKT 1"))

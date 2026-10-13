@@ -7,9 +7,9 @@ the raw error, which is a bug-class outcome.
 
 import psycopg
 import pytest
+from ledger.infra.config import Settings
 
 from ledger.accounts import create_account
-from ledger.config import Settings
 from ledger.errors import DuplicateAccountNameError, LedgerInvariantError
 
 

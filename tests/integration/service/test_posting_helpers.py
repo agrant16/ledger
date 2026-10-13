@@ -18,8 +18,8 @@ import itertools
 
 import psycopg
 import pytest
+from ledger.models.account_model import Account
 
-from ledger.accounts import Account
 from ledger.errors import LedgerError, LedgerInvariantError
 from tests.db_helpers import VALID_HASH, make_account
 
