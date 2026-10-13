@@ -1,6 +1,6 @@
 # ADR 0013: A layered source tree: API, services, repositories, models and infrastructure
 
-* **Status:** Draft
+* **Status:** Accepted
 * **Date:** 2026-10-13 (decided before milestone 3 PR 5)
 * **Deciders:** Alan (human architect) & Claude (AI collaborator)
 

@@ -16,6 +16,6 @@ Short records of the larger decisions behind the ledger service, in the format o
 | [0010](0010-test-layout-by-kind.md) | Tests laid out by kind; only the database tests need a database | 2026-10-12 |
 | [0011](0011-request-transaction-handling.md) | One request, one transaction, through a single callable helper | 2026-10-12 |
 | [0012](0012-idempotency-claim-and-request-hash.md) | The idempotency claim resolves a repeated key in one place, with a canonical request hash | 2026-10-12 |
-| [0013](0013-layered-architecture.md) | A layered source tree: API, services, repositories, models and infrastructure (draft) | 2026-10-13 |
+| [0013](0013-layered-architecture.md) | A layered source tree: API, services, repositories, models and infrastructure | 2026-10-13 |
 
 Decisions still to come are noted where they belong: the SERIALIZABLE write-up (milestone 4).
