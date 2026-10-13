@@ -20,6 +20,8 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from pydantic import TypeAdapter, ValidationError
 
+from tests.db_helpers import VALID_HASH
+
 pytestmark = pytest.mark.usefixtures("migrated_database")
 
 # Every CHECK constraint in the schema, and who is responsible for the values it guards. A new
@@ -155,7 +157,7 @@ def test_an_idempotency_key_the_api_accepts_can_be_stored(conn) -> None:
         stored_without_complaint(
             connection,
             "INSERT INTO transactions (idempotency_key, request_hash) VALUES (%s, %s)",
-            (key, "a" * 64),
+            (key, VALID_HASH),
         )
 
     count_accepted(conn, KEYS, accepted_by(TypeAdapter(IdempotencyKey)), store, minimum=40)

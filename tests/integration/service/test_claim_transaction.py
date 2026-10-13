@@ -14,8 +14,7 @@ frees the key again.
 """
 
 import dataclasses
-import time
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 
 import psycopg
 import pytest
@@ -24,7 +23,7 @@ from psycopg_pool import ConnectionPool
 from ledger.accounts import create_account
 from ledger.config import Settings
 from ledger.errors import IdempotencyConflictError, LedgerInvariantError
-from tests.db_helpers import hash_for
+from tests.db_helpers import hash_for, wait_until_waiting_for_a_lock
 
 HASH_A = hash_for("request a")
 HASH_B = hash_for("request b")
@@ -297,22 +296,6 @@ def test_it_refuses_an_autocommit_connection(
 # --- two requests with the same key at once -----------------------------------------------------
 
 
-def wait_until_blocked(settings: Settings, pid: int, outcome: Future) -> None:
-    """Wait until the backend with this pid is waiting on a lock, or fail. The app role sees its
-    own sessions' wait events, so the watcher connects as the app role, with autocommit so every
-    poll sees fresh data."""
-    deadline = time.monotonic() + 5
-    with psycopg.connect(settings.app_url, autocommit=True) as watcher:
-        while time.monotonic() < deadline and not outcome.done():
-            row = watcher.execute(
-                "SELECT wait_event_type FROM pg_stat_activity WHERE pid = %s", (pid,)
-            ).fetchone()
-            if row == ("Lock",):
-                return
-            time.sleep(0.01)
-    pytest.fail("the second claim never waited for the first: it finished, or it never started")
-
-
 @pytest.fixture
 def funded(app_conn: psycopg.Connection, commit_setup):
     """Committed accounts, so claims on other connections can post a real transfer and commit."""
@@ -337,7 +320,7 @@ def claim_and_post(conn: psycopg.Connection, funded, key: str, request_hash: str
 
 
 def second_claim_waits_for_the_first(
-    settings: Settings,
+    owner_conn: psycopg.Connection,
     app_pool: ConnectionPool,
     funded,
     second_hash: str,
@@ -352,7 +335,7 @@ def second_claim_waits_for_the_first(
         first = claim_and_post(first_conn, funded, "key-1", HASH_A)
         with ThreadPoolExecutor(max_workers=1) as executor:
             outcome = executor.submit(claim_transaction, second_conn, "key-1", second_hash)
-            wait_until_blocked(settings, second_conn.info.backend_pid, outcome)
+            wait_until_waiting_for_a_lock(owner_conn, second_conn.info.backend_pid, outcome.done)
             assert not outcome.done()  # still waiting while the first holds the key
 
             first_finishes(first_conn)
@@ -366,10 +349,10 @@ def second_claim_waits_for_the_first(
 
 
 def test_a_second_claim_waits_and_then_replays_a_committed_first(
-    settings: Settings, app_pool: ConnectionPool, funded
+    owner_conn: psycopg.Connection, app_pool: ConnectionPool, funded
 ) -> None:
     first, second = second_claim_waits_for_the_first(
-        settings, app_pool, funded, HASH_A, lambda conn: conn.commit()
+        owner_conn, app_pool, funded, HASH_A, lambda conn: conn.commit()
     )
 
     assert first.replay is False
@@ -378,12 +361,12 @@ def test_a_second_claim_waits_and_then_replays_a_committed_first(
 
 
 def test_a_second_claim_waits_and_then_takes_over_a_rolled_back_first(
-    settings: Settings, app_pool: ConnectionPool, funded
+    owner_conn: psycopg.Connection, app_pool: ConnectionPool, funded
 ) -> None:
     """The first request failed and rolled back, so its key was never consumed. The waiting
     request claims it for itself, even though its request differs."""
     first, second = second_claim_waits_for_the_first(
-        settings, app_pool, funded, HASH_B, lambda conn: conn.rollback()
+        owner_conn, app_pool, funded, HASH_B, lambda conn: conn.rollback()
     )
 
     assert second.replay is False
@@ -391,10 +374,10 @@ def test_a_second_claim_waits_and_then_takes_over_a_rolled_back_first(
 
 
 def test_a_second_claim_waits_and_then_conflicts_with_a_committed_first_of_another_request(
-    settings: Settings, app_pool: ConnectionPool, funded
+    owner_conn: psycopg.Connection, app_pool: ConnectionPool, funded
 ) -> None:
     first, second = second_claim_waits_for_the_first(
-        settings, app_pool, funded, HASH_B, lambda conn: conn.commit()
+        owner_conn, app_pool, funded, HASH_B, lambda conn: conn.commit()
     )
 
     assert isinstance(second, IdempotencyConflictError)

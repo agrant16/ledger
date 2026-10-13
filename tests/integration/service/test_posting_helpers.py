@@ -19,9 +19,9 @@ import itertools
 import psycopg
 import pytest
 
-from ledger.accounts import Account, create_account
+from ledger.accounts import Account
 from ledger.errors import LedgerError, LedgerInvariantError
-from tests.db_helpers import VALID_HASH
+from tests.db_helpers import VALID_HASH, make_account
 
 KEYS = itertools.count(1)
 
@@ -32,12 +32,6 @@ def api():
     from ledger import posting
 
     return posting
-
-
-def make(
-    conn: psycopg.Connection, name: str, currency: str = "USD", allow_negative: bool = False
-) -> Account:
-    return create_account(conn, name, currency, allow_negative)
 
 
 def claim(api, conn: psycopg.Connection) -> int:
@@ -83,9 +77,9 @@ def count(conn: psycopg.Connection, table: str) -> int:
 def test_insert_writes_one_row_per_entry_in_list_order(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
-    carol = make(app_conn, "customer:carol")
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
+    carol = make_account(app_conn, "customer:carol")
     tx = claim(api, app_conn)
     entries = [
         api.Entry(bob.id, -300, "USD"),
@@ -106,8 +100,8 @@ def test_insert_writes_one_row_per_entry_in_list_order(
 def test_insert_files_the_rows_under_the_given_transaction_only(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
     first = claim(api, app_conn)
     second = claim(api, app_conn)
 
@@ -123,8 +117,8 @@ def test_insert_does_not_touch_the_balances(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
     """Updating balances is _apply_balance_deltas's job; the two steps stay separate."""
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
     tx = claim(api, app_conn)
     before = balances(app_conn)
 
@@ -142,8 +136,8 @@ def test_insert_never_commits(
 ) -> None:
     """The accounts and the claim are uncommitted too, so if the helper committed, everything
     would become visible to the owner connection below."""
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
     tx = claim(api, app_conn)
 
     api._insert_entries(app_conn, tx, [api.Entry(alice.id, -5, "USD"), api.Entry(bob.id, 5, "USD")])
@@ -160,9 +154,9 @@ def test_insert_never_commits(
 def test_apply_adds_each_delta_to_its_accounts_balance(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
-    funding = make(app_conn, "funding:usd", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
     set_balance(app_conn, alice, 1000)
     set_balance(app_conn, bob, 50)
     set_balance(app_conn, funding, -1050)
@@ -178,9 +172,9 @@ def test_apply_adds_each_delta_to_its_accounts_balance(
 def test_apply_changes_only_the_accounts_in_the_map(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
-    carol = make(app_conn, "customer:carol")
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
+    carol = make_account(app_conn, "customer:carol")
     for account, amount in ((alice, 100), (bob, 200), (carol, 300)):
         set_balance(app_conn, account, amount)
 
@@ -192,7 +186,7 @@ def test_apply_changes_only_the_accounts_in_the_map(
 def test_apply_with_a_zero_delta_leaves_the_balance_alone(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    alice = make(app_conn, "customer:alice")
+    alice = make_account(app_conn, "customer:alice")
     set_balance(app_conn, alice, 70)
     api._apply_balance_deltas(app_conn, {alice.id: 0})
     assert balance(app_conn, alice) == 70
@@ -201,7 +195,7 @@ def test_apply_with_a_zero_delta_leaves_the_balance_alone(
 def test_apply_with_no_deltas_changes_nothing(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    alice = make(app_conn, "customer:alice")
+    alice = make_account(app_conn, "customer:alice")
     set_balance(app_conn, alice, 70)
     api._apply_balance_deltas(app_conn, {})
     assert balances(app_conn) == {alice.id: 70}
@@ -213,7 +207,7 @@ def test_apply_does_not_check_for_an_overdraft_the_database_constraint_is_the_sa
     """The overdraft check belongs to post_transaction. If it ever let a protected account go
     negative through here, the balances CHECK refuses, and that is a bug (a logged 500), not a
     LedgerError."""
-    alice = make(app_conn, "customer:alice")
+    alice = make_account(app_conn, "customer:alice")
     set_balance(app_conn, alice, 10)
 
     with pytest.raises(psycopg.errors.CheckViolation) as failure:
@@ -225,7 +219,7 @@ def test_apply_does_not_check_for_an_overdraft_the_database_constraint_is_the_sa
 def test_apply_lets_an_allow_negative_account_go_below_zero(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    funding = make(app_conn, "funding:usd", allow_negative=True)
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
     api._apply_balance_deltas(app_conn, {funding.id: -500})
     assert balance(app_conn, funding) == -500
 
@@ -235,7 +229,7 @@ def test_apply_to_an_account_with_no_balances_row_is_a_bug(
 ) -> None:
     """_lock_accounts has already established that every row exists, so a delta for a missing one
     means the caller is wrong. An UPDATE that matched nothing must not pass silently."""
-    alice = make(app_conn, "customer:alice")
+    alice = make_account(app_conn, "customer:alice")
     set_balance(app_conn, alice, 10)
 
     with pytest.raises(LedgerInvariantError) as failure:
@@ -251,8 +245,8 @@ def test_apply_never_commits(
     commit_setup,
     api,
 ) -> None:
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "funding:usd", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "funding:usd", allow_negative=True)
     commit_setup()
 
     api._apply_balance_deltas(app_conn, {alice.id: 40, bob.id: -40})

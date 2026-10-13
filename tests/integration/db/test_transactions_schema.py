@@ -3,7 +3,7 @@
 import psycopg
 import pytest
 
-HASH = "a" * 64
+from tests.db_helpers import VALID_HASH
 
 INSERT = (
     "INSERT INTO transactions (idempotency_key, request_hash, reverses_transaction_id)"
@@ -14,7 +14,7 @@ INSERT = (
 def insert_transaction(
     conn: psycopg.Connection, key: str = "key-1", reverses: int | None = None
 ) -> int:
-    row = conn.execute(INSERT, (key, HASH, reverses)).fetchone()
+    row = conn.execute(INSERT, (key, VALID_HASH, reverses)).fetchone()
     assert row is not None
     return row[0]
 
@@ -40,7 +40,7 @@ def test_caller_cannot_choose_the_id(clean_db: None, app_conn: psycopg.Connectio
     with pytest.raises(psycopg.errors.GeneratedAlways):
         app_conn.execute(
             "INSERT INTO transactions (id, idempotency_key, request_hash) VALUES (7, 'k', %s)",
-            (HASH,),
+            (VALID_HASH,),
         )
 
 
@@ -85,7 +85,7 @@ def test_idempotency_key_must_be_1_to_255_characters(
 
 @pytest.mark.parametrize(
     "request_hash",
-    [HASH, "0123456789abcdef" * 4, "0" * 64, "f" * 64],
+    [VALID_HASH, "0123456789abcdef" * 4, "0" * 64, "f" * 64],
     ids=["a's", "every hex digit", "zeros", "f's"],
 )
 def test_a_64_digit_lowercase_hex_request_hash_is_accepted(
@@ -133,7 +133,7 @@ def test_a_request_hash_must_be_64_lowercase_hex_digits(
 
 @pytest.mark.parametrize(
     "values",
-    [(None, HASH), ("key-1", None)],
+    [(None, VALID_HASH), ("key-1", None)],
     ids=["idempotency_key", "request_hash"],
 )
 def test_columns_are_not_null(
