@@ -1,6 +1,6 @@
 # ADR 0011: One request, one transaction, run through a single callable helper
 
-* **Status:** Draft
+* **Status:** Accepted
 * **Date:** 2026-10-12 (decided during milestone 3 planning)
 * **Deciders:** Alan (human architect) & Claude (AI collaborator)
 

@@ -14,6 +14,6 @@ Short records of the larger decisions behind the ledger service, in the format o
 | [0008](0008-defense-in-depth-and-property-testing.md) | Layered enforcement of the invariants, state-machine property test | 2026-10-10 |
 | [0009](0009-api-error-responses-rfc-9457.md) | RFC 9457 error responses, request id, minimal logging | 2026-10-11 |
 | [0010](0010-test-layout-by-kind.md) | Tests laid out by kind; only the database tests need a database | 2026-10-12 |
-| [0011](0011-request-transaction-handling.md) | One request, one transaction, through a single callable helper (draft) | 2026-10-12 |
+| [0011](0011-request-transaction-handling.md) | One request, one transaction, through a single callable helper | 2026-10-12 |
 
 Decisions still to come are noted where they belong: the SERIALIZABLE write-up (milestone 4), and the idempotency claim's conflict handling (milestone 3).
