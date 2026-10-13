@@ -4,9 +4,11 @@ from ledger.api.request_id import install_log_record_factory
 
 UVICORN_DUPLICATE = "Exception in ASGI application"
 
+
 class DropUvicornDuplicate(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         return record.getMessage().strip() != UVICORN_DUPLICATE
+
 
 def configure_logging() -> None:
     install_log_record_factory()
