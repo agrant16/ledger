@@ -170,7 +170,7 @@ Every error response is an RFC 9457 problem (`application/problem+json`), descri
 **Request id and logging**
 
 - **Request id:** the server generates a UUID for every request and returns it in the `X-Request-ID` header and as `instance` (`urn:uuid:<id>`). It is attached to every log record made during the request, and log lines are formatted with it (`time level logger [request id] message`, set up once at startup by `configure_logging()` in `ledger/logging_config.py`, which scripts such as the reconciliation job can reuse), so a response's `instance` can be found in the log. Outside a request the id shows as `-`. A client-supplied id is ignored, because ids are normally set by a gateway or load balancer and there is none in front of this service.
-- **Logging is minimal:** a bug is logged once at ERROR with the exception and the request id; a 503 is logged at WARNING with its cause; expected 4xx errors and successful requests are not logged. Once the pool and concurrency settings are wired (the pool-wiring task below), one line at startup records them. Only the standard library is used.
+- **Logging is minimal:** a bug is logged once at ERROR with the exception and the request id (Starlette re-raises the exception after the catch-all handler has answered, so uvicorn would log it a second time without the id; `configure_logging()` drops that one record, and a test against a real uvicorn server counts the ERROR records); a 503 is logged at WARNING with its cause; expected 4xx errors and successful requests are not logged. Once the pool and concurrency settings are wired (the pool-wiring task below), one line at startup records them. Only the standard library is used.
 
 **Request hash (`request_hash`)**
 
