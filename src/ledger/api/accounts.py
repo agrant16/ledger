@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
-from starlette import status
 
 from ledger.accounts import create_account, get_balance
 from ledger.api.types import AccountIdInPath, AccountName, Currency
