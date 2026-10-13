@@ -2,6 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 import psycopg
+from pydantic import BaseModel
 
 from ledger.db import require_transaction
 from ledger.errors import (
@@ -51,6 +52,12 @@ class Entry:
     account_id: int
     amount_minor: int
     currency: str
+
+
+@dataclass(frozen=True)
+class Claim(BaseModel):
+    transaction_id: int
+    replay: bool
 
 
 def claim_transaction(
