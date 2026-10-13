@@ -1,4 +1,4 @@
--- "name" is a postgres keyword. Change to account_name.
+-- "name" is a postgres keyword. accounts.name->accounts.account_name.
 ALTER TABLE accounts
 RENAME COLUMN name TO account_name;
 
