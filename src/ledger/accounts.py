@@ -4,7 +4,7 @@ import psycopg
 from psycopg import errors
 
 from ledger.db import require_transaction
-from ledger.errors import DuplicateAccountNameError
+from ledger.errors import DuplicateAccountNameError, UnknownAccountError
 
 INSERT_ACCOUNTS_SQL = """ 
                       INSERT INTO 
@@ -19,6 +19,17 @@ INSERT_BALANCES_SQL = """
                          VALUES (%s, %s, 0);
                       """
 
+GET_BALANCE_SQL = """
+                  SELECT 
+                      b.account_id, 
+                      a.currency,
+                      b.balance_minor 
+                  FROM accounts a 
+                  LEFT JOIN balances b 
+                  ON a.id = b.account_id
+                  WHERE a.id = %s;
+                  """
+
 
 @dataclass(frozen=True)
 class Account:
@@ -26,6 +37,13 @@ class Account:
     account_name: str
     currency: str
     allow_negative: bool
+
+
+@dataclass(frozen=True)
+class Balance:
+    account_id: int
+    currency: str
+    balance_minor: int
 
 
 def create_account(
@@ -44,3 +62,14 @@ def create_account(
             if constraint == "accounts_account_name_key":
                 raise DuplicateAccountNameError(account_name) from e
             raise
+
+
+def get_balance(conn: psycopg.Connection, account_id: int) -> Balance:
+    with conn.cursor() as cursor:
+        cursor.execute(GET_BALANCE_SQL, (account_id,))
+        row = cursor.fetchone()
+        if row is None:
+            raise UnknownAccountError(
+                f"Unknown account {account_id} encountered while getting balance"
+            )
+        return Balance(account_id=row[0], currency=row[1], balance_minor=row[2])
