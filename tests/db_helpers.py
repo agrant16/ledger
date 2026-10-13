@@ -1,6 +1,17 @@
 """Helpers shared by the tests that use the database."""
 
+import hashlib
+
 import psycopg
+
+# A well-formed request_hash (64 lowercase hex characters), for tests that need any valid value.
+VALID_HASH = "a" * 64
+
+
+def hash_for(label: str) -> str:
+    """A well-formed request_hash that differs for every label."""
+    return hashlib.sha256(label.encode()).hexdigest()
+
 
 # Bookkeeping table owned by the migration runner; resetting must not drop its rows.
 PRESERVED_TABLES = ("schema_migrations",)

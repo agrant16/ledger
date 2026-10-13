@@ -39,7 +39,8 @@ def test_transaction_can_be_created_and_gets_an_id(
 def test_caller_cannot_choose_the_id(clean_db: None, app_conn: psycopg.Connection) -> None:
     with pytest.raises(psycopg.errors.GeneratedAlways):
         app_conn.execute(
-            "INSERT INTO transactions (id, idempotency_key, request_hash) VALUES (7, 'k', 'h')"
+            "INSERT INTO transactions (id, idempotency_key, request_hash) VALUES (7, 'k', %s)",
+            (HASH,),
         )
 
 
@@ -80,6 +81,54 @@ def test_idempotency_key_must_be_1_to_255_characters(
 ) -> None:
     with pytest.raises(psycopg.errors.CheckViolation):
         insert_transaction(app_conn, key)
+
+
+@pytest.mark.parametrize(
+    "request_hash",
+    [HASH, "0123456789abcdef" * 4, "0" * 64, "f" * 64],
+    ids=["a's", "every hex digit", "zeros", "f's"],
+)
+def test_a_64_digit_lowercase_hex_request_hash_is_accepted(
+    clean_db: None, app_conn: psycopg.Connection, request_hash: str
+) -> None:
+    app_conn.execute(INSERT, ("key-1", request_hash, None))
+
+
+@pytest.mark.parametrize(
+    "request_hash",
+    [
+        "",
+        "hash",
+        "a" * 63,
+        "a" * 65,
+        "A" * 64,
+        "a" * 63 + "A",
+        "a" * 63 + "g",
+        "a" * 63 + " ",
+        " " + "a" * 63,
+        "a" * 64 + "\n",
+        "a" * 63 + "\N{FULLWIDTH DIGIT ONE}",
+    ],
+    ids=[
+        "empty",
+        "text",
+        "63 digits",
+        "65 digits",
+        "uppercase",
+        "one uppercase digit",
+        "non-hex letter",
+        "trailing space",
+        "leading space",
+        "trailing newline",
+        "non-ASCII digit",
+    ],
+)
+def test_a_request_hash_must_be_64_lowercase_hex_digits(
+    clean_db: None, app_conn: psycopg.Connection, request_hash: str
+) -> None:
+    with pytest.raises(psycopg.errors.CheckViolation) as failure:
+        app_conn.execute(INSERT, ("key-1", request_hash, None))
+    assert failure.value.diag.constraint_name == "transactions_request_hash_format"
 
 
 @pytest.mark.parametrize(

@@ -21,6 +21,7 @@ import pytest
 
 from ledger.accounts import Account, create_account
 from ledger.errors import LedgerError, LedgerInvariantError
+from tests.db_helpers import VALID_HASH
 
 KEYS = itertools.count(1)
 
@@ -40,7 +41,7 @@ def make(
 
 
 def claim(api, conn: psycopg.Connection) -> int:
-    return api.claim_transaction(conn, f"key-{next(KEYS)}", "hash")
+    return api.claim_transaction(conn, f"key-{next(KEYS)}", VALID_HASH).transaction_id
 
 
 def set_balance(conn: psycopg.Connection, account: Account, balance_minor: int) -> None:
