@@ -81,6 +81,8 @@ Six endpoints cover the whole service; the transfer endpoint carries the interes
 
 Every id the API accepts, whether in a request body, a path, or a decoded cursor, must be an integer from 1 to 9,223,372,036,854,775,807, the `bigint` maximum. Anything outside that range, or not an integer, is rejected with a 400 before it reaches the database, so an oversized id never turns into a database error and a 500. A well-formed id that does not exist is still a 404. In a JSON body an id must be a JSON integer, never a string or a float such as `12.0`. In a URL it must be written as plain decimal digits, so a sign, spaces, underscores, a decimal point or a leading zero (`+12`, ` 12`, `1_000`, `12.0`, `012`) is a 400, not a different way of writing 12.
 
+The database enforces the lower bound for the ids it generates. The `id` columns of `accounts`, `transactions` and `entries` are `GENERATED ALWAYS AS IDENTITY`, whose sequences start at 1, count up by 1 and never cycle, so they cannot produce a zero or a negative number. That alone is not a rule, because any role that may insert can add `OVERRIDING SYSTEM VALUE` and choose its own id. So each of the three columns also has a CHECK that `id > 0` (`accounts_id_positive`, `transactions_id_positive`, `entries_id_positive`, migration 008). Foreign key columns need no check of their own, since they can only point at rows that exist.
+
 **Account request and response (`POST /accounts`)**
 
 ```json
