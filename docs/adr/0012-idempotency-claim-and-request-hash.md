@@ -1,6 +1,6 @@
 # ADR 0012: The idempotency claim resolves a repeated key in one place, with a canonical request hash
 
-* **Status:** Draft
+* **Status:** Accepted
 * **Date:** 2026-10-12 (decided during milestone 3 planning)
 * **Deciders:** Alan (human architect) & Claude (AI collaborator)
 
