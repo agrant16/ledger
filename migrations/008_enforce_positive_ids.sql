@@ -1,4 +1,4 @@
--- migrations/enforce_positive_ids.sql
+-- migrations/008_enforce_positive_ids.sql
 -- Run as the owner role. App role gets only specified grants.
 
 -- Enforce auto-generated primary key ID > 0.
