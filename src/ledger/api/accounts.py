@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
+from starlette import status
 
-from ledger.accounts import get_balance
+from ledger.accounts import create_account, get_balance
 from ledger.api.types import AccountIdInPath, AccountName, Currency
 from ledger.db import run_in_transaction
 
@@ -28,9 +29,18 @@ class BalanceResponse(BaseModel):
     balance_minor: int
 
 
-@router.get("/{account_id}", response_model=AccountResponse)
-def get_account(account_id: AccountIdInPath, request: Request):
-    pass
+@router.post("", status_code=201, response_model=AccountResponse, summary="Create a new account")
+def create_new_account(body: CreateAccountRequest, request: Request):
+    account = run_in_transaction(
+        request.app.state.pool,
+        lambda conn: create_account(conn, body.account_name, body.currency, False),
+    )
+    return AccountResponse(
+        id=account.id,
+        account_name=account.account_name,
+        currency=account.currency,
+        allow_negative=account.allow_negative,
+    )
 
 
 @router.get(
