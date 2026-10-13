@@ -4,6 +4,7 @@ set -eu
 
 psql -v ON_ERROR_STOP=1 \
     -v dbname="$POSTGRES_DB" \
+    -v testdbname="${POSTGRES_DB}_test" \
     -v owner_password="$LEDGER_OWNER_PASSWORD" \
     -v app_password="$LEDGER_APP_PASSWORD" \
     --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" \

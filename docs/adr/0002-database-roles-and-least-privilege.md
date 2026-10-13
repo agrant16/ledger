@@ -20,7 +20,7 @@ The ledger's strongest guarantees are about what can never happen: entries are n
 | `balances` | `SELECT`, `INSERT`, `UPDATE` (a cache, updated with every posting) |
 | `schema_migrations` | none |
 
-- **Role setup is one SQL file**, `docker/roles/roles.sql`. Docker Compose runs it from an init script; CI runs the same file with `psql`.
+- **Role setup is one SQL file**, `docker/roles/roles.sql`. Docker Compose runs it from an init script; CI runs the same file with `psql`. Since milestone 3 it also creates the separate `ledger_test` database the tests run in, with the same owner and grants (see ADR 0003).
 - **A test pins the grants.** It asserts every table's exact privileges for the app role, rejects column-level grants, and fails if a table is missing from its list, so a stray grant fails the build.
 
 ## Consequences
