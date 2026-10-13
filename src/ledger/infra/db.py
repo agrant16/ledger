@@ -3,8 +3,8 @@ from collections.abc import Callable
 import psycopg
 from psycopg_pool import ConnectionPool
 
-from ledger.config import Settings
 from ledger.errors import LedgerInvariantError
+from ledger.infra.config import Settings
 
 
 def create_pool(settings: Settings) -> ConnectionPool:
@@ -23,21 +23,18 @@ def create_pool(settings: Settings) -> ConnectionPool:
     )
 
 
-def require_transaction(conn: psycopg.Connection, method_name: str) -> None:
-    """Caller makes commit so disallow autocommit in service methods."""
-    if conn.autocommit:
-        raise LedgerInvariantError(
-            f"{method_name} needs a connection with a transaction in progress"
-        )
-
-
 def run_in_transaction[T](
     pool: ConnectionPool,
     work: Callable[[psycopg.Connection], T],
     *,
     read_only: bool = False,
 ) -> T:
-    with pool.connection() as conn:
-        if read_only:
-            conn.execute("SET TRANSACTION READ ONLY")
-        return work(conn)
+    try:
+        with pool.connection() as conn:
+            if read_only:
+                conn.execute("SET TRANSACTION READ ONLY")
+            return work(conn)
+    except psycopg.errors.IntegrityError as failure:
+        raise LedgerInvariantError(
+            f"A database constraint was violated: ({failure.diag.constraint_name})"
+        ) from failure

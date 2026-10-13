@@ -38,7 +38,7 @@ def stderr_of(script: str) -> list[str]:
 def test_a_log_line_has_the_time_level_logger_and_the_request_id_placeholder() -> None:
     lines = stderr_of(
         "import logging\n"
-        "from ledger.logging_config import configure_logging\n"
+        "from ledger.infra.logging_config import configure_logging\n"
         "configure_logging()\n"
         "logging.getLogger('some.logger').warning('hello')\n"
     )
@@ -49,7 +49,7 @@ def test_a_log_line_has_the_time_level_logger_and_the_request_id_placeholder() -
 def test_calling_it_twice_does_not_double_the_output() -> None:
     lines = stderr_of(
         "import logging\n"
-        "from ledger.logging_config import configure_logging\n"
+        "from ledger.infra.logging_config import configure_logging\n"
         "configure_logging()\n"
         "configure_logging()\n"
         "logging.getLogger('some.logger').warning('hello')\n"
@@ -61,7 +61,7 @@ def test_info_messages_are_shown() -> None:
     """The level is INFO, so the startup line from the pool-wiring work will be visible."""
     lines = stderr_of(
         "import logging\n"
-        "from ledger.logging_config import configure_logging\n"
+        "from ledger.infra.logging_config import configure_logging\n"
         "configure_logging()\n"
         "logging.getLogger('some.logger').info('hello')\n"
     )
@@ -80,7 +80,7 @@ def uvicorn_lines(*logger_calls: str) -> list[str]:
     body = "".join(f"{call}\n" for call in logger_calls)
     return stderr_of(
         "import logging\n"
-        "from ledger.logging_config import configure_logging\n"
+        "from ledger.infra.logging_config import configure_logging\n"
         "configure_logging()\n"
         "uvicorn_error = logging.getLogger('uvicorn.error')\n"
         "other = logging.getLogger('some.logger')\n" + body
@@ -141,7 +141,7 @@ def test_it_is_still_dropped_after_configuring_twice() -> None:
     body = f"uvicorn_error.error({UVICORN_DUPLICATE!r})"
     lines = stderr_of(
         "import logging\n"
-        "from ledger.logging_config import configure_logging\n"
+        "from ledger.infra.logging_config import configure_logging\n"
         "configure_logging()\n"
         "configure_logging()\n"
         "uvicorn_error = logging.getLogger('uvicorn.error')\n"

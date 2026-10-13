@@ -3,7 +3,7 @@ from pydantic import BaseModel, ConfigDict
 
 from ledger.accounts import create_account, get_balance
 from ledger.api.types import AccountIdInPath, AccountName, Currency
-from ledger.db import run_in_transaction
+from ledger.infra.db import run_in_transaction
 
 
 class CreateAccountRequest(BaseModel):

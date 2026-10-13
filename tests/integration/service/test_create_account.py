@@ -9,8 +9,8 @@ import psycopg
 import pytest
 
 from ledger.accounts import create_account
-from ledger.config import Settings
 from ledger.errors import DuplicateAccountNameError, LedgerInvariantError
+from ledger.infra.config import Settings
 
 
 @pytest.fixture

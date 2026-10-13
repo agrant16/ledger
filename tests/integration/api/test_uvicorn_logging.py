@@ -25,7 +25,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from ledger.api.errors import install_error_handling
-from ledger.logging_config import configure_logging
+from ledger.infra.logging_config import configure_logging
 
 WATCHED_LOGGERS = ("", "uvicorn", "uvicorn.error", "uvicorn.access")
 

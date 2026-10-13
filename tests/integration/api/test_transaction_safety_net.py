@@ -16,6 +16,7 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
 
+from ledger.errors import LedgerInvariantError
 from tests.db_helpers import VALID_HASH, reset_database
 
 LONE_TRANSACTION = "INSERT INTO transactions (idempotency_key, request_hash) VALUES ('k', %s)"
@@ -24,7 +25,7 @@ LONE_TRANSACTION = "INSERT INTO transactions (idempotency_key, request_hash) VAL
 @pytest.fixture
 def client(settings, owner_conn: psycopg.Connection):
     from ledger.api.errors import install_error_handling
-    from ledger.db import run_in_transaction
+    from ledger.infra.db import run_in_transaction
 
     reset_database(owner_conn)
     with ConnectionPool(settings.app_url, min_size=1, max_size=1, timeout=2, open=True) as pool:
@@ -71,7 +72,10 @@ def test_a_failure_at_commit_is_a_logged_500_and_nothing_is_kept(
     errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
     assert len(errors) == 1
     assert errors[0].exc_info is not None
-    assert errors[0].exc_info[0] is psycopg.errors.CheckViolation
+    # The commit-time failure reaches the handler as a bug (ADR 0013): a LedgerInvariantError,
+    # not a LedgerError, with the psycopg error kept as its cause so the log still shows it.
+    assert errors[0].exc_info[0] is LedgerInvariantError
+    assert isinstance(errors[0].exc_info[1].__cause__, psycopg.errors.CheckViolation)
     assert errors[0].request_id == response.headers["X-Request-ID"]
 
     row = owner_conn.execute("SELECT count(*) FROM transactions").fetchone()

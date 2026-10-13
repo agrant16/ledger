@@ -21,8 +21,8 @@ import pytest
 from psycopg_pool import ConnectionPool
 
 from ledger.accounts import create_account
-from ledger.config import Settings
 from ledger.errors import IdempotencyConflictError, LedgerInvariantError
+from ledger.infra.config import Settings
 from tests.db_helpers import hash_for, wait_until_waiting_for_a_lock
 
 HASH_A = hash_for("request a")
@@ -39,7 +39,7 @@ def claim_transaction():
 
 @pytest.fixture
 def claim_type():
-    from ledger.posting import Claim
+    from ledger.models.posting_model import Claim
 
     return Claim
 
@@ -307,7 +307,8 @@ def funded(app_conn: psycopg.Connection, commit_setup):
 
 def claim_and_post(conn: psycopg.Connection, funded, key: str, request_hash: str):
     """Claim a key and post a transfer on it, leaving the transaction open."""
-    from ledger.posting import Entry, claim_transaction, post_transaction
+    from ledger.models.posting_model import Entry
+    from ledger.posting import claim_transaction, post_transaction
 
     funding, alice = funded
     claim = claim_transaction(conn, key, request_hash)

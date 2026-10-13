@@ -11,7 +11,7 @@ from pathlib import Path
 import psycopg
 import pytest
 
-from ledger.config import Settings
+from ledger.infra.config import Settings
 from ledger.migrate import run_migrations
 
 BIGINT_MAX = 9_223_372_036_854_775_807

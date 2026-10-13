@@ -1,22 +1,8 @@
-import logging
 import uuid
-from contextvars import ContextVar
 
 from starlette.types import Receive, Scope, Send
 
-request_id_ctx_var: ContextVar[str] = ContextVar("request_id", default="-")
-
-_original_factory = logging.getLogRecordFactory()
-
-
-def _factory(*args, **kwargs):
-    record = _original_factory(*args, **kwargs)
-    record.request_id = request_id_ctx_var.get()  # "-" outside a request
-    return record
-
-
-def install_log_record_factory():
-    logging.setLogRecordFactory(_factory)
+from ledger.infra.logging_config import request_id_ctx_var
 
 
 class RequestIDMiddleware:

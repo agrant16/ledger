@@ -1,9 +1,7 @@
 from collections import defaultdict
-from dataclasses import dataclass
 
 import psycopg
 
-from ledger.db import require_transaction
 from ledger.errors import (
     CurrencyMismatchError,
     IdempotencyConflictError,
@@ -12,6 +10,8 @@ from ledger.errors import (
     UnbalancedEntriesError,
     UnknownAccountError,
 )
+from ledger.models.posting_model import Claim, Entry, LockedAccount
+from ledger.service.decorators import transactional_service_method
 
 INSERT_TRANSACTION_SQL = """
                          INSERT INTO 
@@ -58,26 +58,13 @@ LOCK_ACCOUNTS_SQL = """
                     """
 
 
-@dataclass(frozen=True)
-class Entry:
-    account_id: int
-    amount_minor: int
-    currency: str
-
-
-@dataclass(frozen=True)
-class Claim:
-    transaction_id: int
-    replay: bool
-
-
+@transactional_service_method
 def claim_transaction(
     conn: psycopg.Connection,
     idempotency_key: str,
     request_hash: str,
     reverses_transaction_id: int | None = None,
 ) -> Claim:
-    require_transaction(conn, "claim_transaction")
 
     with conn.cursor() as cursor:
         cursor.execute(
@@ -101,8 +88,8 @@ def claim_transaction(
         return Claim(transaction_id=row[0], replay=False)
 
 
+@transactional_service_method
 def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
-    require_transaction(conn, "post_transaction")
     if not entries:
         raise LedgerInvariantError(f"No entries for transaction {transaction_id}")
 
@@ -157,13 +144,6 @@ def _apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> N
             cursor.execute(UPDATE_BALANCE_SQL, (delta, account_id))
             if cursor.rowcount != 1:
                 raise LedgerInvariantError(f"No balances row exists for account {account_id}")
-
-
-@dataclass(frozen=True)
-class LockedAccount:
-    currency: str
-    allow_negative: bool
-    balance_minor: int
 
 
 def _lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int, LockedAccount]:

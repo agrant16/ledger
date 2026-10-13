@@ -17,7 +17,7 @@ import pytest
 from psycopg_pool import ConnectionPool
 
 from ledger.accounts import create_account
-from ledger.config import Settings, load_settings
+from ledger.infra.config import Settings, load_settings
 from ledger.migrate import run_migrations
 from tests.db_helpers import (
     TEST_DATABASE_NAME,

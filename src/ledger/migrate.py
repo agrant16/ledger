@@ -9,7 +9,7 @@ from pathlib import Path
 
 import psycopg
 
-from ledger.config import load_settings
+from ledger.infra.config import load_settings
 
 MIGRATION_NAME = re.compile(r"^\d+_[a-z0-9_]+\.sql$")
 # Arbitrary constant; serializes concurrent runners (e.g. two containers starting at once).

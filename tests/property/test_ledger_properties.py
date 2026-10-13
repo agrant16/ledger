@@ -40,8 +40,7 @@ from hypothesis.stateful import (
     rule,
 )
 
-from ledger.accounts import Account, create_account
-from ledger.config import load_settings
+from ledger.accounts import create_account
 from ledger.errors import (
     CurrencyMismatchError,
     InsufficientFundsError,
@@ -49,7 +48,10 @@ from ledger.errors import (
     UnbalancedEntriesError,
     UnknownAccountError,
 )
-from ledger.posting import Entry, claim_transaction, post_transaction
+from ledger.infra.config import load_settings
+from ledger.models.account_model import Account
+from ledger.models.posting_model import Entry
+from ledger.posting import claim_transaction, post_transaction
 from tests.db_helpers import VALID_HASH, reset_database
 
 pytestmark = pytest.mark.usefixtures("migrated_database")

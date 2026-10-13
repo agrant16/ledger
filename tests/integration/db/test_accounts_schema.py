@@ -5,7 +5,7 @@ from pathlib import Path
 import psycopg
 import pytest
 
-from ledger.config import Settings
+from ledger.infra.config import Settings
 from ledger.migrate import run_migrations
 
 INSERT = (

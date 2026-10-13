@@ -10,7 +10,7 @@ A transfer inserts a `transactions` row (which is also the idempotency claim), t
 ## Decision
 - **Two functions.** `claim_transaction(conn, idempotency_key, request_hash, reverses_transaction_id=None) -> int` inserts the `transactions` row and returns its id. `post_transaction(conn, transaction_id, entries)` validates, locks, and writes. In milestone 2 the claim is a plain insert and a duplicate key raises the raw unique violation; milestone 3 adds `ON CONFLICT` handling and replay to the claim only.
 - **The caller owns the database transaction.** Service functions take the request's connection, assume a transaction is open on it, and never commit or roll back. The claim and the posting therefore share one transaction.
-- **An autocommit guard.** `require_transaction` raises `LedgerInvariantError` if a connection is in autocommit mode. `claim_transaction`, `post_transaction`, and `create_account` all call it.
+- **An autocommit guard.** `transactional_service_method` raises `LedgerInvariantError` if a connection is in autocommit mode. `claim_transaction`, `post_transaction`, and `create_account` all call it.
 - **Posting is split into small steps** (`_lock_accounts`, `_insert_entries`, `_apply_balance_deltas`), which gives failure injection a seam: a test replaces `_apply_balance_deltas` with one that raises, then checks that a rollback leaves nothing.
 - **Plain data types.** `Entry(account_id, amount_minor, currency)` is a frozen dataclass, and `create_account` returns a frozen `Account`.
 

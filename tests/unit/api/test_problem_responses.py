@@ -211,7 +211,7 @@ def test_the_catch_all_makes_an_id_when_the_request_has_none(caplog) -> None:
     """The middleware always runs first, so this cannot happen in the app. The catch-all is the last
     resort and must not fail itself, so it covers a request that reached it without an id."""
     from ledger.api.errors import unhandled_exception_handler
-    from ledger.api.request_id import install_log_record_factory
+    from ledger.infra.logging_config import install_log_record_factory
 
     install_log_record_factory()  # normally done by install_error_handling
     caplog.set_level(logging.DEBUG)

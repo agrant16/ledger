@@ -1,13 +1,26 @@
 import logging
-
-from ledger.api.request_id import install_log_record_factory
+from contextvars import ContextVar
 
 UVICORN_DUPLICATE = "Exception in ASGI application"
+
+request_id_ctx_var: ContextVar[str] = ContextVar("request_id", default="-")
+
+_original_factory = logging.getLogRecordFactory()
 
 
 class DropUvicornDuplicate(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         return record.getMessage().strip() != UVICORN_DUPLICATE
+
+
+def _factory(*args, **kwargs):
+    record = _original_factory(*args, **kwargs)
+    record.request_id = request_id_ctx_var.get()  # "-" outside a request
+    return record
+
+
+def install_log_record_factory():
+    logging.setLogRecordFactory(_factory)
 
 
 def configure_logging() -> None:
