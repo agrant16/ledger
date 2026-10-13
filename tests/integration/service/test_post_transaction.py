@@ -24,6 +24,7 @@ from ledger.errors import (
     UnbalancedEntriesError,
     UnknownAccountError,
 )
+from tests.db_helpers import VALID_HASH
 
 KEYS = itertools.count(1)
 
@@ -44,7 +45,7 @@ def make(
 
 def post(api, conn: psycopg.Connection, entries) -> int:
     """Claim a fresh transaction and post the entries to it, as a request would."""
-    tx = api.claim_transaction(conn, f"key-{next(KEYS)}", "hash")
+    tx = api.claim_transaction(conn, f"key-{next(KEYS)}", VALID_HASH).transaction_id
     api.post_transaction(conn, tx, entries)
     return tx
 
@@ -367,7 +368,7 @@ def test_a_failure_between_the_inserts_and_the_balance_update_leaves_nothing(
 
     monkeypatch.setattr("ledger.posting._apply_balance_deltas", boom)
 
-    tx = api.claim_transaction(app_conn, "key-injected", "hash")
+    tx = api.claim_transaction(app_conn, "key-injected", VALID_HASH).transaction_id
     with pytest.raises(RuntimeError, match="injected failure"):
         api.post_transaction(app_conn, tx, transfer(api, 5000, funding, alice))
     # The inserts ran first: the failure came after them, not before.
@@ -438,7 +439,7 @@ def test_the_touched_balance_rows_are_locked_before_the_overdraft_check(
     carol = make(app_conn, "customer:carol")
     commit_setup()
 
-    tx = api.claim_transaction(app_conn, "key-locks", "hash")
+    tx = api.claim_transaction(app_conn, "key-locks", VALID_HASH).transaction_id
     with pytest.raises(InsufficientFundsError):
         api.post_transaction(app_conn, tx, transfer(api, 1, alice, bob))
 

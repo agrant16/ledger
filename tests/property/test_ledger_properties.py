@@ -50,7 +50,7 @@ from ledger.errors import (
     UnknownAccountError,
 )
 from ledger.posting import Entry, claim_transaction, post_transaction
-from tests.db_helpers import reset_database
+from tests.db_helpers import VALID_HASH, reset_database
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
 
@@ -122,7 +122,8 @@ class LedgerMachine(RuleBasedStateMachine):
     def post(self, entries: list[Entry]) -> None:
         """Claim and post as one database transaction, committing only if it all worked."""
         try:
-            transaction_id = claim_transaction(self.app, f"key-{next(self.counter)}", "hash")
+            claim = claim_transaction(self.app, f"key-{next(self.counter)}", VALID_HASH)
+            transaction_id = claim.transaction_id
             post_transaction(self.app, transaction_id, entries)
             self.app.commit()
         except BaseException:

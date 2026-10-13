@@ -236,7 +236,7 @@ def test_a_claimed_and_posted_transfer_commits(
 ) -> None:
     """The claim inserts the transactions row before any entry exists. Because the triggers are
     deferred, claim_transaction followed by post_transaction commits as one unit."""
-    tx = api.claim_transaction(app_conn, "key-1", HASH)
+    tx = api.claim_transaction(app_conn, "key-1", HASH).transaction_id
     api.post_transaction(
         app_conn,
         tx,

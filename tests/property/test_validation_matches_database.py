@@ -29,6 +29,7 @@ CHECKS = {
     "accounts_account_name_whitespace": "request-derived: AccountName",
     "accounts_currency_format": "request-derived: Currency",
     "transactions_idempotency_key_length": "request-derived: IdempotencyKey",
+    "transactions_request_hash_format": "service rule: request_hash() always makes 64 hex digits",
     "entries_amount_minor_not_zero": "request-derived: AmountMinor",
     "balances_protected_nonnegative": "service rule: the overdraft check in post_transaction",
 }
