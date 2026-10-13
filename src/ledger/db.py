@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import psycopg
 from psycopg_pool import ConnectionPool
 
@@ -27,3 +29,15 @@ def require_transaction(conn: psycopg.Connection, method_name: str) -> None:
         raise LedgerInvariantError(
             f"{method_name} needs a connection with a transaction in progress"
         )
+
+
+def run_in_transaction[T](
+    pool: ConnectionPool,
+    work: Callable[[psycopg.Connection], T],
+    *,
+    read_only: bool = False,
+) -> T:
+    with pool.connection() as conn:
+        if read_only:
+            conn.execute("SET TRANSACTION READ ONLY")
+        return work(conn)
