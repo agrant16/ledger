@@ -2,11 +2,11 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 import psycopg
-from pydantic import BaseModel
 
 from ledger.db import require_transaction
 from ledger.errors import (
     CurrencyMismatchError,
+    IdempotencyConflictError,
     InsufficientFundsError,
     LedgerInvariantError,
     UnbalancedEntriesError,
@@ -15,21 +15,31 @@ from ledger.errors import (
 
 INSERT_TRANSACTION_SQL = """
                          INSERT INTO 
-                            transactions (idempotency_key, request_hash, reverses_transaction_id) 
-                            VALUES (%s, %s, %s) 
-                            RETURNING id;
+                             transactions (idempotency_key, request_hash, reverses_transaction_id) 
+                         VALUES (%s, %s, %s) 
+                         ON CONFLICT (idempotency_key) DO NOTHING 
+                         RETURNING id;
                          """
+
+
+SELECT_IDEMPOTENT_SQL = """
+                        SELECT 
+                            id, 
+                            request_hash 
+                        FROM transactions
+                        WHERE idempotency_key = %s;
+                        """
 
 INSERT_ENTRY_SQL = """
                    INSERT INTO 
                        entries (transaction_id, account_id, amount_minor, currency) 
-                       VALUES (%s, %s, %s, %s);
+                   VALUES (%s, %s, %s, %s);
                    """
 
 UPDATE_BALANCE_SQL = """UPDATE 
                             balances 
-                            SET balance_minor = balance_minor + %s 
-                            WHERE account_id = %s;
+                        SET balance_minor = balance_minor + %s 
+                        WHERE account_id = %s;
                      """
 
 
@@ -44,7 +54,8 @@ LOCK_ACCOUNTS_SQL = """
                     ON a.id = b.account_id
                     WHERE b.account_id = ANY(%s::bigint[])
                     ORDER BY b.account_id ASC
-                    FOR UPDATE OF b;"""
+                    FOR UPDATE OF b;
+                    """
 
 
 @dataclass(frozen=True)
@@ -55,7 +66,7 @@ class Entry:
 
 
 @dataclass(frozen=True)
-class Claim(BaseModel):
+class Claim:
     transaction_id: int
     replay: bool
 
@@ -65,7 +76,7 @@ def claim_transaction(
     idempotency_key: str,
     request_hash: str,
     reverses_transaction_id: int | None = None,
-) -> int:
+) -> Claim:
     require_transaction(conn, "claim_transaction")
 
     with conn.cursor() as cursor:
@@ -73,7 +84,22 @@ def claim_transaction(
             INSERT_TRANSACTION_SQL, (idempotency_key, request_hash, reverses_transaction_id)
         )
         row = cursor.fetchone()
-        return row[0]
+        if not row:
+            cursor.execute(SELECT_IDEMPOTENT_SQL, (idempotency_key,))
+            existing_row = cursor.fetchone()
+            if not existing_row:
+                raise LedgerInvariantError(
+                    "Encountered bug in claim_transaction: row should exist but can't be found"
+                )
+            existing_id, existing_request_hash = existing_row[0], existing_row[1]
+            if request_hash == existing_request_hash:
+                return Claim(transaction_id=existing_id, replay=True)
+            else:
+                raise IdempotencyConflictError(
+                    "Idempotency Conflict: idempotency key already exists for "
+                    "request in transactions"
+                )
+        return Claim(transaction_id=row[0], replay=False)
 
 
 def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
