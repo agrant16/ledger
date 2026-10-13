@@ -22,11 +22,11 @@ commit_setup fixture truncates everything afterwards.
 import psycopg
 import pytest
 
-from ledger.accounts import Account, create_account
+from ledger.accounts import Account
 from ledger.errors import LedgerError
+from tests.db_helpers import VALID_HASH, make_account
 
 SAFETY_NET = (psycopg.errors.CheckViolation, psycopg.errors.RaiseException)
-HASH = "a" * 64
 
 
 @pytest.fixture
@@ -37,16 +37,10 @@ def api():
     return posting
 
 
-def make(
-    conn: psycopg.Connection, name: str, currency: str = "USD", allow_negative: bool = False
-) -> Account:
-    return create_account(conn, name, currency, allow_negative)
-
-
 def insert_transaction(conn: psycopg.Connection, key: str) -> int:
     row = conn.execute(
         "INSERT INTO transactions (idempotency_key, request_hash) VALUES (%s, %s) RETURNING id",
-        (key, HASH),
+        (key, VALID_HASH),
     ).fetchone()
     assert row is not None
     return row[0]
@@ -74,11 +68,11 @@ def committed(owner_conn: psycopg.Connection) -> tuple[int, int]:
 def accounts(clean_db: None, app_conn: psycopg.Connection, commit_setup) -> dict[str, Account]:
     """Committed accounts: two in USD, two in EUR, and a USD funding account."""
     made = {
-        "alice": make(app_conn, "customer:alice", "USD"),
-        "bob": make(app_conn, "customer:bob", "USD"),
-        "eve": make(app_conn, "customer:eve", "EUR"),
-        "finn": make(app_conn, "customer:finn", "EUR"),
-        "funding": make(app_conn, "funding:usd", "USD", allow_negative=True),
+        "alice": make_account(app_conn, "customer:alice", "USD"),
+        "bob": make_account(app_conn, "customer:bob", "USD"),
+        "eve": make_account(app_conn, "customer:eve", "EUR"),
+        "finn": make_account(app_conn, "customer:finn", "EUR"),
+        "funding": make_account(app_conn, "funding:usd", "USD", allow_negative=True),
     }
     commit_setup()
     return made
@@ -210,7 +204,7 @@ def test_a_claim_that_was_never_posted_cannot_be_committed(
     app_conn: psycopg.Connection, owner_conn: psycopg.Connection, accounts, api
 ) -> None:
     """The bug this guards against: a caller claims the key, skips post_transaction, and commits."""
-    api.claim_transaction(app_conn, "key-1", HASH)
+    api.claim_transaction(app_conn, "key-1", VALID_HASH)
     with pytest.raises(SAFETY_NET):
         app_conn.commit()
     assert committed(owner_conn) == (0, 0)
@@ -236,7 +230,7 @@ def test_a_claimed_and_posted_transfer_commits(
 ) -> None:
     """The claim inserts the transactions row before any entry exists. Because the triggers are
     deferred, claim_transaction followed by post_transaction commits as one unit."""
-    tx = api.claim_transaction(app_conn, "key-1", HASH).transaction_id
+    tx = api.claim_transaction(app_conn, "key-1", VALID_HASH).transaction_id
     api.post_transaction(
         app_conn,
         tx,

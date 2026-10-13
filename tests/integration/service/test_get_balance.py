@@ -12,7 +12,7 @@ import pytest
 from psycopg_pool import ConnectionPool
 
 from ledger.accounts import create_account
-from ledger.errors import UnknownAccountError
+from ledger.errors import LedgerError, LedgerInvariantError, UnknownAccountError
 
 
 @pytest.fixture
@@ -111,3 +111,21 @@ def test_it_changes_nothing(clean_db: None, app_conn: psycopg.Connection, get_ba
         "SELECT balance_minor FROM balances WHERE account_id = %s", (account.id,)
     ).fetchone()
     assert row == (12,)
+
+
+def test_an_account_with_no_balances_row_is_a_bug_and_not_a_balance(
+    clean_db: None, app_conn: psycopg.Connection, get_balance
+) -> None:
+    """create_account always writes the balances row with the account, so an account that has none
+    means the data is damaged. That is a bug (a logged 500), not an unknown account (404), and it
+    must never come back as a Balance full of None."""
+    row = app_conn.execute(
+        "INSERT INTO accounts (account_name, currency, allow_negative)"
+        " VALUES ('orphan', 'USD', false) RETURNING id"
+    ).fetchone()
+    assert row is not None
+
+    with pytest.raises(LedgerInvariantError) as failure:
+        get_balance(app_conn, row[0])
+
+    assert not isinstance(failure.value, LedgerError)

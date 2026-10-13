@@ -19,15 +19,36 @@ from psycopg_pool import ConnectionPool
 from ledger.accounts import create_account
 from ledger.config import Settings, load_settings
 from ledger.migrate import run_migrations
-from tests.db_helpers import reset_database, with_connect_timeout
+from tests.db_helpers import (
+    TEST_DATABASE_NAME,
+    reset_database,
+    with_connect_timeout,
+    with_database,
+)
 
 # pytest's own plugin for testing pytest behavior, used by tests/unit/test_disallow_db.py. It has to
 # be declared in the top-level conftest.
 pytest_plugins = ["pytester"]
 
 
+@pytest.fixture(scope="session", autouse=True)
+def use_the_test_database() -> Iterator[None]:
+    """Point every `load_settings()` call in the test run at the test database.
+
+    Tests empty the tables they use, so they must never run against the database the service is
+    using. The same server, roles and passwords are used; only the database name changes. Setting
+    the environment, instead of building settings only in the `settings` fixture, also covers code
+    that reads its own settings: the real app's startup and the property test.
+    """
+    configured = load_settings()
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("DATABASE_OWNER_URL", with_database(configured.owner_url, TEST_DATABASE_NAME))
+        patch.setenv("DATABASE_APP_URL", with_database(configured.app_url, TEST_DATABASE_NAME))
+        yield
+
+
 @pytest.fixture(scope="session")
-def settings() -> Settings:
+def settings(use_the_test_database: None) -> Settings:
     """The settings with a short connect timeout, so a stopped database fails in seconds."""
     configured = load_settings()
     return dataclasses.replace(
@@ -39,7 +60,15 @@ def settings() -> Settings:
 
 @pytest.fixture(scope="session")
 def migrated_database(settings: Settings) -> None:
-    run_migrations(settings.owner_url, settings.migrations_dir)
+    try:
+        run_migrations(settings.owner_url, settings.migrations_dir)
+    except psycopg.OperationalError as failure:
+        if f'database "{TEST_DATABASE_NAME}" does not exist' not in str(failure):
+            raise
+        raise RuntimeError(
+            f"The test database {TEST_DATABASE_NAME!r} does not exist. A fresh Compose volume "
+            "creates it; an older one needs it added once (see 'Running tests' in the README)."
+        ) from failure
 
 
 @pytest.fixture

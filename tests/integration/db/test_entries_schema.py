@@ -3,7 +3,8 @@
 import psycopg
 import pytest
 
-HASH = "a" * 64
+from tests.db_helpers import VALID_HASH
+
 BIGINT_MAX = 9_223_372_036_854_775_807
 
 INSERT = (
@@ -27,7 +28,7 @@ def insert_account(
 def insert_transaction(conn: psycopg.Connection, key: str = "key-1") -> int:
     row = conn.execute(
         "INSERT INTO transactions (idempotency_key, request_hash) VALUES (%s, %s) RETURNING id",
-        (key, HASH),
+        (key, VALID_HASH),
     ).fetchone()
     assert row is not None
     return row[0]

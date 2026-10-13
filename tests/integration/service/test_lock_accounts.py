@@ -12,14 +12,14 @@ post_transaction's job.
 The app role has no UPDATE privilege on accounts, so the statement can only lock balances rows.
 """
 
-import time
 from concurrent.futures import ThreadPoolExecutor
 
 import psycopg
 import pytest
 from psycopg_pool import ConnectionPool
 
-from ledger.accounts import Account, create_account
+from ledger.accounts import Account
+from tests.db_helpers import make_account, wait_until_waiting_for_a_lock
 
 
 @pytest.fixture
@@ -28,12 +28,6 @@ def api():
     from ledger import posting
 
     return posting
-
-
-def make(
-    conn: psycopg.Connection, name: str, currency: str = "USD", allow_negative: bool = False
-) -> Account:
-    return create_account(conn, name, currency, allow_negative)
 
 
 def set_balance(conn: psycopg.Connection, account: Account, balance_minor: int) -> None:
@@ -68,25 +62,14 @@ def is_locked(pool: ConnectionPool, account: Account) -> bool:
         return False
 
 
-def wait_until_a_session_is_blocked_on_a_lock(owner_conn: psycopg.Connection) -> None:
-    """Poll until some lock request is waiting, so the test knows the thread got stuck on it."""
-    for _ in range(100):
-        row = owner_conn.execute("SELECT count(*) FROM pg_locks WHERE NOT granted").fetchone()
-        assert row is not None
-        if row[0] >= 1:
-            return
-        time.sleep(0.05)
-    pytest.fail("no session ever blocked on a lock")
-
-
 # --- what it returns --------------------------------------------------------------------------
 
 
 def test_returns_each_accounts_currency_overdraft_flag_and_balance(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    alice = make(app_conn, "customer:alice", "USD")
-    funding = make(app_conn, "funding:eur", "EUR", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice", "USD")
+    funding = make_account(app_conn, "funding:eur", "EUR", allow_negative=True)
     set_balance(app_conn, alice, 2500)
     set_balance(app_conn, funding, -900)
 
@@ -101,9 +84,9 @@ def test_returns_each_accounts_currency_overdraft_flag_and_balance(
 def test_the_result_is_keyed_in_ascending_account_id_order(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    first = make(app_conn, "customer:first")
-    second = make(app_conn, "customer:second")
-    third = make(app_conn, "customer:third")
+    first = make_account(app_conn, "customer:first")
+    second = make_account(app_conn, "customer:second")
+    third = make_account(app_conn, "customer:third")
     set_balance(app_conn, first, 1)  # its newest row version now sits after the others in storage
     scan_in_storage_order(app_conn)
     result = api._lock_accounts(app_conn, [third.id, first.id, second.id])
@@ -113,7 +96,7 @@ def test_the_result_is_keyed_in_ascending_account_id_order(
 def test_an_unknown_account_is_left_out_and_not_an_error(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    alice = make(app_conn, "customer:alice")
+    alice = make_account(app_conn, "customer:alice")
     result = api._lock_accounts(app_conn, [alice.id, 999_999])
     assert list(result) == [alice.id]
 
@@ -121,13 +104,13 @@ def test_an_unknown_account_is_left_out_and_not_an_error(
 def test_an_id_given_twice_is_returned_once(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    alice = make(app_conn, "customer:alice")
+    alice = make_account(app_conn, "customer:alice")
     result = api._lock_accounts(app_conn, [alice.id, alice.id])
     assert list(result) == [alice.id]
 
 
 def test_no_ids_returns_nothing(clean_db: None, app_conn: psycopg.Connection, api) -> None:
-    make(app_conn, "customer:alice")
+    make_account(app_conn, "customer:alice")
     assert api._lock_accounts(app_conn, []) == {}
 
 
@@ -141,9 +124,9 @@ def test_it_locks_the_requested_rows_and_only_those(
     commit_setup,
     api,
 ) -> None:
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
-    carol = make(app_conn, "customer:carol")
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
+    carol = make_account(app_conn, "customer:carol")
     commit_setup()
 
     api._lock_accounts(app_conn, [alice.id, bob.id, 999_999])
@@ -171,25 +154,29 @@ def test_locks_are_taken_in_ascending_account_id_whatever_order_it_is_asked_in(
     was given, it holds nothing. The low account's row is updated once after both are created, so
     its newest version sits after high's in the table: a statement with no ORDER BY, scanning the
     table in storage order, would reach high first and fail this test."""
-    low = make(app_conn, "customer:low")
-    high = make(app_conn, "customer:high")
+    low = make_account(app_conn, "customer:low")
+    high = make_account(app_conn, "customer:high")
     set_balance(app_conn, low, 1)
     commit_setup()
 
-    def ask_for_both():
-        with app_pool.connection() as conn:
-            conn.execute("SET LOCAL lock_timeout = '10s'")
-            scan_in_storage_order(conn)
-            try:
-                return api._lock_accounts(conn, [high.id, low.id])
-            finally:
-                conn.rollback()
+    with (
+        app_pool.connection() as holder,
+        app_pool.connection() as asker,
+        ThreadPoolExecutor(max_workers=1) as executor,
+    ):
 
-    with app_pool.connection() as holder, ThreadPoolExecutor(max_workers=1) as executor:
+        def ask_for_both():
+            asker.execute("SET LOCAL lock_timeout = '10s'")
+            scan_in_storage_order(asker)
+            try:
+                return api._lock_accounts(asker, [high.id, low.id])
+            finally:
+                asker.rollback()
+
         try:
             holder.execute("SELECT 1 FROM balances WHERE account_id = %s FOR UPDATE", (high.id,))
             future = executor.submit(ask_for_both)
-            wait_until_a_session_is_blocked_on_a_lock(owner_conn)
+            wait_until_waiting_for_a_lock(owner_conn, asker.info.backend_pid, future.done)
             low_is_already_held = is_locked(app_pool, low)
         finally:
             holder.rollback()
@@ -213,23 +200,27 @@ def test_the_balance_is_read_after_waiting_for_the_lock(
     """READ COMMITTED: a locking SELECT that had to wait returns the row as the other writer left
     it, not as it was when the statement began. This is why the overdraft check can trust the
     balance it gets back."""
-    alice = make(app_conn, "customer:alice")
+    alice = make_account(app_conn, "customer:alice")
     set_balance(app_conn, alice, 100)
     commit_setup()
 
-    def ask():
-        with app_pool.connection() as conn:
-            conn.execute("SET LOCAL lock_timeout = '10s'")
-            try:
-                return api._lock_accounts(conn, [alice.id])
-            finally:
-                conn.rollback()
+    with (
+        app_pool.connection() as writer,
+        app_pool.connection() as asker,
+        ThreadPoolExecutor(max_workers=1) as executor,
+    ):
 
-    with app_pool.connection() as writer, ThreadPoolExecutor(max_workers=1) as executor:
+        def ask():
+            asker.execute("SET LOCAL lock_timeout = '10s'")
+            try:
+                return api._lock_accounts(asker, [alice.id])
+            finally:
+                asker.rollback()
+
         try:
             set_balance(writer, alice, 700)  # takes the row lock; not yet committed
             future = executor.submit(ask)
-            wait_until_a_session_is_blocked_on_a_lock(owner_conn)
+            wait_until_waiting_for_a_lock(owner_conn, asker.info.backend_pid, future.done)
             writer.commit()
         except BaseException:
             writer.rollback()

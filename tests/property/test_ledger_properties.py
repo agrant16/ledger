@@ -310,4 +310,5 @@ LedgerMachine.TestCase.settings = settings(
     suppress_health_check=[HealthCheck.too_slow],
 )
 
-TestLedgerProperties = LedgerMachine.TestCase
+# The one test that legitimately runs long (about 8 seconds here, more on a slow CI machine).
+TestLedgerProperties = pytest.mark.timeout(120)(LedgerMachine.TestCase)

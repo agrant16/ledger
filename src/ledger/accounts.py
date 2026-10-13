@@ -4,7 +4,7 @@ import psycopg
 from psycopg import errors
 
 from ledger.db import require_transaction
-from ledger.errors import DuplicateAccountNameError, UnknownAccountError
+from ledger.errors import DuplicateAccountNameError, LedgerInvariantError, UnknownAccountError
 
 INSERT_ACCOUNTS_SQL = """ 
                       INSERT INTO 
@@ -72,4 +72,6 @@ def get_balance(conn: psycopg.Connection, account_id: int) -> Balance:
             raise UnknownAccountError(
                 f"Unknown account {account_id} encountered while getting balance"
             )
+        if row[0] is None:
+            raise LedgerInvariantError(f"Critical Bug: Account {account_id} has no balance row")
         return Balance(account_id=row[0], currency=row[1], balance_minor=row[2])

@@ -14,7 +14,7 @@ import itertools
 import psycopg
 import pytest
 
-from ledger.accounts import Account, create_account
+from ledger.accounts import Account
 from ledger.config import Settings
 from ledger.errors import (
     CurrencyMismatchError,
@@ -24,7 +24,7 @@ from ledger.errors import (
     UnbalancedEntriesError,
     UnknownAccountError,
 )
-from tests.db_helpers import VALID_HASH
+from tests.db_helpers import VALID_HASH, make_account
 
 KEYS = itertools.count(1)
 
@@ -35,12 +35,6 @@ def api():
     from ledger import posting
 
     return posting
-
-
-def make(
-    conn: psycopg.Connection, name: str, currency: str = "USD", allow_negative: bool = False
-) -> Account:
-    return create_account(conn, name, currency, allow_negative)
 
 
 def post(api, conn: psycopg.Connection, entries) -> int:
@@ -96,8 +90,8 @@ def assert_nothing_written(conn: psycopg.Connection, before: dict[int, int]) -> 
 def test_writes_the_entries_in_order_against_the_transaction(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    funding = make(app_conn, "funding:usd", allow_negative=True)
-    alice = make(app_conn, "customer:alice")
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice")
     tx = post(api, app_conn, transfer(api, 5000, funding, alice))
     assert entry_rows(app_conn, tx) == [(funding.id, -5000, "USD"), (alice.id, 5000, "USD")]
 
@@ -105,8 +99,8 @@ def test_writes_the_entries_in_order_against_the_transaction(
 def test_updates_the_balances_and_lets_the_funding_account_go_negative(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    funding = make(app_conn, "funding:usd", allow_negative=True)
-    alice = make(app_conn, "customer:alice")
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice")
     post(api, app_conn, transfer(api, 5000, funding, alice))
     assert balance(app_conn, alice) == 5000
     assert balance(app_conn, funding) == -5000
@@ -116,9 +110,9 @@ def test_cached_balances_equal_the_sum_of_entries_after_several_postings(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
     """Invariant: the cached balance always equals the sum of that account's entries."""
-    funding = make(app_conn, "funding:usd", allow_negative=True)
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
     post(api, app_conn, transfer(api, 5000, funding, alice))
     post(api, app_conn, transfer(api, 1200, alice, bob))
     post(api, app_conn, transfer(api, 300, bob, alice))
@@ -140,10 +134,10 @@ def test_cached_balances_equal_the_sum_of_entries_after_several_postings(
 def test_one_transaction_may_span_currencies_when_each_currency_balances(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    usd_funding = make(app_conn, "funding:usd", "USD", allow_negative=True)
-    eur_funding = make(app_conn, "funding:eur", "EUR", allow_negative=True)
-    alice = make(app_conn, "customer:alice", "USD")
-    bob = make(app_conn, "customer:bob", "EUR")
+    usd_funding = make_account(app_conn, "funding:usd", "USD", allow_negative=True)
+    eur_funding = make_account(app_conn, "funding:eur", "EUR", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice", "USD")
+    bob = make_account(app_conn, "customer:bob", "EUR")
     entries = transfer(api, 700, usd_funding, alice) + transfer(api, 900, eur_funding, bob)
     tx = post(api, app_conn, entries)
     assert len(entry_rows(app_conn, tx)) == 4
@@ -157,9 +151,9 @@ def test_the_overdraft_check_uses_the_net_change_not_each_entry(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
     """Each entry alone fits within alice's 100, but together they take 160."""
-    funding = make(app_conn, "funding:usd", allow_negative=True)
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
     post(api, app_conn, transfer(api, 100, funding, alice))
     before = snapshot(app_conn)
     entries_before = count(app_conn, "entries")
@@ -176,8 +170,8 @@ def test_the_overdraft_check_uses_the_net_change_not_each_entry(
 def test_an_account_whose_entries_net_to_zero_needs_no_balance(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
     entries = transfer(api, 100, alice, bob) + transfer(api, 100, bob, alice)
     tx = post(api, app_conn, entries)
     assert len(entry_rows(app_conn, tx)) == 4
@@ -190,8 +184,8 @@ def test_an_account_whose_entries_net_to_zero_needs_no_balance(
 def test_unbalanced_entries_are_a_bug_and_write_nothing(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    funding = make(app_conn, "funding:usd", allow_negative=True)
-    alice = make(app_conn, "customer:alice")
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice")
     before = snapshot(app_conn)
     entries = [api.Entry(funding.id, -100, "USD"), api.Entry(alice.id, 90, "USD")]
     with pytest.raises(UnbalancedEntriesError) as failure:
@@ -205,8 +199,8 @@ def test_each_currency_must_balance_even_if_the_total_is_zero(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
     """+100 USD and -100 EUR sum to zero across currencies, but not within either."""
-    usd_funding = make(app_conn, "funding:usd", "USD", allow_negative=True)
-    bob = make(app_conn, "customer:bob", "EUR")
+    usd_funding = make_account(app_conn, "funding:usd", "USD", allow_negative=True)
+    bob = make_account(app_conn, "customer:bob", "EUR")
     before = snapshot(app_conn)
     entries = [api.Entry(bob.id, -100, "EUR"), api.Entry(usd_funding.id, 100, "USD")]
     with pytest.raises(UnbalancedEntriesError):
@@ -222,7 +216,7 @@ def test_no_entries_at_all_is_a_bug(clean_db: None, app_conn: psycopg.Connection
 
 
 def test_an_unknown_account_is_rejected(clean_db: None, app_conn: psycopg.Connection, api) -> None:
-    funding = make(app_conn, "funding:usd", allow_negative=True)
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
     before = snapshot(app_conn)
     entries = [api.Entry(funding.id, -100, "USD"), api.Entry(999_999, 100, "USD")]
     with pytest.raises(UnknownAccountError):
@@ -233,7 +227,7 @@ def test_an_unknown_account_is_rejected(clean_db: None, app_conn: psycopg.Connec
 def test_the_unknown_account_error_names_every_missing_account(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    funding = make(app_conn, "funding:usd", allow_negative=True)
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
     entries = [
         api.Entry(funding.id, -300, "USD"),
         api.Entry(999_998, 100, "USD"),
@@ -250,8 +244,8 @@ def test_an_entry_in_the_wrong_currency_for_its_account_is_rejected(
 ) -> None:
     """Invariant: every entry's currency matches its account's. This is the service's own check;
     the composite foreign key on entries is only the safety net behind it."""
-    eur_funding = make(app_conn, "funding:eur", "EUR", allow_negative=True)
-    alice = make(app_conn, "customer:alice", "USD")
+    eur_funding = make_account(app_conn, "funding:eur", "EUR", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice", "USD")
     before = snapshot(app_conn)
     entries = [api.Entry(eur_funding.id, -100, "EUR"), api.Entry(alice.id, 100, "EUR")]
     with pytest.raises(CurrencyMismatchError):
@@ -262,8 +256,8 @@ def test_an_entry_in_the_wrong_currency_for_its_account_is_rejected(
 def test_insufficient_funds_reports_the_account_balance_and_amount(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
     before = snapshot(app_conn)
     with pytest.raises(InsufficientFundsError) as failure:
         post(api, app_conn, transfer(api, 1, alice, bob))
@@ -278,9 +272,9 @@ def test_when_several_accounts_overdraw_the_lowest_account_id_is_reported(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
     """Which account the error names must not depend on the order of the entries."""
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
-    carol = make(app_conn, "customer:carol")
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
+    carol = make_account(app_conn, "customer:carol")
     assert alice.id < bob.id < carol.id
     entries = [
         api.Entry(bob.id, -50, "USD"),  # bob comes first in the entries, but alice has the lower id
@@ -297,9 +291,9 @@ def test_when_several_accounts_overdraw_the_lowest_account_id_is_reported(
 def test_spending_exactly_the_balance_is_allowed_but_one_more_is_not(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    funding = make(app_conn, "funding:usd", allow_negative=True)
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
     post(api, app_conn, transfer(api, 100, funding, alice))
     post(api, app_conn, transfer(api, 100, alice, bob))
     assert balance(app_conn, alice) == 0
@@ -317,7 +311,7 @@ def test_spending_exactly_the_balance_is_allowed_but_one_more_is_not(
 def test_unbalanced_entries_are_reported_before_an_unknown_account(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    funding = make(app_conn, "funding:usd", allow_negative=True)
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
     entries = [api.Entry(funding.id, -100, "USD"), api.Entry(999_999, 90, "USD")]
     with pytest.raises(UnbalancedEntriesError):
         post(api, app_conn, entries)
@@ -326,8 +320,10 @@ def test_unbalanced_entries_are_reported_before_an_unknown_account(
 def test_an_unknown_account_is_reported_before_a_currency_mismatch(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    eur_funding = make(app_conn, "funding:eur", "EUR", allow_negative=True)
-    alice = make(app_conn, "customer:alice", "USD")  # wrong currency for the EUR entry below
+    eur_funding = make_account(app_conn, "funding:eur", "EUR", allow_negative=True)
+    alice = make_account(
+        app_conn, "customer:alice", "USD"
+    )  # wrong currency for the EUR entry below
     entries = [
         api.Entry(eur_funding.id, -100, "EUR"),
         api.Entry(alice.id, 50, "EUR"),
@@ -340,8 +336,10 @@ def test_an_unknown_account_is_reported_before_a_currency_mismatch(
 def test_a_currency_mismatch_is_reported_before_insufficient_funds(
     clean_db: None, app_conn: psycopg.Connection, api
 ) -> None:
-    alice = make(app_conn, "customer:alice", "USD")  # balance 0, so this would also overdraw
-    bob = make(app_conn, "customer:bob", "EUR")
+    alice = make_account(
+        app_conn, "customer:alice", "USD"
+    )  # balance 0, so this would also overdraw
+    bob = make_account(app_conn, "customer:bob", "EUR")
     entries = [api.Entry(alice.id, -100, "EUR"), api.Entry(bob.id, 100, "EUR")]
     with pytest.raises(CurrencyMismatchError):
         post(api, app_conn, entries)
@@ -359,8 +357,8 @@ def test_a_failure_between_the_inserts_and_the_balance_update_leaves_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Failure injection: the entries are written, then the balance update raises."""
-    funding = make(app_conn, "funding:usd", allow_negative=True)
-    alice = make(app_conn, "customer:alice")
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice")
     commit_setup()
 
     def boom(*args, **kwargs):
@@ -389,8 +387,8 @@ def test_it_never_commits(
     api,
 ) -> None:
     """The caller owns the transaction, so a rollback must undo the entries and the balances."""
-    funding = make(app_conn, "funding:usd", allow_negative=True)
-    alice = make(app_conn, "customer:alice")
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice")
     commit_setup()
     post(api, app_conn, transfer(api, 5000, funding, alice))
     assert (
@@ -411,8 +409,8 @@ def test_it_refuses_an_autocommit_connection(
     settings: Settings,
     api,
 ) -> None:
-    funding = make(app_conn, "funding:usd", allow_negative=True)
-    alice = make(app_conn, "customer:alice")
+    funding = make_account(app_conn, "funding:usd", allow_negative=True)
+    alice = make_account(app_conn, "customer:alice")
     commit_setup()
     with psycopg.connect(settings.app_url, autocommit=True) as conn:
         with pytest.raises(LedgerInvariantError):
@@ -434,9 +432,9 @@ def test_the_touched_balance_rows_are_locked_before_the_overdraft_check(
     """The overdraft check must read a balance that is already locked, so the check and the update
     cannot be separated by another writer. The post below fails the check without writing; the
     rows it touched must still be locked, and an untouched account's row must not be."""
-    alice = make(app_conn, "customer:alice")
-    bob = make(app_conn, "customer:bob")
-    carol = make(app_conn, "customer:carol")
+    alice = make_account(app_conn, "customer:alice")
+    bob = make_account(app_conn, "customer:bob")
+    carol = make_account(app_conn, "customer:carol")
     commit_setup()
 
     tx = api.claim_transaction(app_conn, "key-locks", VALID_HASH).transaction_id

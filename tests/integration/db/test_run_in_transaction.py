@@ -22,6 +22,7 @@ import pytest
 from psycopg_pool import ConnectionPool
 
 from ledger.accounts import create_account
+from tests.db_helpers import VALID_HASH
 
 LONE_TRANSACTION = "INSERT INTO transactions (idempotency_key, request_hash) VALUES ('k', %s)"
 
@@ -84,7 +85,7 @@ def test_a_failed_commit_raises_and_keeps_nothing(
 ) -> None:
     """A transaction row with no entries is refused by the deferred trigger at commit."""
     with pytest.raises(psycopg.errors.CheckViolation):
-        run(single_pool, lambda conn: conn.execute(LONE_TRANSACTION, ("a" * 64,)))
+        run(single_pool, lambda conn: conn.execute(LONE_TRANSACTION, (VALID_HASH,)))
 
     assert count(owner_conn, "transactions") == 0
 
@@ -103,7 +104,7 @@ def test_the_connection_is_usable_again_after_each_kind_of_failure(
     assert run(single_pool, lambda conn: conn.execute("SELECT 42").fetchone()) == (42,)
 
     with pytest.raises(psycopg.errors.CheckViolation):
-        run(single_pool, lambda conn: conn.execute(LONE_TRANSACTION, ("a" * 64,)))
+        run(single_pool, lambda conn: conn.execute(LONE_TRANSACTION, (VALID_HASH,)))
     assert run(single_pool, lambda conn: conn.execute("SELECT 43").fetchone()) == (43,)
 
 

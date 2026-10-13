@@ -46,7 +46,15 @@ The tests are laid out by kind: `tests/unit` needs no database (`uv run pytest t
 
 CI runs `uv run pytest --cov`, which also measures branch coverage and fails below the floor set in `pyproject.toml`; run the same command locally to see which lines are missed.
 
-The defaults point at the Compose database on `127.0.0.1:5432`. Set `DATABASE_OWNER_URL` and `DATABASE_APP_URL` to use another one. Test fixtures connect as the owner role to migrate, reset, and seed data, and as the app role for everything under test.
+The defaults point at the Compose server on `127.0.0.1:5432`. Set `DATABASE_OWNER_URL` and `DATABASE_APP_URL` to use another one.
+
+The tests run in their own database, `ledger_test`, on the same server and with the same roles. Every test run empties its tables, so it must not use the `ledger` database that the running service uses: whatever you created through the API stays untouched. A fresh Compose volume creates `ledger_test` along with `ledger` (`docker/roles/roles.sql`). A volume created before this was added needs it once:
+
+```bash
+docker compose exec -T db psql -U postgres -d ledger -v ON_ERROR_STOP=1 -v testdbname=ledger_test -f /docker-roles/test-database.sql
+```
+
+(Or start over with `docker compose down -v`, which deletes the service's data too.) Test fixtures connect as the owner role to migrate, reset, and seed data, and as the app role for everything under test.
 
 ## API
 
@@ -66,7 +74,7 @@ Request and response shapes, error codes, and idempotency rules are specified in
 These invariants will be defended by property-based, concurrency, and failure-injection tests:
 
 1. Entries in each transaction sum to zero per currency.
-2. Entries are never changed after they are written, and the database itself refuses UPDATE and DELETE on them.
+2. Entries are never changed after they are written, and the database itself refuses UPDATE and DELETE on them for the service's role (the owner role, used only for migrations and test fixtures, is not restricted).
 3. The cached balance always equals the sum of that account's entries.
 4. An account that doesn't allow negative balances never goes below zero, enforced in the transfer code and by a database CHECK on cached balances.
 5. The same idempotency key never moves money twice.

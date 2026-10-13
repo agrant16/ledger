@@ -21,6 +21,7 @@ dev = [
     "httpx2",
     "pytest-cov",
     "sqlfluff",
+    "pytest-timeout",
 ]
 
 [tool.uv]
@@ -30,6 +31,12 @@ package = false
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+# A test that hangs (a deadlock, a lock that is never released) stops the run after 30 seconds
+# with the stack of every thread, instead of waiting for the CI job's 10-minute limit. The
+# "thread" method behaves the same on Windows and Linux. A test that needs longer says so with
+# @pytest.mark.timeout(seconds).
+timeout = 30
+timeout_method = "thread"
 
 [tool.coverage.run]
 source = ["src/ledger"]
@@ -39,8 +46,9 @@ branch = true
 show_missing = true
 # Enforced in CI (`pytest --cov`). A safety net against untested code, not a goal in itself:
 # the invariant, property-based and concurrency tests are the evidence of correctness.
-# Set just below the measured baseline; raise it as the ledger code lands.
-fail_under = 85
+# Set a couple of points below the measured baseline (about 97% in milestone 3), so a real drop
+# fails while a small refactor does not; raise it when the baseline rises.
+fail_under = 95
 
 [tool.ruff]
 line-length = 100

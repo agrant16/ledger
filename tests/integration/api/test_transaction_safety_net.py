@@ -16,7 +16,7 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
 
-from tests.db_helpers import reset_database
+from tests.db_helpers import VALID_HASH, reset_database
 
 LONE_TRANSACTION = "INSERT INTO transactions (idempotency_key, request_hash) VALUES ('k', %s)"
 
@@ -35,7 +35,7 @@ def client(settings, owner_conn: psycopg.Connection):
         @app.post("/orphan-claim")
         def orphan_claim(request: Request) -> dict:
             run_in_transaction(
-                request.app.state.pool, lambda conn: conn.execute(LONE_TRANSACTION, ("a" * 64,))
+                request.app.state.pool, lambda conn: conn.execute(LONE_TRANSACTION, (VALID_HASH,))
             )
             return {"ok": True}
 

@@ -51,7 +51,7 @@ These properties must always hold. Tests should check them directly, preferably 
 - Every transaction's entries sum to zero per currency (debits equal credits).
 - Replaying the same transfer request with the same idempotency key never applies it twice.
 - No account balance goes negative under concurrent transfers, except accounts created with `allow_negative` true (the funding accounts).
-- Ledger entries are append-only, and the database itself refuses UPDATE and DELETE on them. Corrections are made with new entries, never by editing or deleting old ones.
+- Ledger entries are append-only, and the database itself refuses UPDATE and DELETE on them for the service's role (the owner role, used only for migrations and test fixtures, is not restricted). Corrections are made with new entries, never by editing or deleting old ones.
 - The cached balance always equals the sum of that account's entries.
 - Every entry's currency matches its account's currency.
 
