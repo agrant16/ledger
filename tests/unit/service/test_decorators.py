@@ -129,3 +129,53 @@ def test_each_call_is_checked_again(decorate) -> None:
     with pytest.raises(LedgerInvariantError):
         work(AUTOCOMMIT)
     assert work(IN_TRANSACTION) == "ran"
+
+
+# --- no usable connection: the check fails closed ---------------------------------------------
+
+
+def test_a_call_with_no_connection_at_all_is_refused(decorate) -> None:
+    calls = []
+
+    @decorate
+    def work(conn=None):
+        calls.append("ran")
+
+    with pytest.raises(LedgerInvariantError) as failure:
+        work()
+
+    assert not isinstance(failure.value, LedgerError)
+    assert "work" in str(failure.value)
+    assert calls == []
+
+
+def test_a_none_connection_is_refused(decorate) -> None:
+    calls = []
+
+    @decorate
+    def work(conn):
+        calls.append("ran")
+
+    with pytest.raises(LedgerInvariantError):
+        work(None)
+    with pytest.raises(LedgerInvariantError):
+        work(conn=None)
+
+    assert calls == []
+
+
+def test_something_that_is_not_a_connection_is_refused_and_the_function_does_not_run(
+    decorate,
+) -> None:
+    """A pool, a cursor or a plain value has no `autocommit` attribute. Passing one by mistake must
+    never be treated as 'no autocommit, so fine'."""
+    calls = []
+
+    @decorate
+    def work(conn):
+        calls.append("ran")
+
+    with pytest.raises((LedgerInvariantError, AttributeError)):
+        work(object())
+
+    assert calls == []
