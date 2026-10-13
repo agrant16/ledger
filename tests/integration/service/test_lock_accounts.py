@@ -16,9 +16,9 @@ from concurrent.futures import ThreadPoolExecutor
 
 import psycopg
 import pytest
-from ledger.models.account_model import Account
 from psycopg_pool import ConnectionPool
 
+from ledger.models.account_model import Account
 from tests.db_helpers import make_account, wait_until_waiting_for_a_lock
 
 

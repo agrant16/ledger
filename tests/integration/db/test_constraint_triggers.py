@@ -21,9 +21,9 @@ commit_setup fixture truncates everything afterwards.
 
 import psycopg
 import pytest
-from ledger.models.account_model import Account
 
 from ledger.errors import LedgerError
+from ledger.models.account_model import Account
 from tests.db_helpers import VALID_HASH, make_account
 
 SAFETY_NET = (psycopg.errors.CheckViolation, psycopg.errors.RaiseException)

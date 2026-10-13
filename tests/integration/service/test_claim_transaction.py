@@ -308,7 +308,6 @@ def funded(app_conn: psycopg.Connection, commit_setup):
 def claim_and_post(conn: psycopg.Connection, funded, key: str, request_hash: str):
     """Claim a key and post a transfer on it, leaving the transaction open."""
     from ledger.models.posting_model import Entry
-
     from ledger.posting import claim_transaction, post_transaction
 
     funding, alice = funded

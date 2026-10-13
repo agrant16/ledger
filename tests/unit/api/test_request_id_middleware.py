@@ -9,9 +9,8 @@ compared in lowercase, because ASGI treats them as case-insensitive bytes.
 import asyncio
 import uuid
 
-from ledger.infra.logging_config import request_id_ctx_var
-
 from ledger.api.request_id import RequestIDMiddleware
+from ledger.infra.logging_config import request_id_ctx_var
 
 HEADER = b"x-request-id"
 

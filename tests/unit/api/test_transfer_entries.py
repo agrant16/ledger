@@ -13,6 +13,7 @@ import dataclasses
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
+
 from ledger.models.posting_model import Entry
 
 BIGINT_MAX = 9_223_372_036_854_775_807
