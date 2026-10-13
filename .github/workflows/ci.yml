@@ -38,15 +38,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-      - run: uv sync --frozen
+      # --locked fails if uv.lock is out of date with pyproject.toml; --frozen would not notice.
+      - run: uv sync --locked
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run sqlfluff lint migrations/
-      # Service containers skip the docker init scripts, so run the same role setup by hand.
+      # Service containers skip the docker init scripts, so run the same role setup by hand. It
+      # also creates the separate database the tests run against (ledger_test).
       - name: Create database roles
         run: |
           psql -v ON_ERROR_STOP=1 \
-            -v dbname=ledger -v owner_password=owner-ci-only -v app_password=app-ci-only \
+            -v dbname=ledger -v testdbname=ledger_test \
+            -v owner_password=owner-ci-only -v app_password=app-ci-only \
             -f docker/roles/roles.sql
         env:
           PGHOST: localhost
@@ -72,6 +75,19 @@ jobs:
           curl --fail --silent --show-error
           --retry 10 --retry-delay 2 --retry-connrefused --retry-all-errors
           http://127.0.0.1:8000/health
+
+      - name: Create an account and read its balance
+        run: |
+          set -eu
+          created=$(curl --fail --silent --show-error \
+            --header 'Content-Type: application/json' \
+            --data '{"account_name": "smoke:alice", "currency": "USD"}' \
+            http://127.0.0.1:8000/accounts)
+          echo "$created"
+          id=$(echo "$created" | jq -r .id)
+          balance=$(curl --fail --silent --show-error "http://127.0.0.1:8000/accounts/${id}/balance")
+          echo "$balance"
+          echo "$balance" | jq -e '.currency == "USD" and .balance_minor == 0'
 
       - name: Show container logs on failure
         if: failure()
