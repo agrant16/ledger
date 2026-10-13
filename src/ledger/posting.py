@@ -89,15 +89,14 @@ def claim_transaction(
             existing_row = cursor.fetchone()
             if not existing_row:
                 raise LedgerInvariantError(
-                    "Encountered bug in claim_transaction: row should exist but can't be found"
+                    "Critical error in claim_transaction: row should exist but can't be found"
                 )
             existing_id, existing_request_hash = existing_row[0], existing_row[1]
             if request_hash == existing_request_hash:
                 return Claim(transaction_id=existing_id, replay=True)
             else:
                 raise IdempotencyConflictError(
-                    "Idempotency Conflict: idempotency key already exists for "
-                    "request in transactions"
+                    "Idempotency key was already used with a different request"
                 )
         return Claim(transaction_id=row[0], replay=False)
 
