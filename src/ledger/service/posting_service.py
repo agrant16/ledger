@@ -25,15 +25,15 @@ def claim_transaction(
     transaction_id = posting_repo.insert_claim(
         conn, idempotency_key, request_hash, reverses_transaction_id
     )
-    if not transaction_id:
+    if transaction_id is None:
         existing_record = posting_repo.find_claim(conn, idempotency_key)
         if not existing_record:
             raise LedgerInvariantError(
                 "Critical error in claim_transaction: row should exist but can't be found"
             )
-
-        if request_hash == existing_record[1]:
-            return Claim(transaction_id=existing_record[0], replay=True)
+        existing_id, existing_hash = existing_record
+        if request_hash == existing_hash:
+            return Claim(transaction_id=existing_id, replay=True)
         else:
             raise IdempotencyConflictError(
                 "Idempotency key was already used with a different request"

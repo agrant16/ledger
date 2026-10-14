@@ -70,7 +70,7 @@ def insert_claim(
         raise LedgerInvariantError("Critical error on insertion of transfer record") from failure
 
 
-def find_claim(conn: psycopg.Connection, idempotency_key: str):
+def find_claim(conn: psycopg.Connection, idempotency_key: str) -> tuple[int, str] | None:
     with conn.cursor() as cursor:
         cursor.execute(SELECT_CLAIM_SQL, (idempotency_key,))
         row = cursor.fetchone()
@@ -96,7 +96,7 @@ def insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[
         raise LedgerInvariantError("Critical error on insertion of entry record") from failure
 
 
-def apply_balance_deltas(conn: psycopg.Connection, deltas) -> set[int]:
+def apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> set[int]:
     try:
         with conn.cursor() as cursor:
             updated_accounts = set()
