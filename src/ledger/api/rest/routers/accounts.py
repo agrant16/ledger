@@ -1,5 +1,10 @@
-from fastapi import APIRouter, Request
+import logging
 
+import psycopg_pool
+from fastapi import APIRouter, Depends, Request
+from psycopg_pool import ConnectionPool
+
+from ledger.api.rest.dependencies import get_pool
 from ledger.api.rest.schemas.account_schema import (
     AccountResponse,
     BalanceResponse,
@@ -9,15 +14,24 @@ from ledger.api.rest.schemas.types import AccountIdInPath
 from ledger.infra.db import run_in_transaction
 from ledger.service.account_service import create_account, get_balance
 
-router = APIRouter(prefix="/accounts", tags=["accounts"])
+router = APIRouter()
+
+logger: logging.Logger = logging.getLogger(__name__)
 
 
-@router.post("", status_code=201, response_model=AccountResponse, summary="Create a new account")
-def create_new_account(body: CreateAccountRequest, request: Request):
+@router.post(
+    path="", status_code=201, response_model=AccountResponse, summary="Create a new account"
+)
+def create_new_account(
+    body: CreateAccountRequest,
+    request: Request,
+    pool: psycopg_pool.ConnectionPool = Depends(get_pool),  # noqa: B008
+):
     account = run_in_transaction(
-        request.app.state.pool,
+        pool,
         lambda conn: create_account(conn, body.account_name, body.currency, False),
     )
+    logger.info("account created id=%s currency=%s", account.id, account.currency)
     return AccountResponse.from_model(account)
 
 
@@ -32,8 +46,10 @@ def create_new_account(body: CreateAccountRequest, request: Request):
         "because a transfer's entries and balance update commit together."
     ),
 )
-def get_account_balance(account_id: AccountIdInPath, request: Request):
-    balance = run_in_transaction(
-        request.app.state.pool, lambda conn: get_balance(conn, account_id), read_only=True
-    )
+def get_account_balance(
+    account_id: AccountIdInPath,
+    request: Request,
+    pool: ConnectionPool = Depends(get_pool),  # noqa: B008
+):
+    balance = run_in_transaction(pool, lambda conn: get_balance(conn, account_id), read_only=True)
     return BalanceResponse.from_model(balance)
