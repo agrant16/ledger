@@ -20,7 +20,7 @@ INSERT_BALANCES_SQL = """
 
 GET_BALANCE_SQL = """
                   SELECT 
-                      a.account_id, 
+                      a.id, 
                       a.currency,
                       b.balance_minor 
                   FROM accounts a 
@@ -37,7 +37,9 @@ def insert_account(
         try:
             cursor.execute(INSERT_ACCOUNTS_SQL, (account_name, currency, allow_negative))
             row = cursor.fetchone()
-            account = Account(id=row[0], account_name=row[1], currency=row[2], allow_negative=row[3])
+            account = Account(
+                id=row[0], account_name=row[1], currency=row[2], allow_negative=row[3]
+            )
             return account
         except errors.UniqueViolation as e:
             constraint = e.diag.constraint_name
