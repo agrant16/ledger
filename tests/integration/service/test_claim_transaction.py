@@ -1,5 +1,5 @@
-"""claim_transaction (docs/design.md, Error behavior and Request hash; ADR 0012): the idempotency
-claim.
+"""claim_transaction (ledger/service/posting_service.py; docs/design.md, Error behavior and Request
+hash; ADRs 0012 and 0013): the idempotency claim.
 
     claim_transaction(conn, idempotency_key, request_hash, reverses_transaction_id=None) -> Claim
     Claim(transaction_id, replay)
@@ -11,16 +11,22 @@ transaction that has not committed yet makes the second claim wait for that tran
 
 It takes the request's connection and never commits; the caller owns the transaction, so a rollback
 frees the key again.
+
+The service decides; the repository runs the SQL (`posting_repo.insert_claim`, then, when the key is
+taken, `posting_repo.find_claim`). The SQL itself is tested in
+tests/integration/db/test_posting_repo_claims.py, and the decisions below are also tested with the
+repository patched to answer what each test says.
 """
 
 import dataclasses
+import types
 from concurrent.futures import ThreadPoolExecutor
 
 import psycopg
 import pytest
 from psycopg_pool import ConnectionPool
 
-from ledger.errors import IdempotencyConflictError, LedgerInvariantError
+from ledger.errors import IdempotencyConflictError, LedgerError, LedgerInvariantError
 from ledger.infra.config import Settings
 from ledger.service.account_service import create_account
 from tests.db_helpers import hash_for, wait_until_waiting_for_a_lock
@@ -32,7 +38,7 @@ HASH_B = hash_for("request b")
 @pytest.fixture
 def claim_transaction():
     """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.posting import claim_transaction
+    from ledger.service.posting_service import claim_transaction
 
     return claim_transaction
 
@@ -207,10 +213,16 @@ def test_a_second_reversal_under_a_new_key_is_not_taken_for_a_replay(
     original = claim_transaction(app_conn, "key-1", HASH_A)
     claim_transaction(app_conn, "key-2", HASH_B, reverses_transaction_id=original.transaction_id)
 
-    with pytest.raises(psycopg.errors.UniqueViolation):
-        claim_transaction(
-            app_conn, "key-3", hash_for("another"), reverses_transaction_id=original.transaction_id
-        )
+    with pytest.raises(LedgerInvariantError) as failure:
+        with app_conn.transaction():
+            claim_transaction(
+                app_conn,
+                "key-3",
+                hash_for("another"),
+                reverses_transaction_id=original.transaction_id,
+            )
+
+    assert isinstance(failure.value.__cause__, psycopg.errors.UniqueViolation)
 
 
 # --- the same key with a different request: a conflict ------------------------------------------
@@ -308,7 +320,7 @@ def funded(app_conn: psycopg.Connection, commit_setup):
 def claim_and_post(conn: psycopg.Connection, funded, key: str, request_hash: str):
     """Claim a key and post a transfer on it, leaving the transaction open."""
     from ledger.models.posting_model import Entry
-    from ledger.posting import claim_transaction, post_transaction
+    from ledger.service.posting_service import claim_transaction, post_transaction
 
     funding, alice = funded
     claim = claim_transaction(conn, key, request_hash)
@@ -330,7 +342,7 @@ def second_claim_waits_for_the_first(
     """The first connection claims "key-1" and holds it open. The second connection claims the same
     key and must wait. Then `first_finishes(conn)` commits or rolls back the first transaction.
     Returns what the first claim was and what the second claim returned or raised."""
-    from ledger.posting import claim_transaction
+    from ledger.service.posting_service import claim_transaction
 
     with app_pool.connection() as first_conn, app_pool.connection() as second_conn:
         first = claim_and_post(first_conn, funded, "key-1", HASH_A)
@@ -382,3 +394,108 @@ def test_a_second_claim_waits_and_then_conflicts_with_a_committed_first_of_anoth
     )
 
     assert isinstance(second, IdempotencyConflictError)
+
+
+# --- the decision, with the repository answering what the test says ---------------------------
+
+
+@pytest.fixture
+def posting_repo():
+    from ledger.repository import posting_repo
+
+    return posting_repo
+
+
+def stored(transaction_id: int, request_hash: str):
+    """What find_claim returns: anything with these two attributes."""
+    return types.SimpleNamespace(transaction_id=transaction_id, request_hash=request_hash)
+
+
+def test_a_free_key_is_a_new_claim_and_the_key_is_never_looked_up(
+    app_conn: psycopg.Connection,
+    claim_transaction,
+    posting_repo,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asked = []
+
+    def insert_claim(conn, idempotency_key, request_hash, reverses_transaction_id=None):
+        asked.append((conn, idempotency_key, request_hash, reverses_transaction_id))
+        return 41
+
+    def find_claim(conn, idempotency_key):
+        raise AssertionError("a free key needs no lookup")
+
+    monkeypatch.setattr(posting_repo, "insert_claim", insert_claim)
+    monkeypatch.setattr(posting_repo, "find_claim", find_claim)
+
+    claim = claim_transaction(app_conn, "key-1", HASH_A, reverses_transaction_id=7)
+
+    assert (claim.transaction_id, claim.replay) == (41, False)
+    assert asked == [(app_conn, "key-1", HASH_A, 7)]
+
+
+def test_a_taken_key_with_the_same_hash_is_a_replay_of_the_stored_transaction(
+    app_conn: psycopg.Connection,
+    claim_transaction,
+    posting_repo,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(posting_repo, "insert_claim", lambda *args, **kwargs: None)
+    monkeypatch.setattr(posting_repo, "find_claim", lambda conn, key: stored(41, HASH_A))
+
+    claim = claim_transaction(app_conn, "key-1", HASH_A)
+
+    assert (claim.transaction_id, claim.replay) == (41, True)
+
+
+def test_a_taken_key_with_another_hash_is_a_conflict_that_repeats_nothing_back(
+    app_conn: psycopg.Connection,
+    claim_transaction,
+    posting_repo,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(posting_repo, "insert_claim", lambda *args, **kwargs: None)
+    monkeypatch.setattr(posting_repo, "find_claim", lambda conn, key: stored(41, HASH_A))
+
+    with pytest.raises(IdempotencyConflictError) as failure:
+        claim_transaction(app_conn, "secret-key-123", HASH_B)
+
+    assert "secret-key-123" not in str(failure.value)
+    assert HASH_A not in str(failure.value) and HASH_B not in str(failure.value)
+
+
+def test_a_taken_key_that_cannot_be_found_is_a_bug(
+    app_conn: psycopg.Connection,
+    claim_transaction,
+    posting_repo,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rows are never deleted, so a conflict with nothing to read back means something is badly
+    wrong. It must not be made up as a replay."""
+    monkeypatch.setattr(posting_repo, "insert_claim", lambda *args, **kwargs: None)
+    monkeypatch.setattr(posting_repo, "find_claim", lambda conn, key: None)
+
+    with pytest.raises(LedgerInvariantError) as failure:
+        claim_transaction(app_conn, "key-1", HASH_A)
+
+    assert not isinstance(failure.value, LedgerError)
+
+
+def test_an_autocommit_connection_is_refused_before_the_repository_is_called(
+    claim_transaction, posting_repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The test above passes even without the guard, because an insert on an autocommit connection
+    commits a transaction with no entries and the database trigger refuses it. This one has no
+    database effect to hide behind: only the guard can raise, and nothing reaches the repository."""
+
+    def never_called(*args, **kwargs):
+        raise AssertionError("the repository must not be reached")
+
+    monkeypatch.setattr(posting_repo, "insert_claim", never_called)
+    monkeypatch.setattr(posting_repo, "find_claim", never_called)
+
+    with pytest.raises(LedgerInvariantError) as failure:
+        claim_transaction(types.SimpleNamespace(autocommit=True), "key-1", HASH_A)
+
+    assert "claim_transaction" in str(failure.value)

@@ -10,9 +10,8 @@
 A module may always import its own layer. The scan reads the source with the ast module, so it
 needs no database and imports nothing.
 
-The tree is on its way to this shape in steps, and each step tightens a ratchet in this file:
-`LEGACY` lists the modules still waiting to be split into repository and service, and the root of
-src/ledger may hold only the modules in `ROOT_MODULES`. A step ends when its entries are gone.
+The root of src/ledger may hold only the modules in `ROOT_MODULES`: the entry points and the error
+taxonomy. Everything else lives in a layer package.
 """
 
 import ast
@@ -24,12 +23,10 @@ import pytest
 SRC = Path(__file__).resolve().parents[2] / "src" / "ledger"
 
 ENTRY_POINTS = {"main", "migrate"}
-# Still to be split into repository and service functions (the next step removes this).
-LEGACY = {"posting"}
-ROOT_MODULES = {"__init__", "errors"} | ENTRY_POINTS | LEGACY
+ROOT_MODULES = {"__init__", "errors"} | ENTRY_POINTS
 LAYER_PACKAGES = {"models", "repository", "service", "infra", "api"}
 
-ALL_LAYERS = {"errors", "models", "repository", "service", "infra", "api", "legacy", "entry"}
+ALL_LAYERS = {"errors", "models", "repository", "service", "infra", "api", "entry"}
 ALLOWED = {
     "errors": set(),
     "models": set(),
@@ -37,10 +34,9 @@ ALLOWED = {
     "repository": {"models", "errors"},
     "service": {"repository", "models", "errors"},
     "api": {"service", "models", "errors", "infra"},
-    "legacy": {"models", "errors", "infra", "service", "legacy"},
     "entry": ALL_LAYERS,
 }
-# Third-party modules a layer must not import (matched by prefix). Legacy is exempt until split.
+# Third-party modules a layer must not import (matched by prefix).
 FORBIDDEN = {
     "models": ("psycopg", "psycopg_pool", "fastapi", "starlette"),
     "infra": (),
@@ -58,12 +54,14 @@ REQUIRED_MODULES = [
     "models/posting_model.py",
     "repository/__init__.py",
     "repository/account_repo.py",
+    "repository/posting_repo.py",
     "service/account_service.py",
     "service/decorators.py",
+    "service/posting_service.py",
 ]
 
 # Layers whose code must not talk to the database: the SQL lives in the repository (and in infra's
-# transaction control). Legacy modules are exempt until they are split.
+# transaction control).
 NO_SQL_LAYERS = {"service", "api", "models"}
 DATABASE_CALLS = {"execute", "executemany", "cursor"}
 SQL_STATEMENT = re.compile(r"^\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b")
@@ -84,8 +82,6 @@ def layer_of(dotted: str) -> str | None:
         return top
     if top in ENTRY_POINTS:
         return "entry"
-    if top in LEGACY:
-        return "legacy"
     return None
 
 

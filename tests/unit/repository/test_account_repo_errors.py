@@ -13,31 +13,7 @@ import psycopg
 import pytest
 
 from ledger.errors import DuplicateAccountNameError, LedgerError, LedgerInvariantError
-
-
-class FakeCursor:
-    def __init__(self, failure: Exception) -> None:
-        self.failure = failure
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc_info) -> bool:
-        return False
-
-    def execute(self, *args, **kwargs):
-        raise self.failure
-
-    def fetchone(self):
-        raise AssertionError("fetchone must not be reached after a failed execute")
-
-
-class FakeConnection:
-    def __init__(self, failure: Exception) -> None:
-        self.failure = failure
-
-    def cursor(self) -> FakeCursor:
-        return FakeCursor(self.failure)
+from tests.unit.repository.fakes import FakeConnection
 
 
 class UniqueViolationOn(psycopg.errors.UniqueViolation):

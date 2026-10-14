@@ -50,8 +50,8 @@ from ledger.errors import (
 from ledger.infra.config import load_settings
 from ledger.models.account_model import Account
 from ledger.models.posting_model import Entry
-from ledger.posting import claim_transaction, post_transaction
 from ledger.service.account_service import create_account
+from ledger.service.posting_service import claim_transaction, post_transaction
 from tests.db_helpers import VALID_HASH, reset_database
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
