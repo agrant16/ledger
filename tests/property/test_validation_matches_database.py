@@ -113,7 +113,7 @@ def accepted_by(adapter: TypeAdapter):
 
 
 def test_an_account_name_the_api_accepts_can_be_stored(conn) -> None:
-    from ledger.api.accounts import CreateAccountRequest
+    from ledger.api.rest.schemas.account_schema import CreateAccountRequest
 
     def accepts(name) -> bool:
         try:
@@ -134,7 +134,7 @@ def test_an_account_name_the_api_accepts_can_be_stored(conn) -> None:
 
 
 def test_a_currency_the_api_accepts_can_be_stored(conn) -> None:
-    from ledger.api.accounts import CreateAccountRequest
+    from ledger.api.rest.schemas.account_schema import CreateAccountRequest
 
     def accepts(currency) -> bool:
         try:
@@ -154,7 +154,7 @@ def test_a_currency_the_api_accepts_can_be_stored(conn) -> None:
 
 
 def test_an_idempotency_key_the_api_accepts_can_be_stored(conn) -> None:
-    from ledger.api.types import IdempotencyKey
+    from ledger.api.rest.schemas.types import IdempotencyKey
 
     def store(connection, key) -> None:
         stored_without_complaint(
@@ -167,7 +167,7 @@ def test_an_idempotency_key_the_api_accepts_can_be_stored(conn) -> None:
 
 
 def test_an_amount_the_api_accepts_is_a_nonzero_bigint(conn) -> None:
-    from ledger.api.types import AmountMinor
+    from ledger.api.rest.schemas.types import AmountMinor
 
     def store(connection, amount) -> None:
         row = connection.execute("SELECT %s::bigint <> 0", (amount,)).fetchone()
@@ -177,7 +177,7 @@ def test_an_amount_the_api_accepts_is_a_nonzero_bigint(conn) -> None:
 
 
 def test_an_account_id_the_api_accepts_is_a_positive_bigint(conn) -> None:
-    from ledger.api.types import AccountId
+    from ledger.api.rest.schemas.types import AccountId
 
     def store(connection, account_id) -> None:
         row = connection.execute("SELECT %s::bigint >= 1", (account_id,)).fetchone()

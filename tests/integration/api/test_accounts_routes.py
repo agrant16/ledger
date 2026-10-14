@@ -35,7 +35,7 @@ VALID = {"account_name": "customer:alice", "currency": "USD"}
 def app(app_pool: ConnectionPool, owner_conn: psycopg.Connection) -> FastAPI:
     """A throwaway app with the real router, the error handling and the shared test pool."""
     from ledger.api.accounts import router
-    from ledger.api.errors import install_error_handling
+    from ledger.api.rest.error_handlers import install_error_handling
 
     reset_database(owner_conn)
     application = FastAPI()

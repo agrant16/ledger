@@ -24,7 +24,7 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 
-from ledger.api.errors import install_error_handling
+from ledger.api.rest.error_handlers import install_error_handling
 from ledger.infra.logging_config import configure_logging
 
 WATCHED_LOGGERS = ("", "uvicorn", "uvicorn.error", "uvicorn.access")
@@ -112,7 +112,7 @@ def test_an_unexpected_500_is_logged_once(server: tuple[str, Collect]) -> None:
     assert body["type"] == "about:blank"
     errors = errors_in(collector)
     assert [(record.name, record.getMessage()) for record in errors] == [
-        ("ledger.api.errors", "unhandled exception")
+        ("ledger.api.rest.error_handlers", "unhandled exception")
     ]
 
 

@@ -24,7 +24,7 @@ LONE_TRANSACTION = "INSERT INTO transactions (idempotency_key, request_hash) VAL
 
 @pytest.fixture
 def client(settings, owner_conn: psycopg.Connection):
-    from ledger.api.errors import install_error_handling
+    from ledger.api.rest.error_handlers import install_error_handling
     from ledger.infra.db import run_in_transaction
 
     reset_database(owner_conn)

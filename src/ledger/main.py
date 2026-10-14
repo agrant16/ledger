@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from ledger.api import accounts
-from ledger.api.errors import install_error_handling
+from ledger.api.rest.error_handlers import install_error_handling
 from ledger.infra.config import load_settings
 from ledger.infra.db import create_pool
 from ledger.infra.logging_config import configure_logging

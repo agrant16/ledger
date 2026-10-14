@@ -4,7 +4,7 @@ The domain code stays free of HTTP: the API layer owns one table from each Ledge
 its status, its RFC 9457 `type` and its `title`, resolved through the class hierarchy. A new
 LedgerError with no row must fail a test and not quietly become a 500.
 
-Contract these tests expect from ledger/api/errors.py:
+Contract these tests expect from ledger/api/rest/problems.py:
 
     problem_for(error_class) -> ProblemSpec     # attributes: status, type, title
     raises LookupError for a class that is not a LedgerError or has no row.
@@ -29,9 +29,9 @@ from tests.unit.api.api_cases import EXPECTED, URN_PREFIX
 @pytest.fixture
 def table():
     """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.api import errors
+    from ledger.api.rest import problems
 
-    return errors
+    return problems
 
 
 def domain_ledger_errors() -> set[type[LedgerError]]:

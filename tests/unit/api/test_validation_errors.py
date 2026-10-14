@@ -1,6 +1,6 @@
 """Turning Pydantic validation errors into the `errors` list of an RFC 9457 problem body.
 
-Contract these tests expect from ledger/api/errors.py:
+Contract these tests expect from ledger/api/rest/error_handlers.py:
 
     validation_errors(errors: list[dict]) -> list[dict]
 
@@ -22,7 +22,7 @@ import pytest
 
 @pytest.fixture
 def convert():
-    from ledger.api.errors import validation_errors
+    from ledger.api.rest.error_handlers import validation_errors
 
     return validation_errors
 

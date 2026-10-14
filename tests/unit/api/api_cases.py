@@ -1,6 +1,6 @@
 """Shared cases for the API error tests: what each LedgerError maps to (docs/design.md, Error
 model, and ADR 0007) and a way to build one. The table here is the spec; the API layer's own
-table in ledger/api/errors.py has to agree with it."""
+table in ledger/api/rest/problems.py has to agree with it."""
 
 from collections.abc import Callable
 

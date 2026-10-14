@@ -20,12 +20,17 @@ from pathlib import Path
 
 import pytest
 
-SRC = Path(__file__).resolve().parents[2] / "src" / "ledger"
+from tests.unit.layering_scan import (
+    ENTRY_POINTS,
+    LAYER_PACKAGES,
+    SRC,
+    build_tree,
+    imported_names,
+    layer_of,
+    module_name,
+)
 
-ENTRY_POINTS = {"main", "migrate"}
 ROOT_MODULES = {"__init__", "errors"} | ENTRY_POINTS
-LAYER_PACKAGES = {"models", "repository", "service", "infra", "api"}
-
 ALL_LAYERS = {"errors", "models", "repository", "service", "infra", "api", "entry"}
 ALLOWED = {
     "errors": set(),
@@ -58,52 +63,28 @@ REQUIRED_MODULES = [
     "service/account_service.py",
     "service/decorators.py",
     "service/posting_service.py",
+    "api/rest/__init__.py",
+    "api/rest/problems.py",
+    "api/rest/error_handlers.py",
+    "api/rest/idempotency.py",
+    "api/rest/middleware/__init__.py",
+    "api/rest/middleware/request_id.py",
+    "api/rest/schemas/__init__.py",
+    "api/rest/schemas/types.py",
+    "api/rest/schemas/account_schema.py",
+    "api/rest/schemas/transfer_schema.py",
 ]
+
+# The API layer lives in the rest package. The routes still wait to move into rest/routes (the next
+# step removes this); everything else has already moved.
+API_ROOT_MODULES = {"__init__", "accounts"}
+API_PACKAGES = {"rest"}
 
 # Layers whose code must not talk to the database: the SQL lives in the repository (and in infra's
 # transaction control).
 NO_SQL_LAYERS = {"service", "api", "models"}
 DATABASE_CALLS = {"execute", "executemany", "cursor"}
 SQL_STATEMENT = re.compile(r"^\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b")
-
-
-def layer_of(dotted: str) -> str | None:
-    """The layer of a module named like `ledger.service.decorators`, or None if it is not one of
-    ours or does not belong to a known layer (the layout test reports that)."""
-    parts = dotted.split(".")
-    if parts[0] != "ledger":
-        return None
-    if len(parts) == 1:
-        return "entry"
-    top = parts[1]
-    if top == "errors":
-        return "errors"
-    if top in LAYER_PACKAGES:
-        return top
-    if top in ENTRY_POINTS:
-        return "entry"
-    return None
-
-
-def imported_names(tree: ast.AST) -> set[str]:
-    """Every module an import statement names, with the names imported from a package also listed
-    as submodules (`from psycopg import errors` counts as `psycopg.errors`)."""
-    names: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            names.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-            names.add(node.module)
-            names.update(f"{node.module}.{alias.name}" for alias in node.names)
-    return names
-
-
-def module_name(root: Path, path: Path) -> str:
-    relative = path.relative_to(root.parent).with_suffix("")
-    parts = list(relative.parts)
-    if parts[-1] == "__init__":
-        parts.pop()
-    return ".".join(parts)
 
 
 def import_violations(root: Path) -> list[str]:
@@ -170,6 +151,15 @@ def test_the_root_of_the_package_holds_only_entry_points_and_the_modules_still_t
     assert packages - LAYER_PACKAGES == set(), "unknown package: add it to a layer or remove it"
 
 
+def test_the_api_package_holds_only_the_rest_package_and_the_routes_still_to_move() -> None:
+    api = SRC / "api"
+    modules = {path.stem for path in api.glob("*.py")}
+    packages = {path.name for path in api.iterdir() if path.is_dir() and path.name != "__pycache__"}
+
+    assert modules - API_ROOT_MODULES == set(), "move these into api/rest"
+    assert packages - API_PACKAGES == set(), "unknown package under api/: use api/rest"
+
+
 @pytest.mark.parametrize("relative", REQUIRED_MODULES)
 def test_the_modules_this_step_creates_exist(relative: str) -> None:
     assert (SRC / relative).is_file()
@@ -179,20 +169,11 @@ def test_the_scan_sees_the_whole_tree() -> None:
     names = {module_name(SRC, path) for path in SRC.rglob("*.py")}
 
     assert "ledger.main" in names
-    assert "ledger.api.errors" in names
+    assert "ledger.api.rest.error_handlers" in names
     assert len(names) >= 12
 
 
 # --- the scan itself: it must catch what it claims to catch -----------------------------------
-
-
-def build_tree(tmp_path: Path, files: dict[str, str]) -> Path:
-    root = tmp_path / "ledger"
-    for relative, text in files.items():
-        path = root / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-    return root
 
 
 def test_a_clean_tree_has_no_violations(tmp_path: Path) -> None:

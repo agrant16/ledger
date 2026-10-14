@@ -1,4 +1,4 @@
-"""request_hash (ledger/api/request_hash.py; docs/design.md, Request hash).
+"""request_hash (ledger/api/rest/idempotency.py; docs/design.md, Request hash).
 
     request_hash(method, path, body) -> str
 
@@ -26,14 +26,14 @@ TRANSFER_JSON = json.dumps(TRANSFER)
 @pytest.fixture
 def request_hash():
     """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.api.request_hash import request_hash
+    from ledger.api.rest.idempotency import request_hash
 
     return request_hash
 
 
 @pytest.fixture
 def transfer_model():
-    from ledger.api.transfers import TransferRequest
+    from ledger.api.rest.schemas.transfer_schema import TransferRequest
 
     return TransferRequest
 
@@ -45,7 +45,7 @@ def transfer(transfer_model):
 
 @pytest.fixture
 def account_model():
-    from ledger.api.accounts import CreateAccountRequest
+    from ledger.api.rest.schemas.account_schema import CreateAccountRequest
 
     return CreateAccountRequest
 
