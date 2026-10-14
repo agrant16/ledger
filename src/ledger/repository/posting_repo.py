@@ -2,7 +2,7 @@ import psycopg
 from psycopg import errors
 
 from ledger.errors import LedgerInvariantError
-from ledger.models.posting_model import Claim, Entry, LockedAccount
+from ledger.models.posting_model import Entry, LockedAccount
 
 INSERT_CLAIM_SQL = """
                      INSERT INTO 
@@ -64,11 +64,12 @@ def insert_claim(
             row = cursor.fetchone()
             if row:
                 return row[0]
+            return None
     except errors.IntegrityError as failure:
         raise LedgerInvariantError("Critical error on insertion of transfer record") from failure
 
 
-def find_claim(conn: psycopg.Connection, idempotency_key: str) -> Claim | None:
+def find_claim(conn: psycopg.Connection, idempotency_key: str):
     with conn.cursor() as cursor:
         cursor.execute(SELECT_CLAIM_SQL, (idempotency_key,))
         row = cursor.fetchone()

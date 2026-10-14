@@ -4,6 +4,7 @@ import psycopg
 
 from ledger.errors import (
     CurrencyMismatchError,
+    IdempotencyConflictError,
     InsufficientFundsError,
     LedgerInvariantError,
     UnbalancedEntriesError,
@@ -21,7 +22,21 @@ def claim_transaction(
     request_hash: str,
     reverses_transaction_id: int | None = None,
 ) -> Claim:
-    pass
+    transaction_id = posting_repo.insert_claim(conn, idempotency_key, request_hash, reverses_transaction_id)
+    if not transaction_id:
+        existing_record = posting_repo.find_claim(conn, idempotency_key)
+        if not existing_record:
+            raise LedgerInvariantError(
+                "Critical error in claim_transaction: row should exist but can't be found"
+            )
+
+        if request_hash == existing_record.request_hash:
+            return Claim(transaction_id=existing_record.transaction_id, replay=True)
+        else:
+            raise IdempotencyConflictError(
+                "Idempotency key was already used with a different request"
+            )
+    return Claim(transaction_id=transaction_id, replay=False)
 
 
 @transactional_service_method
@@ -62,4 +77,8 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
             raise InsufficientFundsError(account_id, account.balance_minor, delta)
 
     posting_repo.insert_entries(conn, transaction_id, entries)
-    posting_repo.apply_balance_deltas(conn, deltas)
+    updated_accounts = posting_repo.apply_balance_deltas(conn, deltas)
+
+    if len(updated_accounts) != len(deltas.keys()):
+        missing_id = deltas.keys() - updated_accounts
+        raise LedgerInvariantError(f"Critical Error: Not all balances were updated for account {missing_id}")
