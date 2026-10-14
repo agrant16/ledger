@@ -1,32 +1,13 @@
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, ConfigDict
 
-from ledger.api.types import AccountIdInPath, AccountName, Currency
+from ledger.api.rest.schemas.account_schema import AccountResponse, CreateAccountRequest, BalanceResponse
+from ledger.api.rest.schemas.types import AccountIdInPath
 from ledger.infra.db import run_in_transaction
 from ledger.service.account_service import create_account, get_balance
 
 
-class CreateAccountRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    account_name: AccountName
-    currency: Currency
-
 
 router = APIRouter(prefix="/accounts", tags=["accounts"])
-
-
-class AccountResponse(BaseModel):
-    id: int
-    account_name: str
-    currency: str
-    allow_negative: bool
-
-
-class BalanceResponse(BaseModel):
-    account_id: int
-    currency: str
-    balance_minor: int
-
 
 @router.post("", status_code=201, response_model=AccountResponse, summary="Create a new account")
 def create_new_account(body: CreateAccountRequest, request: Request):
