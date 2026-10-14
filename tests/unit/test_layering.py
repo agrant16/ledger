@@ -20,12 +20,17 @@ from pathlib import Path
 
 import pytest
 
-SRC = Path(__file__).resolve().parents[2] / "src" / "ledger"
+from tests.unit.layering_scan import (
+    ENTRY_POINTS,
+    LAYER_PACKAGES,
+    SRC,
+    build_tree,
+    imported_names,
+    layer_of,
+    module_name,
+)
 
-ENTRY_POINTS = {"main", "migrate"}
 ROOT_MODULES = {"__init__", "errors"} | ENTRY_POINTS
-LAYER_PACKAGES = {"models", "repository", "service", "infra", "api"}
-
 ALL_LAYERS = {"errors", "models", "repository", "service", "infra", "api", "entry"}
 ALLOWED = {
     "errors": set(),
@@ -80,45 +85,6 @@ API_PACKAGES = {"rest"}
 NO_SQL_LAYERS = {"service", "api", "models"}
 DATABASE_CALLS = {"execute", "executemany", "cursor"}
 SQL_STATEMENT = re.compile(r"^\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b")
-
-
-def layer_of(dotted: str) -> str | None:
-    """The layer of a module named like `ledger.service.decorators`, or None if it is not one of
-    ours or does not belong to a known layer (the layout test reports that)."""
-    parts = dotted.split(".")
-    if parts[0] != "ledger":
-        return None
-    if len(parts) == 1:
-        return "entry"
-    top = parts[1]
-    if top == "errors":
-        return "errors"
-    if top in LAYER_PACKAGES:
-        return top
-    if top in ENTRY_POINTS:
-        return "entry"
-    return None
-
-
-def imported_names(tree: ast.AST) -> set[str]:
-    """Every module an import statement names, with the names imported from a package also listed
-    as submodules (`from psycopg import errors` counts as `psycopg.errors`)."""
-    names: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            names.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-            names.add(node.module)
-            names.update(f"{node.module}.{alias.name}" for alias in node.names)
-    return names
-
-
-def module_name(root: Path, path: Path) -> str:
-    relative = path.relative_to(root.parent).with_suffix("")
-    parts = list(relative.parts)
-    if parts[-1] == "__init__":
-        parts.pop()
-    return ".".join(parts)
 
 
 def import_violations(root: Path) -> list[str]:
@@ -208,15 +174,6 @@ def test_the_scan_sees_the_whole_tree() -> None:
 
 
 # --- the scan itself: it must catch what it claims to catch -----------------------------------
-
-
-def build_tree(tmp_path: Path, files: dict[str, str]) -> Path:
-    root = tmp_path / "ledger"
-    for relative, text in files.items():
-        path = root / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
-    return root
 
 
 def test_a_clean_tree_has_no_violations(tmp_path: Path) -> None:
