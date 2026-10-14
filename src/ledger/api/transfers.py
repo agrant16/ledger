@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ledger.api.types import AccountId, AmountMinor, Currency
-from ledger.posting import Entry
+from ledger.models.posting_model import Entry
 
 
 class TransferRequest(BaseModel):
