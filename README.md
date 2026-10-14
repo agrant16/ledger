@@ -42,7 +42,7 @@ uv run ruff format --check .
 uv run sqlfluff lint migrations/
 ```
 
-The tests are laid out by kind: `tests/unit` needs no database (`uv run pytest tests/unit`), `tests/integration` and `tests/property` do. See ADR 0010.
+The tests are laid out by kind: `tests/unit` needs no database (`uv run pytest tests/unit`), `tests/integration`, `tests/property` and `tests/e2e` do. `tests/e2e` holds the tests that cross layers on purpose (the whole app, concurrent requests, the commit-time safety net). See ADRs 0010 and 0013.
 
 CI runs `uv run pytest --cov`, which also measures branch coverage and fails below the floor set in `pyproject.toml`; run the same command locally to see which lines are missed.
 
