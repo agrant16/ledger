@@ -87,7 +87,10 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
             f"Critical Error: Not all balances were updated for account {missing_id}"
         )
 
-def entries_for_transfer(from_account_id: int, to_account_id: int, amount_minor: int, currency: str) -> list[Entry]:
+
+def entries_for_transfer(
+    from_account_id: int, to_account_id: int, amount_minor: int, currency: str
+) -> list[Entry]:
     return [
         Entry(
             account_id=from_account_id,

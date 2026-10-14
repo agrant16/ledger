@@ -3,7 +3,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict
 
 from ledger.api.rest.schemas.types import AccountName, Currency
-from ledger.models.account_model import Balance, Account
+from ledger.models.account_model import Account, Balance
 
 
 class AccountResponse(BaseModel):
@@ -21,6 +21,7 @@ class AccountResponse(BaseModel):
             allow_negative=account.allow_negative,
         )
 
+
 class BalanceResponse(BaseModel):
     account_id: int
     currency: str
@@ -33,6 +34,7 @@ class BalanceResponse(BaseModel):
             currency=balance.currency,
             balance_minor=balance.balance_minor,
         )
+
 
 class CreateAccountRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")

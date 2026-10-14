@@ -1,13 +1,16 @@
 from fastapi import APIRouter, Request
 
-from ledger.api.rest.schemas.account_schema import AccountResponse, CreateAccountRequest, BalanceResponse
+from ledger.api.rest.schemas.account_schema import (
+    AccountResponse,
+    BalanceResponse,
+    CreateAccountRequest,
+)
 from ledger.api.rest.schemas.types import AccountIdInPath
 from ledger.infra.db import run_in_transaction
 from ledger.service.account_service import create_account, get_balance
 
-
-
 router = APIRouter(prefix="/accounts", tags=["accounts"])
+
 
 @router.post("", status_code=201, response_model=AccountResponse, summary="Create a new account")
 def create_new_account(body: CreateAccountRequest, request: Request):

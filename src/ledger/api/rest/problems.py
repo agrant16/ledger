@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-
 from ledger.errors import (
     AlreadyReversedError,
     CurrencyMismatchError,
@@ -15,15 +14,13 @@ from ledger.errors import (
     UnknownTransferError,
 )
 
+
 @dataclass(frozen=True)
 class ProblemSpec:
     status: int
     type: str
     title: str
     extensions: tuple[str, ...] = ()
-
-
-
 
 
 PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
@@ -56,6 +53,7 @@ PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
     ),
     ServiceBusyError: ProblemSpec(503, "urn:ledger:error:service-busy", "Service busy"),
 }
+
 
 def problem_for(error_class: type[Exception]) -> ProblemSpec:
     for cls in error_class.__mro__:

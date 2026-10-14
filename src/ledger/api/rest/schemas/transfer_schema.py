@@ -2,6 +2,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from ledger.api.rest.schemas.types import AccountId, AmountMinor, Currency
 
+
 class TransferRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     from_account_id: AccountId
