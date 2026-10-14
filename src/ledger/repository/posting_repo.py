@@ -1,0 +1,105 @@
+import psycopg
+from psycopg import errors
+
+from ledger.errors import LedgerInvariantError
+from ledger.models.posting_model import Claim, Entry, LockedAccount
+
+INSERT_CLAIM_SQL = """
+                     INSERT INTO 
+                         transactions (idempotency_key, request_hash, reverses_transaction_id) 
+                     VALUES (%s, %s, %s) 
+                     ON CONFLICT (idempotency_key) DO NOTHING 
+                     RETURNING id;
+                     """
+
+
+SELECT_CLAIM_SQL = """
+                        SELECT 
+                            id, 
+                            request_hash 
+                        FROM transactions
+                        WHERE idempotency_key = %s;
+                        """
+
+
+INSERT_ENTRY_SQL = """
+                   INSERT INTO 
+                       entries (transaction_id, account_id, amount_minor, currency) 
+                   VALUES (%s, %s, %s, %s);
+                   """
+
+UPDATE_BALANCE_SQL = """UPDATE 
+                            balances 
+                        SET balance_minor = balance_minor + %s 
+                        WHERE account_id = %s;
+                     """
+
+
+LOCK_ACCOUNTS_SQL = """
+                    SELECT 
+                        b.account_id, 
+                        a.currency, 
+                        b.allow_negative, 
+                        b.balance_minor 
+                    FROM balances b
+                    JOIN accounts a 
+                    ON a.id = b.account_id
+                    WHERE b.account_id = ANY(%s::bigint[])
+                    ORDER BY b.account_id ASC
+                    FOR UPDATE OF b;
+                    """
+
+
+def insert_claim(
+    conn: psycopg.Connection,
+    idempotency_key: str,
+    request_hash: str,
+    reverses_transaction_id: int | None = None,
+) -> int | None:
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                INSERT_CLAIM_SQL, (idempotency_key, request_hash, reverses_transaction_id)
+            )
+            row = cursor.fetchone()
+            if row:
+                return row[0]
+    except errors.IntegrityError as failure:
+        raise LedgerInvariantError("Critical error on insertion of transfer record") from failure
+
+
+def find_claim(conn: psycopg.Connection, idempotency_key: str) -> Claim | None:
+    with conn.cursor() as cursor:
+        cursor.execute(SELECT_CLAIM_SQL, (idempotency_key,))
+        row = cursor.fetchone()
+        return row
+
+
+def lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int, LockedAccount]:
+    with conn.cursor() as cursor:
+        cursor.execute(LOCK_ACCOUNTS_SQL, (account_ids,))
+        rows = cursor.fetchall()
+        return {row[0]: LockedAccount(row[1], row[2], row[3]) for row in rows}
+
+
+def insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
+    try:
+        with conn.cursor() as cursor:
+            params = [
+                (transaction_id, entry.account_id, entry.amount_minor, entry.currency)
+                for entry in entries
+            ]
+            cursor.executemany(INSERT_ENTRY_SQL, params)
+    except errors.IntegrityError as failure:
+        raise LedgerInvariantError("Critical error on insertion of entry record") from failure
+
+
+def apply_balance_deltas(conn: psycopg.Connection, deltas) -> set[int]:
+    try:
+        with conn.cursor() as cursor:
+            params = [(delta, account_id) for account_id, delta in deltas.items()]
+            cursor.executemany(UPDATE_BALANCE_SQL, params, returning=True)
+            rows = cursor.fetchall()
+            return set([row[0] for row in rows if row[0] is not None])
+    except errors.IntegrityError as failure:
+        raise LedgerInvariantError("Critical error on balance update") from failure
