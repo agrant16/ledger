@@ -2,7 +2,7 @@
 the idempotency claim.
 
     insert_claim(conn, idempotency_key, request_hash, reverses_transaction_id) -> int | None
-    find_claim(conn, idempotency_key) -> a row with .transaction_id and .request_hash, or None
+    find_claim(conn, idempotency_key) -> (transaction_id, request_hash), or None
 
 `insert_claim` runs `INSERT ... ON CONFLICT (idempotency_key) DO NOTHING RETURNING id`: it returns
 the new transaction's id, or None when the key is already taken, whatever the hash or the reversal
@@ -181,7 +181,8 @@ def test_find_claim_returns_the_stored_id_and_hash(
     found = repo.find_claim(app_conn, "key-2")
 
     assert found is not None
-    assert (found.transaction_id, found.request_hash) == (second, HASH_B)
+    transaction_id, request_hash = found
+    assert (transaction_id, request_hash) == (second, HASH_B)
 
 
 def test_find_claim_returns_none_for_a_key_nobody_used(
@@ -198,8 +199,8 @@ def test_find_claim_compares_keys_exactly(
     lower = repo.insert_claim(app_conn, "key-1", HASH_A, None)
     upper = repo.insert_claim(app_conn, "KEY-1", HASH_B, None)
 
-    assert repo.find_claim(app_conn, "key-1").transaction_id == lower
-    assert repo.find_claim(app_conn, "KEY-1").transaction_id == upper
+    assert repo.find_claim(app_conn, "key-1") == (lower, HASH_A)
+    assert repo.find_claim(app_conn, "KEY-1") == (upper, HASH_B)
     assert repo.find_claim(app_conn, "Key-1") is None
 
 

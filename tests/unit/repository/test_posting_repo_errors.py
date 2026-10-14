@@ -7,8 +7,9 @@ its cause, and anything that is not an integrity error passes through untouched.
 can raise the common ones (see tests/integration/db); this file reaches all of them, with no
 database, including a unique violation that names no constraint.
 
-It also pins what apply_balance_deltas reports: the ids of the accounts whose balances row it
-updated, so a statement that matched nothing is visible to the service.
+What the functions do with real rows (including which accounts apply_balance_deltas reports as
+updated) is tested against the real database, so these tests do not depend on how a statement is
+run.
 """
 
 import psycopg
@@ -70,18 +71,3 @@ def test_an_error_that_is_not_an_integrity_error_is_not_translated(
         WRITES[function](repo, FakeConnection(failure))
 
     assert caught.value is failure
-
-
-def test_apply_balance_deltas_reports_the_accounts_it_updated(repo) -> None:
-    connection = FakeConnection(rowcounts=[1, 0, 1])
-
-    updated = repo.apply_balance_deltas(connection, {10: 5, 20: -5, 30: 0})
-
-    assert updated == {10, 30}
-
-
-def test_apply_balance_deltas_with_nothing_to_do_updates_nothing(repo) -> None:
-    connection = FakeConnection()
-
-    assert repo.apply_balance_deltas(connection, {}) == set()
-    assert connection.executed == []

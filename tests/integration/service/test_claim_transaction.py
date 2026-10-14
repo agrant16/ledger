@@ -406,9 +406,9 @@ def posting_repo():
     return posting_repo
 
 
-def stored(transaction_id: int, request_hash: str):
-    """What find_claim returns: anything with these two attributes."""
-    return types.SimpleNamespace(transaction_id=transaction_id, request_hash=request_hash)
+def stored(transaction_id: int, request_hash: str) -> tuple[int, str]:
+    """What find_claim returns: the stored (transaction_id, request_hash) pair."""
+    return (transaction_id, request_hash)
 
 
 def test_a_free_key_is_a_new_claim_and_the_key_is_never_looked_up(
