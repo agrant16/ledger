@@ -58,7 +58,22 @@ REQUIRED_MODULES = [
     "service/account_service.py",
     "service/decorators.py",
     "service/posting_service.py",
+    "api/rest/__init__.py",
+    "api/rest/problems.py",
+    "api/rest/error_handlers.py",
+    "api/rest/idempotency.py",
+    "api/rest/middleware/__init__.py",
+    "api/rest/middleware/request_id.py",
+    "api/rest/schemas/__init__.py",
+    "api/rest/schemas/types.py",
+    "api/rest/schemas/account_schema.py",
+    "api/rest/schemas/transfer_schema.py",
 ]
+
+# The API layer lives in the rest package. The routes still wait to move into rest/routes (the next
+# step removes this); everything else has already moved.
+API_ROOT_MODULES = {"__init__", "accounts"}
+API_PACKAGES = {"rest"}
 
 # Layers whose code must not talk to the database: the SQL lives in the repository (and in infra's
 # transaction control).
@@ -170,6 +185,15 @@ def test_the_root_of_the_package_holds_only_entry_points_and_the_modules_still_t
     assert packages - LAYER_PACKAGES == set(), "unknown package: add it to a layer or remove it"
 
 
+def test_the_api_package_holds_only_the_rest_package_and_the_routes_still_to_move() -> None:
+    api = SRC / "api"
+    modules = {path.stem for path in api.glob("*.py")}
+    packages = {path.name for path in api.iterdir() if path.is_dir() and path.name != "__pycache__"}
+
+    assert modules - API_ROOT_MODULES == set(), "move these into api/rest"
+    assert packages - API_PACKAGES == set(), "unknown package under api/: use api/rest"
+
+
 @pytest.mark.parametrize("relative", REQUIRED_MODULES)
 def test_the_modules_this_step_creates_exist(relative: str) -> None:
     assert (SRC / relative).is_file()
@@ -179,7 +203,7 @@ def test_the_scan_sees_the_whole_tree() -> None:
     names = {module_name(SRC, path) for path in SRC.rglob("*.py")}
 
     assert "ledger.main" in names
-    assert "ledger.api.errors" in names
+    assert "ledger.api.rest.error_handlers" in names
     assert len(names) >= 12
 
 

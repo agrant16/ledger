@@ -1,4 +1,4 @@
-"""TransferRequest (ledger/api/transfers.py; docs/design.md, Transfer request).
+"""TransferRequest (ledger/api/rest/schemas/transfer_schema.py; docs/design.md, Transfer request).
 
     TransferRequest(from_account_id, to_account_id, amount_minor, currency)
 
@@ -20,7 +20,7 @@ INTEGER_FIELDS = ["from_account_id", "to_account_id", "amount_minor"]
 @pytest.fixture
 def model():
     """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.api.transfers import TransferRequest
+    from ledger.api.rest.schemas.transfer_schema import TransferRequest
 
     return TransferRequest
 
@@ -144,7 +144,7 @@ def test_every_problem_is_reported_together(model) -> None:
 def test_through_a_route_the_json_kinds_are_strict(model) -> None:
     """A whole-number float, a string, a boolean and null all arrive as JSON, so check them as JSON
     text and see the 400 with a pointer at the field."""
-    from ledger.api.errors import install_error_handling
+    from ledger.api.rest.error_handlers import install_error_handling
 
     app = FastAPI()
     install_error_handling(app)

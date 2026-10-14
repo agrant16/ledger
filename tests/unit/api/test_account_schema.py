@@ -1,4 +1,5 @@
-"""CreateAccountRequest (ledger/api/accounts.py; docs/design.md, Account request and response).
+"""CreateAccountRequest (ledger/api/rest/schemas/account_schema.py; docs/design.md, Account
+request and response).
 
     CreateAccountRequest(account_name, currency)
 
@@ -19,7 +20,7 @@ VALID = {"account_name": "customer:alice", "currency": "USD"}
 @pytest.fixture
 def model():
     """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.api.accounts import CreateAccountRequest
+    from ledger.api.rest.schemas.account_schema import CreateAccountRequest
 
     return CreateAccountRequest
 
@@ -83,7 +84,7 @@ def test_every_problem_is_reported_together(model) -> None:
 
 
 def test_through_a_route_a_bad_request_is_a_400_with_pointers(model) -> None:
-    from ledger.api.errors import install_error_handling
+    from ledger.api.rest.error_handlers import install_error_handling
 
     app = FastAPI()
     install_error_handling(app)

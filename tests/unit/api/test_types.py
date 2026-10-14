@@ -1,9 +1,9 @@
-"""The shared request types (ledger/api/types.py; docs/design.md, Transfer request, Account request
-and response, Id bounds). Their rules are checked here once, so the request models only need to
-show they use them.
+"""The shared request types (ledger/api/rest/schemas/types.py; docs/design.md, Transfer request,
+Account request and response, Id bounds). Their rules are checked here once, so the request models
+only need to show they use them.
 
-Contract these tests expect from ledger/api/types.py. Each name is an `Annotated` type that works
-with pydantic's TypeAdapter:
+Contract these tests expect from ledger/api/rest/schemas/types.py. Each name is an `Annotated` type
+that works with pydantic's TypeAdapter:
 
     AccountId        a JSON body id: a strict integer from 1 to 9,223,372,036,854,775,807
     AccountIdInPath  the same id as it arrives in a URL: a string of canonical decimal digits
@@ -33,7 +33,7 @@ MAX_AMOUNT = 99_900_000_000
 @pytest.fixture
 def types():
     """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.api import types
+    from ledger.api.rest.schemas import types
 
     return types
 
@@ -66,7 +66,7 @@ def test_an_account_id_in_a_body_rejects_everything_else(types, value) -> None:
 
 @pytest.fixture
 def path_client(types) -> TestClient:
-    from ledger.api.errors import install_error_handling
+    from ledger.api.rest.error_handlers import install_error_handling
 
     app = FastAPI()
     install_error_handling(app)
@@ -233,7 +233,7 @@ def test_an_idempotency_key_rejects_everything_else(types, value) -> None:
 
 @pytest.fixture
 def header_client(types) -> TestClient:
-    from ledger.api.errors import install_error_handling
+    from ledger.api.rest.error_handlers import install_error_handling
 
     app = FastAPI()
     install_error_handling(app)

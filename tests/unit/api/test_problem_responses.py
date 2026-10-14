@@ -3,7 +3,7 @@
 Every failure leaves the API as an RFC 9457 `application/problem+json` body. These tests run a
 throwaway FastAPI app whose only job is to raise things, so they need no database.
 
-Contract these tests expect from ledger/api/errors.py:
+Contract these tests expect from ledger/api/rest/error_handlers.py:
 
     install_error_handling(app: FastAPI) -> None
 
@@ -75,7 +75,7 @@ class TransferBody(BaseModel):
 
 @pytest.fixture
 def client() -> TestClient:
-    from ledger.api.errors import install_error_handling
+    from ledger.api.rest.error_handlers import install_error_handling
 
     app = FastAPI()
     install_error_handling(app)
@@ -210,7 +210,7 @@ def test_the_500_detail_is_the_same_whatever_went_wrong(client) -> None:
 def test_the_catch_all_makes_an_id_when_the_request_has_none(caplog) -> None:
     """The middleware always runs first, so this cannot happen in the app. The catch-all is the last
     resort and must not fail itself, so it covers a request that reached it without an id."""
-    from ledger.api.errors import unhandled_exception_handler
+    from ledger.api.rest.error_handlers import unhandled_exception_handler
     from ledger.infra.logging_config import install_log_record_factory
 
     install_log_record_factory()  # normally done by install_error_handling

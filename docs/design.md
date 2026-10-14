@@ -178,7 +178,7 @@ Every error response is an RFC 9457 problem (`application/problem+json`), descri
 
 The hash is computed over a normalized form of the request, so a harmless difference between retries never looks like a different request.
 
-- **Form:** the SHA-256, as 64 lowercase hex digits, of the canonical JSON (sorted keys, no spaces) of the list `[METHOD, path, body]`, computed by `request_hash(method, path, body)` in `ledger/api/request_hash.py`. The form is a contract, because stored hashes are compared with new ones on every replay; a test pins it. A CHECK on `transactions.request_hash` (migration 007) enforces the 64 lowercase hex digits as a safety net.
+- **Form:** the SHA-256, as 64 lowercase hex digits, of the canonical JSON (sorted keys, no spaces) of the list `[METHOD, path, body]`, computed by `request_hash(method, path, body)` in `ledger/api/rest/idempotency.py`. The form is a contract, because stored hashes are compared with new ones on every replay; a test pins it. A CHECK on `transactions.request_hash` (migration 007) enforces the 64 lowercase hex digits as a safety net.
 - **Included:** the uppercase method, the path the request was routed on (so a reversal's target transfer is part of the hash; no trailing-slash or query-order differences), and the body as the validated request model dumped to JSON, or `null` when there is no body. Because the body is validated first, an omitted optional field and the same field set to its default hash the same. Text is not normalized, so two strings the database stores as different names are different requests.
 - **Excluded:** the `Idempotency-Key` header itself, which is the lookup key and not part of the request's meaning, and other headers such as user agent or timestamps, which change between retries.
 
