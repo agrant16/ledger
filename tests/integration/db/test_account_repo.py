@@ -289,3 +289,39 @@ def test_find_balance_changes_nothing(clean_db: None, app_conn: psycopg.Connecti
     ).fetchone()
     assert row == (12,)
     assert (count(app_conn, "accounts"), count(app_conn, "balances")) == (1, 1)
+
+
+# --- every integrity error is translated, not only the ones with a name ------------------------
+
+
+@pytest.mark.parametrize(
+    "name, currency, allow_negative",
+    [(None, "USD", False), ("customer:alice", None, False), ("customer:alice", "USD", None)],
+    ids=["no name", "no currency", "no allow_negative"],
+)
+def test_a_missing_value_is_a_bug_and_not_a_raw_database_error(
+    clean_db: None,
+    app_conn: psycopg.Connection,
+    repo,
+    name: str | None,
+    currency: str | None,
+    allow_negative: bool | None,
+) -> None:
+    """Any integrity error, not just a CHECK or the duplicate name, reaches the caller as a
+    LedgerInvariantError. Here it is a NOT NULL violation."""
+    with pytest.raises(LedgerInvariantError) as failure:
+        repo.insert_account(app_conn, name, currency, allow_negative)
+
+    assert not isinstance(failure.value, LedgerError)
+    assert isinstance(failure.value.__cause__, psycopg.errors.NotNullViolation)
+
+
+def test_a_balance_with_no_allow_negative_is_a_bug(
+    clean_db: None, app_conn: psycopg.Connection, repo
+) -> None:
+    account = repo.insert_account(app_conn, "customer:alice", "USD", False)
+
+    with pytest.raises(LedgerInvariantError) as failure:
+        repo.insert_balance(app_conn, account.id, None)
+
+    assert isinstance(failure.value.__cause__, psycopg.errors.NotNullViolation)
