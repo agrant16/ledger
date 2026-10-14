@@ -22,7 +22,9 @@ def claim_transaction(
     request_hash: str,
     reverses_transaction_id: int | None = None,
 ) -> Claim:
-    transaction_id = posting_repo.insert_claim(conn, idempotency_key, request_hash, reverses_transaction_id)
+    transaction_id = posting_repo.insert_claim(
+        conn, idempotency_key, request_hash, reverses_transaction_id
+    )
     if not transaction_id:
         existing_record = posting_repo.find_claim(conn, idempotency_key)
         if not existing_record:
@@ -30,8 +32,8 @@ def claim_transaction(
                 "Critical error in claim_transaction: row should exist but can't be found"
             )
 
-        if request_hash == existing_record.request_hash:
-            return Claim(transaction_id=existing_record.transaction_id, replay=True)
+        if request_hash == existing_record[1]:
+            return Claim(transaction_id=existing_record[0], replay=True)
         else:
             raise IdempotencyConflictError(
                 "Idempotency key was already used with a different request"
@@ -80,5 +82,7 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
     updated_accounts = posting_repo.apply_balance_deltas(conn, deltas)
 
     if len(updated_accounts) != len(deltas.keys()):
-        missing_id = deltas.keys() - updated_accounts
-        raise LedgerInvariantError(f"Critical Error: Not all balances were updated for account {missing_id}")
+        missing_id = sorted(deltas.keys() - updated_accounts)
+        raise LedgerInvariantError(
+            f"Critical Error: Not all balances were updated for account {missing_id}"
+        )

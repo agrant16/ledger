@@ -31,7 +31,8 @@ INSERT_ENTRY_SQL = """
 UPDATE_BALANCE_SQL = """UPDATE 
                             balances 
                         SET balance_minor = balance_minor + %s 
-                        WHERE account_id = %s;
+                        WHERE account_id = %s
+                        RETURNING account_id;
                      """
 
 
@@ -98,9 +99,12 @@ def insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[
 def apply_balance_deltas(conn: psycopg.Connection, deltas) -> set[int]:
     try:
         with conn.cursor() as cursor:
-            params = [(delta, account_id) for account_id, delta in deltas.items()]
-            cursor.executemany(UPDATE_BALANCE_SQL, params, returning=True)
-            rows = cursor.fetchall()
-            return set([row[0] for row in rows if row[0] is not None])
+            updated_accounts = set()
+            for key, delta in deltas.items():
+                cursor.execute(UPDATE_BALANCE_SQL, (delta, key))
+                row = cursor.fetchone()
+                if row:
+                    updated_accounts.add(row[0])
+            return updated_accounts
     except errors.IntegrityError as failure:
         raise LedgerInvariantError("Critical error on balance update") from failure
