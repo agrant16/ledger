@@ -1,8 +1,7 @@
 import logging
+from http import HTTPStatus
 
-import psycopg_pool
 from fastapi import APIRouter, Depends, Request
-from psycopg_pool import ConnectionPool
 
 from ledger.api.rest.dependencies import get_pool
 from ledger.api.rest.schemas.account_schema import (
@@ -20,12 +19,15 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 @router.post(
-    path="", status_code=201, response_model=AccountResponse, summary="Create a new account"
+    path="",
+    status_code=HTTPStatus.CREATED,
+    response_model=AccountResponse,
+    summary="Create a new account",
 )
 def create_new_account(
     body: CreateAccountRequest,
     request: Request,
-    pool: psycopg_pool.ConnectionPool = Depends(get_pool),  # noqa: B008
+    pool=Depends(get_pool),  # noqa: B008
 ):
     account = run_in_transaction(
         pool,
@@ -49,7 +51,7 @@ def create_new_account(
 def get_account_balance(
     account_id: AccountIdInPath,
     request: Request,
-    pool: ConnectionPool = Depends(get_pool),  # noqa: B008
+    pool=Depends(get_pool),  # noqa: B008
 ):
     balance = run_in_transaction(pool, lambda conn: get_balance(conn, account_id), read_only=True)
     return BalanceResponse.from_model(balance)
