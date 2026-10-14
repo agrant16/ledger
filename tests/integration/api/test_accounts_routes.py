@@ -2,12 +2,12 @@
 
 Contract these tests expect:
 
-- ledger/api/accounts.py has an `APIRouter` called `router` with both routes, and the real app
-  (ledger.main.app) includes it.
+- ledger/api/rest/routers/accounts.py has an `APIRouter` called `router` with both routes, and the
+  aggregate router (ledger/api/rest/router.py) includes it.
 - Each route reads the pool from `request.app.state.pool` and does all of its database work in one
   `run_in_transaction(pool, work, ...)` call. The balance route passes read_only=True.
-- ledger/api/accounts.py imports `get_balance` (from ledger.service.account_service) and calls it
-  by that name, so a test can replace it.
+- The router module imports `get_balance` (from ledger.service.account_service) and calls it by
+  that name, so a test can replace it.
 - POST /accounts: 201 with {"id", "account_name", "currency", "allow_negative": false}. The body
   cannot set allow_negative. A duplicate name is the 409 problem with `account_name` in it.
 - GET balance: 200 with {"account_id", "currency", "balance_minor"}; 404 for an unknown account;
@@ -17,8 +17,6 @@ Contract these tests expect:
 """
 
 import logging
-import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
 
 import psycopg
 import pytest
@@ -34,8 +32,8 @@ VALID = {"account_name": "customer:alice", "currency": "USD"}
 @pytest.fixture
 def app(app_pool: ConnectionPool, owner_conn: psycopg.Connection) -> FastAPI:
     """A throwaway app with the real router, the error handling and the shared test pool."""
-    from ledger.api.accounts import router
     from ledger.api.rest.error_handlers import install_error_handling
+    from ledger.api.rest.router import router
 
     reset_database(owner_conn)
     application = FastAPI()
@@ -80,23 +78,6 @@ def test_creating_an_account_returns_201_and_the_account(client: TestClient) -> 
         False,
     )
     assert response.headers["X-Request-ID"]
-
-
-def test_the_account_and_a_zero_balance_row_exist_afterwards(
-    client: TestClient, owner_conn: psycopg.Connection
-) -> None:
-    account = create(client)
-
-    account_row = owner_conn.execute(
-        "SELECT account_name, currency, allow_negative FROM accounts WHERE id = %s",
-        (account["id"],),
-    ).fetchone()
-    balance_row = owner_conn.execute(
-        "SELECT allow_negative, balance_minor FROM balances WHERE account_id = %s",
-        (account["id"],),
-    ).fetchone()
-    assert account_row == ("customer:alice", "USD", False)
-    assert balance_row == (False, 0)
 
 
 def test_a_duplicate_name_is_a_409_that_names_the_account(
@@ -159,24 +140,6 @@ def test_a_name_ending_in_a_non_ascii_space_is_accepted(client: TestClient) -> N
     assert response.status_code == 201
 
 
-def test_two_creates_of_the_same_name_at_once_give_one_201_and_one_409(
-    app: FastAPI, owner_conn: psycopg.Connection
-) -> None:
-    """The unique constraint decides, so exactly one of two simultaneous creates can win."""
-    start = threading.Barrier(2)
-
-    def attempt() -> int:
-        own_client = TestClient(app, raise_server_exceptions=False)
-        start.wait(timeout=10)
-        return own_client.post("/accounts", json=VALID).status_code
-
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        statuses = [f.result(timeout=30) for f in [pool.submit(attempt), pool.submit(attempt)]]
-
-    assert sorted(statuses) == [201, 409]
-    assert count(owner_conn, "accounts") == 1
-
-
 # --- GET /accounts/{account_id}/balance -------------------------------------------------------
 
 
@@ -216,29 +179,6 @@ def test_an_id_that_is_not_canonical_digits_is_a_400(client: TestClient, raw) ->
     assert response.json()["errors"][0]["parameter"] == "account_id"
 
 
-def test_the_read_does_not_wait_for_a_row_lock(
-    client: TestClient, app_pool: ConnectionPool
-) -> None:
-    """A transfer in flight holds the balances row FOR UPDATE. The balance read must not wait."""
-    account = create(client)
-    holder = app_pool.getconn()
-    executor = ThreadPoolExecutor(max_workers=1)
-    try:
-        holder.execute("SELECT 1 FROM balances WHERE account_id = %s FOR UPDATE", (account["id"],))
-        future = executor.submit(client.get, f"/accounts/{account['id']}/balance")
-        try:
-            response = future.result(timeout=5)
-        except TimeoutError:
-            pytest.fail("the balance read waited for a row lock")
-        finally:
-            holder.rollback()
-            executor.shutdown(wait=True)
-    finally:
-        app_pool.putconn(holder)
-
-    assert response.status_code == 200
-
-
 def test_the_balance_read_runs_in_a_read_only_transaction(
     client: TestClient,
     owner_conn: psycopg.Connection,
@@ -252,7 +192,7 @@ def test_the_balance_read_runs_in_a_read_only_transaction(
     def writes(conn, account_id):
         conn.execute("UPDATE balances SET balance_minor = 99 WHERE account_id = %s", (account_id,))
 
-    monkeypatch.setattr("ledger.api.accounts.get_balance", writes)
+    monkeypatch.setattr("ledger.api.rest.routers.accounts.get_balance", writes)
 
     response = client.get(f"/accounts/{account['id']}/balance")
 
@@ -279,19 +219,3 @@ def test_the_balance_endpoint_is_documented_as_a_cached_read(client: TestClient)
 
 
 # --- through the real app ---------------------------------------------------------------------
-
-
-def test_the_real_app_creates_an_account_and_reads_its_balance(
-    clean_db: None, owner_conn: psycopg.Connection
-) -> None:
-    from ledger.main import app
-
-    try:
-        with TestClient(app, raise_server_exceptions=False) as real_client:
-            created = real_client.post("/accounts", json=VALID)
-            assert created.status_code == 201
-            balance = real_client.get(f"/accounts/{created.json()['id']}/balance")
-            assert balance.status_code == 200
-            assert balance.json()["balance_minor"] == 0
-    finally:
-        reset_database(owner_conn)

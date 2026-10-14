@@ -3,8 +3,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from ledger.api import accounts
 from ledger.api.rest.error_handlers import install_error_handling
+from ledger.api.rest.router import router as api_router
 from ledger.infra.config import load_settings
 from ledger.infra.db import create_pool
 from ledger.infra.logging_config import configure_logging
@@ -26,12 +26,4 @@ app = FastAPI(title="Ledger Service", lifespan=lifespan)
 
 install_error_handling(app)
 
-app.include_router(accounts.router)
-
-
-@app.get("/health", include_in_schema=False)
-def health() -> dict[str, str]:
-    """Liveness plus a database round trip, to confirm the app can reach Postgres."""
-    with app.state.pool.connection() as conn:
-        conn.execute("SELECT 1")
-    return {"status": "ok"}
+app.include_router(api_router)

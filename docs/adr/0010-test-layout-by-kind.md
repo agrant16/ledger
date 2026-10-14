@@ -12,6 +12,7 @@ Every test lived in one flat `tests/` folder, 25 files and 339 tests by the end 
   - `tests/unit/` (with `unit/api/`): no database, no app lifespan.
   - `tests/integration/` with `db/` (schema, privileges, roles, triggers, the migration runner), `service/` (accounts and posting) and `api/` (the real app).
   - `tests/property/`: Hypothesis tests, both database-backed ones and pure ones.
+  - `tests/e2e/` (added by ADR 0013): tests that cross layers on purpose, through the real app or a real server: the commit-time safety net, concurrent requests, the real startup. `tests/integration/api/` is then only the HTTP contract.
   - A `concurrency/` folder joins them in milestone 4.
 - **Fixtures are not autouse.** `migrated_database` is a normal session fixture that `owner_conn` and `app_pool` depend on, so a test that uses the database gets migrated tables and a test that does not never connects. The property test and the app tests request it explicitly with `usefixtures`.
 - **`reset_database` lives in `tests/db_helpers.py`,** not in `conftest.py`, so tests no longer import from a conftest.

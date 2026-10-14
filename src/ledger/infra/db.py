@@ -38,3 +38,9 @@ def run_in_transaction[T](
         raise LedgerInvariantError(
             f"A database constraint was violated: ({failure.diag.constraint_name})"
         ) from failure
+
+
+def check_database(pool: ConnectionPool) -> None:
+    """Raise if the database cannot answer; used by GET /health."""
+    with pool.connection() as conn:
+        conn.execute("SELECT 1")

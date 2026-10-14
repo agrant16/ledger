@@ -73,11 +73,14 @@ REQUIRED_MODULES = [
     "api/rest/schemas/types.py",
     "api/rest/schemas/account_schema.py",
     "api/rest/schemas/transfer_schema.py",
+    "api/rest/router.py",
+    "api/rest/routers/__init__.py",
+    "api/rest/routers/accounts.py",
+    "api/rest/routers/health.py",
 ]
 
-# The API layer lives in the rest package. The routes still wait to move into rest/routes (the next
-# step removes this); everything else has already moved.
-API_ROOT_MODULES = {"__init__", "accounts"}
+# The API layer lives in the rest package and nothing else sits directly under api/.
+API_ROOT_MODULES = {"__init__"}
 API_PACKAGES = {"rest"}
 
 # Layers whose code must not talk to the database: the SQL lives in the repository (and in infra's
@@ -151,7 +154,7 @@ def test_the_root_of_the_package_holds_only_entry_points_and_the_modules_still_t
     assert packages - LAYER_PACKAGES == set(), "unknown package: add it to a layer or remove it"
 
 
-def test_the_api_package_holds_only_the_rest_package_and_the_routes_still_to_move() -> None:
+def test_the_api_package_holds_only_the_rest_package() -> None:
     api = SRC / "api"
     modules = {path.stem for path in api.glob("*.py")}
     packages = {path.name for path in api.iterdir() if path.is_dir() and path.name != "__pycache__"}

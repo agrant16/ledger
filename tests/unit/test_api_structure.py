@@ -5,12 +5,12 @@ down and read the source with the ast module, so they need no database:
 
 1. Inside `ledger/api/rest/`, each part may import only what its job needs. Schemas are the wire
    contract: they hold the request and response shapes and the code that converts between them and
-   the domain models, so they may import models but never services, infrastructure, routes or
+   the domain models, so they may import models but never services, infrastructure, routers or
    handlers. The problem table (`problems.py`) has no web framework in it. Middleware depends on
    infrastructure only. The error handlers use the table, the middleware and infrastructure.
-   Routes use schemas, the request hash, services, models and infrastructure, and never each other.
-   The router knows the routes and nothing else. A module under `rest/` that is not in `PART_RULES`
-   fails the test: a new module has to say where it belongs.
+   Routers use schemas, the request hash, services, models and infrastructure, and never each
+   other. The aggregate router (`router.py`) knows the routers and nothing else. A module under
+   `rest/` that is not in `PART_RULES` fails the test: a new module has to say where it belongs.
 
 2. File names say what a file is: `_model.py` in models, `_repo.py` in repository, `_service.py` in
    service, `_schema.py` in schemas. The suffixes keep names unique across layers.
@@ -18,8 +18,8 @@ down and read the source with the ast module, so they need no database:
 3. The web frameworks (fastapi, starlette, pydantic) are imported only by the API layer and the
    entry points. Nothing else in the ledger knows what carries a request.
 
-Step 3b adds the rules that need the routes folder: routes are synchronous functions, and a route
-calls run_in_transaction at most once.
+What the code in the router modules may do, and what main.py may do, is checked in
+tests/unit/test_router_rules.py.
 """
 
 import ast
@@ -46,7 +46,7 @@ PART_RULES = {
     "dependencies": {"schemas"},
     "middleware": {"infra"},
     "error_handlers": {"problems", "middleware", "infra", "errors"},
-    "routes": {
+    "routers": {
         "schemas",
         "idempotency",
         "dependencies",
@@ -55,7 +55,7 @@ PART_RULES = {
         "infra",
         "errors",
     },
-    "router": {"routes"},
+    "router": {"routers"},
 }
 
 # Third-party modules a part must not import (matched by prefix).
@@ -70,24 +70,22 @@ PART_FORBIDDEN = {
 def rest_part(dotted: str) -> str | None:
     """The part of the REST package a module belongs to: `schemas` for
     `ledger.api.rest.schemas.types`, `problems` for `ledger.api.rest.problems`, and so on. None for
-    a module outside the package. The routes file that has not moved yet counts as a route."""
-    if dotted == "ledger.api.accounts":
-        return "routes"
+    a module outside the package."""
     parts = dotted.split(".")
     if parts[:3] != ["ledger", "api", "rest"]:
         return None
     return "rest" if len(parts) == 3 else parts[3]
 
 
-# Parts whose modules must not import one another. Routes stay independent: code two routes share
-# goes in a neutral module (`dependencies`, `idempotency`, a schema), not in one route for the other
-# to import. Schema modules, by contrast, build on each other (every schema uses `types`).
-NO_SIBLINGS = {"routes"}
+# Parts whose modules must not import one another. Routers stay independent: code two routers
+# share goes in a neutral module (`dependencies`, `idempotency`, a schema), not in one router for
+# the other to import. Schema modules, by contrast, build on each other (every schema uses `types`).
+NO_SIBLINGS = {"routers"}
 
 
 def is_other_module(imported: str, own_name: str) -> bool:
-    """True for a submodule of the part (`ledger.api.rest.routes.transfers`) that is not the module
-    doing the importing. The bare package (`ledger.api.rest.routes`) is not a module of its own."""
+    """True for a submodule of the part (`ledger.api.rest.routers.transfers`) that is not the module
+    doing the importing. The bare package (`ledger.api.rest.routers`) is not a module of its own."""
     return imported != own_name and imported.count(".") >= 4
 
 
@@ -196,7 +194,7 @@ def test_a_tree_that_follows_the_part_rules_has_no_violations(tmp_path: Path) ->
                 "from ledger.infra.logging_config import v\n"
                 "from ledger.errors import E\n"
             ),
-            "api/rest/routes/accounts.py": (
+            "api/rest/routers/accounts.py": (
                 "from fastapi import APIRouter\n"
                 "from ledger.api.rest.schemas.account_schema import AccountResponse\n"
                 "from ledger.api.rest.idempotency import request_hash\n"
@@ -206,7 +204,7 @@ def test_a_tree_that_follows_the_part_rules_has_no_violations(tmp_path: Path) ->
                 "from ledger.infra.db import run_in_transaction\n"
                 "from ledger.errors import E\n"
             ),
-            "api/rest/router.py": "from ledger.api.rest.routes import accounts\n",
+            "api/rest/router.py": "from ledger.api.rest.routers import accounts\n",
         },
     )
 
@@ -221,7 +219,7 @@ def test_a_tree_that_follows_the_part_rules_has_no_violations(tmp_path: Path) ->
         ("api/rest/schemas/a_schema.py", "from ledger.infra.db import run_in_transaction\n"),
         ("api/rest/schemas/a_schema.py", "from ledger.repository import account_repo\n"),
         ("api/rest/schemas/a_schema.py", "from ledger.api.rest.problems import problem_for\n"),
-        ("api/rest/schemas/a_schema.py", "from ledger.api.rest.routes import accounts\n"),
+        ("api/rest/schemas/a_schema.py", "from ledger.api.rest.routers import accounts\n"),
         ("api/rest/schemas/a_schema.py", "from ledger.errors import E\n"),
         ("api/rest/schemas/a_schema.py", "from fastapi import APIRouter\n"),
         # the problem table has no framework and no wiring
@@ -238,21 +236,19 @@ def test_a_tree_that_follows_the_part_rules_has_no_violations(tmp_path: Path) ->
         ("api/rest/middleware/request_id.py", "from ledger.service import account_service\n"),
         ("api/rest/middleware/request_id.py", "from ledger.api.rest.problems import problem_for\n"),
         ("api/rest/middleware/request_id.py", "from fastapi import FastAPI\n"),
-        # the error handlers do not reach into schemas, services or routes
+        # the error handlers do not reach into schemas, services or routers
         ("api/rest/error_handlers.py", "from ledger.api.rest.schemas import types\n"),
         ("api/rest/error_handlers.py", "from ledger.service import account_service\n"),
-        ("api/rest/error_handlers.py", "from ledger.api.rest.routes import accounts\n"),
+        ("api/rest/error_handlers.py", "from ledger.api.rest.routers import accounts\n"),
         ("api/rest/error_handlers.py", "from ledger.models.account_model import Account\n"),
-        # routes do not reach into each other, the router, the handlers or the middleware
-        ("api/rest/routes/accounts.py", "from ledger.api.rest.routes import transfers\n"),
-        ("api/rest/routes/accounts.py", "from ledger.api.rest import router\n"),
-        ("api/rest/routes/accounts.py", "from ledger.api.rest.error_handlers import f\n"),
-        ("api/rest/routes/accounts.py", "from ledger.api.rest.middleware import request_id\n"),
-        ("api/rest/routes/accounts.py", "from ledger.api.rest.problems import problem_for\n"),
-        ("api/rest/routes/accounts.py", "from ledger.repository import account_repo\n"),
-        # the route file that has not moved yet is held to the same rules
-        ("api/accounts.py", "from ledger.api.rest.error_handlers import f\n"),
-        # the router knows the routes and nothing else
+        # routers do not reach into each other, the aggregate router, the handlers or the middleware
+        ("api/rest/routers/accounts.py", "from ledger.api.rest.routers import transfers\n"),
+        ("api/rest/routers/accounts.py", "from ledger.api.rest import router\n"),
+        ("api/rest/routers/accounts.py", "from ledger.api.rest.error_handlers import f\n"),
+        ("api/rest/routers/accounts.py", "from ledger.api.rest.middleware import request_id\n"),
+        ("api/rest/routers/accounts.py", "from ledger.api.rest.problems import problem_for\n"),
+        ("api/rest/routers/accounts.py", "from ledger.repository import account_repo\n"),
+        # the aggregate router knows the routers and nothing else
         ("api/rest/router.py", "from ledger.api.rest.schemas import types\n"),
         ("api/rest/router.py", "from ledger.service import account_service\n"),
         # shared dependencies are small
@@ -309,7 +305,7 @@ def test_a_clean_tree_keeps_the_frameworks_in_the_api_layer(tmp_path: Path) -> N
         tmp_path,
         {
             "main.py": "from fastapi import FastAPI\n",
-            "api/rest/routes/accounts.py": (
+            "api/rest/routers/accounts.py": (
                 "from fastapi import APIRouter\nfrom pydantic import BaseModel\n"
             ),
             "api/rest/middleware/request_id.py": "from starlette.types import Scope\n",
