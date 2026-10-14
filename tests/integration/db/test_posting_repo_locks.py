@@ -1,6 +1,7 @@
-"""_lock_accounts (docs/design.md, milestone 2): lock the touched balances rows and read them.
+"""lock_accounts (ledger/repository/posting_repo.py; ADR 0006, ADR 0013): lock the touched
+balances rows and read them.
 
-    _lock_accounts(conn, account_ids) -> dict[int, LockedAccount]
+    lock_accounts(conn, account_ids) -> dict[int, LockedAccount]
 
 It takes the ids an entry list touches and runs one locking statement over them, returning for
 each known account its currency, whether it may go negative, and its balance as read after the lock
@@ -19,15 +20,16 @@ import pytest
 from psycopg_pool import ConnectionPool
 
 from ledger.models.account_model import Account
+from ledger.models.posting_model import LockedAccount
 from tests.db_helpers import make_account, wait_until_waiting_for_a_lock
 
 
 @pytest.fixture
-def api():
-    """Imported lazily so these tests fail one by one while the helper does not exist yet."""
-    from ledger import posting
+def repo():
+    """Imported lazily so these tests fail one by one while the module does not exist yet."""
+    from ledger.repository import posting_repo
 
-    return posting
+    return posting_repo
 
 
 def set_balance(conn: psycopg.Connection, account: Account, balance_minor: int) -> None:
@@ -50,6 +52,20 @@ def scan_in_storage_order(conn: psycopg.Connection) -> None:
         conn.execute(f"SET LOCAL {setting} = off")
 
 
+def move_to_the_end_of_both_tables(owner_conn: psycopg.Connection, account: Account) -> None:
+    """Update the account's row in `accounts` and in `balances` so that its newest version sits
+    after the others in both heaps. The join reads the accounts table first, so reordering only the
+    balances rows would leave the join's output in id order by accident, and a statement missing its
+    ORDER BY would pass the ordering tests. (The app role may not UPDATE accounts, so the owner
+    connection does it, on rows the test has committed.)"""
+    owner_conn.execute(
+        "UPDATE accounts SET account_name = account_name WHERE id = %s", (account.id,)
+    )
+    owner_conn.execute(
+        "UPDATE balances SET balance_minor = balance_minor + 1 WHERE account_id = %s", (account.id,)
+    )
+
+
 def is_locked(pool: ConnectionPool, account: Account) -> bool:
     """True if another connection cannot lock the account's balances row right now."""
     with pool.connection() as other:
@@ -66,52 +82,57 @@ def is_locked(pool: ConnectionPool, account: Account) -> bool:
 
 
 def test_returns_each_accounts_currency_overdraft_flag_and_balance(
-    clean_db: None, app_conn: psycopg.Connection, api
+    clean_db: None, app_conn: psycopg.Connection, repo
 ) -> None:
     alice = make_account(app_conn, "customer:alice", "USD")
     funding = make_account(app_conn, "funding:eur", "EUR", allow_negative=True)
     set_balance(app_conn, alice, 2500)
     set_balance(app_conn, funding, -900)
 
-    result = api._lock_accounts(app_conn, [alice.id, funding.id])
+    result = repo.lock_accounts(app_conn, [alice.id, funding.id])
 
     assert result == {
-        alice.id: api.LockedAccount(currency="USD", allow_negative=False, balance_minor=2500),
-        funding.id: api.LockedAccount(currency="EUR", allow_negative=True, balance_minor=-900),
+        alice.id: LockedAccount(currency="USD", allow_negative=False, balance_minor=2500),
+        funding.id: LockedAccount(currency="EUR", allow_negative=True, balance_minor=-900),
     }
 
 
 def test_the_result_is_keyed_in_ascending_account_id_order(
-    clean_db: None, app_conn: psycopg.Connection, api
+    clean_db: None,
+    app_conn: psycopg.Connection,
+    owner_conn: psycopg.Connection,
+    commit_setup,
+    repo,
 ) -> None:
     first = make_account(app_conn, "customer:first")
     second = make_account(app_conn, "customer:second")
     third = make_account(app_conn, "customer:third")
-    set_balance(app_conn, first, 1)  # its newest row version now sits after the others in storage
+    commit_setup()
+    move_to_the_end_of_both_tables(owner_conn, first)
     scan_in_storage_order(app_conn)
-    result = api._lock_accounts(app_conn, [third.id, first.id, second.id])
+    result = repo.lock_accounts(app_conn, [third.id, first.id, second.id])
     assert list(result) == [first.id, second.id, third.id]
 
 
 def test_an_unknown_account_is_left_out_and_not_an_error(
-    clean_db: None, app_conn: psycopg.Connection, api
+    clean_db: None, app_conn: psycopg.Connection, repo
 ) -> None:
     alice = make_account(app_conn, "customer:alice")
-    result = api._lock_accounts(app_conn, [alice.id, 999_999])
+    result = repo.lock_accounts(app_conn, [alice.id, 999_999])
     assert list(result) == [alice.id]
 
 
 def test_an_id_given_twice_is_returned_once(
-    clean_db: None, app_conn: psycopg.Connection, api
+    clean_db: None, app_conn: psycopg.Connection, repo
 ) -> None:
     alice = make_account(app_conn, "customer:alice")
-    result = api._lock_accounts(app_conn, [alice.id, alice.id])
+    result = repo.lock_accounts(app_conn, [alice.id, alice.id])
     assert list(result) == [alice.id]
 
 
-def test_no_ids_returns_nothing(clean_db: None, app_conn: psycopg.Connection, api) -> None:
+def test_no_ids_returns_nothing(clean_db: None, app_conn: psycopg.Connection, repo) -> None:
     make_account(app_conn, "customer:alice")
-    assert api._lock_accounts(app_conn, []) == {}
+    assert repo.lock_accounts(app_conn, []) == {}
 
 
 # --- what it locks ----------------------------------------------------------------------------
@@ -122,14 +143,14 @@ def test_it_locks_the_requested_rows_and_only_those(
     app_conn: psycopg.Connection,
     app_pool: ConnectionPool,
     commit_setup,
-    api,
+    repo,
 ) -> None:
     alice = make_account(app_conn, "customer:alice")
     bob = make_account(app_conn, "customer:bob")
     carol = make_account(app_conn, "customer:carol")
     commit_setup()
 
-    api._lock_accounts(app_conn, [alice.id, bob.id, 999_999])
+    repo.lock_accounts(app_conn, [alice.id, bob.id, 999_999])
 
     assert is_locked(app_pool, alice)
     assert is_locked(app_pool, bob)
@@ -145,7 +166,7 @@ def test_locks_are_taken_in_ascending_account_id_whatever_order_it_is_asked_in(
     owner_conn: psycopg.Connection,
     app_pool: ConnectionPool,
     commit_setup,
-    api,
+    repo,
 ) -> None:
     """Ascending order is what makes two transfers between the same accounts unable to deadlock.
 
@@ -156,8 +177,8 @@ def test_locks_are_taken_in_ascending_account_id_whatever_order_it_is_asked_in(
     table in storage order, would reach high first and fail this test."""
     low = make_account(app_conn, "customer:low")
     high = make_account(app_conn, "customer:high")
-    set_balance(app_conn, low, 1)
     commit_setup()
+    move_to_the_end_of_both_tables(owner_conn, low)
 
     with (
         app_pool.connection() as holder,
@@ -169,7 +190,7 @@ def test_locks_are_taken_in_ascending_account_id_whatever_order_it_is_asked_in(
             asker.execute("SET LOCAL lock_timeout = '10s'")
             scan_in_storage_order(asker)
             try:
-                return api._lock_accounts(asker, [high.id, low.id])
+                return repo.lock_accounts(asker, [high.id, low.id])
             finally:
                 asker.rollback()
 
@@ -195,7 +216,7 @@ def test_the_balance_is_read_after_waiting_for_the_lock(
     owner_conn: psycopg.Connection,
     app_pool: ConnectionPool,
     commit_setup,
-    api,
+    repo,
 ) -> None:
     """READ COMMITTED: a locking SELECT that had to wait returns the row as the other writer left
     it, not as it was when the statement began. This is why the overdraft check can trust the
@@ -213,7 +234,7 @@ def test_the_balance_is_read_after_waiting_for_the_lock(
         def ask():
             asker.execute("SET LOCAL lock_timeout = '10s'")
             try:
-                return api._lock_accounts(asker, [alice.id])
+                return repo.lock_accounts(asker, [alice.id])
             finally:
                 asker.rollback()
 

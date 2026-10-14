@@ -24,6 +24,7 @@ import pytest
 
 from ledger.errors import LedgerError
 from ledger.models.account_model import Account
+from ledger.models.posting_model import Entry
 from tests.db_helpers import VALID_HASH, make_account
 
 SAFETY_NET = (psycopg.errors.CheckViolation, psycopg.errors.RaiseException)
@@ -32,9 +33,9 @@ SAFETY_NET = (psycopg.errors.CheckViolation, psycopg.errors.RaiseException)
 @pytest.fixture
 def api():
     """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger import posting
+    from ledger.service import posting_service
 
-    return posting
+    return posting_service
 
 
 def insert_transaction(conn: psycopg.Connection, key: str) -> int:
@@ -235,8 +236,8 @@ def test_a_claimed_and_posted_transfer_commits(
         app_conn,
         tx,
         [
-            api.Entry(accounts["funding"].id, -500, "USD"),
-            api.Entry(accounts["alice"].id, 500, "USD"),
+            Entry(accounts["funding"].id, -500, "USD"),
+            Entry(accounts["alice"].id, 500, "USD"),
         ],
     )
     app_conn.commit()
