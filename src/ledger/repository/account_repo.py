@@ -41,9 +41,9 @@ def insert_account(
             )
             return account
         except errors.UniqueViolation as failure:
-            constraint = e.diag.constraint_name
+            constraint = failure.diag.constraint_name
             if constraint == "accounts_account_name_key":
-                raise DuplicateAccountNameError(account_name) from e
+                raise DuplicateAccountNameError(account_name) from failure
             raise LedgerInvariantError("Critical error in insert account") from failure
         except errors.IntegrityError as failure:
             raise LedgerInvariantError("Critical error on in insert account") from failure
