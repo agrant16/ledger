@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, ConfigDict
 
-from ledger.accounts import create_account, get_balance
 from ledger.api.types import AccountIdInPath, AccountName, Currency
 from ledger.infra.db import run_in_transaction
+from ledger.service.account_service import create_account, get_balance
 
 
 class CreateAccountRequest(BaseModel):

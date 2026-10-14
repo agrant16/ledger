@@ -12,7 +12,7 @@ import psycopg
 import pytest
 from psycopg_pool import ConnectionPool
 
-from ledger.accounts import create_account
+from ledger.service.account_service import create_account
 from tests.db_helpers import wait_until_waiting_for_a_lock
 
 LOCK_THE_ROW = "SELECT 1 FROM balances WHERE account_id = %s FOR UPDATE"

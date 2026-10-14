@@ -1,16 +1,20 @@
-"""create_account (docs/design.md, milestone 2): the account and its balances row, together.
+"""create_account (ledger/service/account_service.py; docs/design.md): the account and its balances
+row, together.
 
-It takes the request's connection and never commits; the caller owns the transaction. The API
-validates input, so the service does not: a bad value reaches the database CHECK and surfaces as
-the raw error, which is a bug-class outcome.
+It takes the request's connection and never commits; the caller owns the transaction. It writes the
+two rows through the repository (`account_repo.insert_account`, then `account_repo.insert_balance`).
+The API validates input, so the service does not: a bad value reaches the database CHECK, which the
+repository reports as a LedgerInvariantError (a bug, never a LedgerError). A duplicate name is the
+expected outcome, DuplicateAccountNameError. The SQL and the error translation themselves are tested
+in tests/integration/db/test_account_repo.py.
 """
 
 import psycopg
 import pytest
 
-from ledger.accounts import create_account
-from ledger.errors import DuplicateAccountNameError, LedgerInvariantError
+from ledger.errors import DuplicateAccountNameError, LedgerError, LedgerInvariantError
 from ledger.infra.config import Settings
+from ledger.service.account_service import create_account
 
 
 @pytest.fixture
@@ -149,10 +153,13 @@ def test_it_refuses_an_autocommit_connection(
 def test_a_bad_currency_surfaces_the_database_check(
     clean_db: None, app_conn: psycopg.Connection
 ) -> None:
-    """Validation belongs to the API layer. The service does not repeat it, so the raw database
-    error comes through, and it is not a LedgerError."""
-    with pytest.raises(psycopg.errors.CheckViolation):
+    """Validation belongs to the API layer. The service does not repeat it, so the database CHECK
+    fires, and the repository reports it as a bug that is not a LedgerError."""
+    with pytest.raises(LedgerInvariantError) as failure:
         create_account(app_conn, "customer:alice", "usd", False)
+
+    assert not isinstance(failure.value, LedgerError)
+    assert isinstance(failure.value.__cause__, psycopg.errors.CheckViolation)
 
 
 def test_a_failure_creating_the_balances_row_leaves_no_account(
@@ -161,8 +168,60 @@ def test_a_failure_creating_the_balances_row_leaves_no_account(
     owner_conn: psycopg.Connection,
     failing_balances_insert: None,
 ) -> None:
-    """The account and its balances row succeed or fail together. The raw error is not hidden."""
+    """The account and its balances row succeed or fail together. An error that is not a constraint
+    violation is not hidden or translated."""
     with pytest.raises(psycopg.errors.RaiseException):
         create_account(app_conn, "customer:alice", "USD", False)
     app_conn.rollback()
     assert count_accounts(owner_conn, "customer:alice") == 0
+
+
+def test_it_writes_the_account_and_then_its_balance_row_through_the_repository(
+    clean_db: None, app_conn: psycopg.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ledger.repository import account_repo
+
+    calls = []
+    real_insert_account = account_repo.insert_account
+    real_insert_balance = account_repo.insert_balance
+
+    def insert_account(conn, account_name, currency, allow_negative):
+        calls.append(("insert_account", conn, account_name, currency, allow_negative))
+        return real_insert_account(conn, account_name, currency, allow_negative)
+
+    def insert_balance(conn, account_id, allow_negative):
+        calls.append(("insert_balance", conn, account_id, allow_negative))
+        return real_insert_balance(conn, account_id, allow_negative)
+
+    monkeypatch.setattr(account_repo, "insert_account", insert_account)
+    monkeypatch.setattr(account_repo, "insert_balance", insert_balance)
+
+    account = create_account(app_conn, "funding:usd", "USD", True)
+
+    assert calls == [
+        ("insert_account", app_conn, "funding:usd", "USD", True),
+        ("insert_balance", app_conn, account.id, True),
+    ]
+
+
+def test_a_duplicate_name_does_not_reach_the_balance_step(
+    clean_db: None, app_conn: psycopg.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ledger.repository import account_repo
+
+    create_account(app_conn, "customer:alice", "USD", False)
+    balance_inserts = []
+    real_insert_balance = account_repo.insert_balance
+    monkeypatch.setattr(
+        account_repo,
+        "insert_balance",
+        lambda *args, **kwargs: (
+            balance_inserts.append(args) or real_insert_balance(*args, **kwargs)
+        ),
+    )
+
+    with pytest.raises(DuplicateAccountNameError):
+        with app_conn.transaction():
+            create_account(app_conn, "customer:alice", "EUR", False)
+
+    assert balance_inserts == []

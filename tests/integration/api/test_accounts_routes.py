@@ -6,8 +6,8 @@ Contract these tests expect:
   (ledger.main.app) includes it.
 - Each route reads the pool from `request.app.state.pool` and does all of its database work in one
   `run_in_transaction(pool, work, ...)` call. The balance route passes read_only=True.
-- ledger/api/accounts.py imports `get_balance` (from ledger.accounts) and calls it by that name,
-  so a test can replace it.
+- ledger/api/accounts.py imports `get_balance` (from ledger.service.account_service) and calls it
+  by that name, so a test can replace it.
 - POST /accounts: 201 with {"id", "account_name", "currency", "allow_negative": false}. The body
   cannot set allow_negative. A duplicate name is the 409 problem with `account_name` in it.
 - GET balance: 200 with {"account_id", "currency", "balance_minor"}; 404 for an unknown account;

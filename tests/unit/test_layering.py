@@ -16,6 +16,7 @@ src/ledger may hold only the modules in `ROOT_MODULES`. A step ends when its ent
 """
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
@@ -23,8 +24,8 @@ import pytest
 SRC = Path(__file__).resolve().parents[2] / "src" / "ledger"
 
 ENTRY_POINTS = {"main", "migrate"}
-# Still to be split into repository and service functions (the next step removes these).
-LEGACY = {"accounts", "posting"}
+# Still to be split into repository and service functions (the next step removes this).
+LEGACY = {"posting"}
 ROOT_MODULES = {"__init__", "errors"} | ENTRY_POINTS | LEGACY
 LAYER_PACKAGES = {"models", "repository", "service", "infra", "api"}
 
@@ -35,7 +36,7 @@ ALLOWED = {
     "infra": {"errors"},
     "repository": {"models", "errors"},
     "service": {"repository", "models", "errors"},
-    "api": {"service", "models", "errors", "infra", "legacy"},
+    "api": {"service", "models", "errors", "infra"},
     "legacy": {"models", "errors", "infra", "service", "legacy"},
     "entry": ALL_LAYERS,
 }
@@ -55,8 +56,17 @@ REQUIRED_MODULES = [
     "infra/logging_config.py",
     "models/account_model.py",
     "models/posting_model.py",
+    "repository/__init__.py",
+    "repository/account_repo.py",
+    "service/account_service.py",
     "service/decorators.py",
 ]
+
+# Layers whose code must not talk to the database: the SQL lives in the repository (and in infra's
+# transaction control). Legacy modules are exempt until they are split.
+NO_SQL_LAYERS = {"service", "api", "models"}
+DATABASE_CALLS = {"execute", "executemany", "cursor"}
+SQL_STATEMENT = re.compile(r"^\s*(SELECT|INSERT|UPDATE|DELETE|WITH)\b")
 
 
 def layer_of(dotted: str) -> str | None:
@@ -121,11 +131,39 @@ def import_violations(root: Path) -> list[str]:
     return problems
 
 
+def sql_violations(root: Path) -> list[str]:
+    """Database access outside the repository: a call to execute, executemany or cursor, or a string
+    that starts like an SQL statement, in a service, API or model module."""
+    problems: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        name = module_name(root, path)
+        if layer_of(name) not in NO_SQL_LAYERS:
+            continue
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in DATABASE_CALLS
+            ):
+                problems.append(f"{name} calls .{node.func.attr}(): SQL belongs in the repository")
+            elif (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and SQL_STATEMENT.match(node.value)
+            ):
+                problems.append(f"{name} contains SQL text: it belongs in the repository")
+    return problems
+
+
 # --- the real tree ----------------------------------------------------------------------------
 
 
 def test_imports_in_the_source_tree_follow_the_layer_rules() -> None:
     assert import_violations(SRC) == []
+
+
+def test_sql_lives_only_in_the_repository() -> None:
+    assert sql_violations(SRC) == []
 
 
 def test_the_root_of_the_package_holds_only_entry_points_and_the_modules_still_to_split() -> None:
@@ -231,3 +269,66 @@ def test_an_import_inside_a_function_or_a_type_checking_block_is_caught(tmp_path
 
     flagged = {message.split(" ")[0] for message in import_violations(root)}
     assert flagged == {"ledger.service.a", "ledger.service.b"}
+
+
+# --- the SQL rule: it must catch what it claims to catch --------------------------------------
+
+
+@pytest.mark.parametrize(
+    "path, source",
+    [
+        ("service/account_service.py", "def f(conn):\n    conn.execute('x')\n"),
+        ("service/account_service.py", "def f(conn):\n    conn.executemany('x', [])\n"),
+        (
+            "service/account_service.py",
+            "def f(conn):\n    with conn.cursor() as c:\n        pass\n",
+        ),
+        ("service/account_service.py", "SQL = 'SELECT 1'\n"),
+        ("service/account_service.py", "SQL = '''\n    INSERT INTO t VALUES (1)\n'''\n"),
+        ("service/account_service.py", "SQL = 'UPDATE t SET x = 1'\n"),
+        ("service/account_service.py", "SQL = 'DELETE FROM t'\n"),
+        ("service/account_service.py", "SQL = 'WITH x AS (SELECT 1) SELECT * FROM x'\n"),
+        ("api/accounts.py", "def f(cursor):\n    cursor.execute('x')\n"),
+        ("models/account_model.py", "def f(conn):\n    conn.execute('x')\n"),
+    ],
+    ids=lambda value: value.strip().splitlines()[0] if isinstance(value, str) else value,
+)
+def test_database_access_outside_the_repository_is_caught(
+    tmp_path: Path, path: str, source: str
+) -> None:
+    root = build_tree(tmp_path, {path: source})
+
+    assert sql_violations(root) != []
+
+
+def test_the_repository_and_infra_may_run_sql(tmp_path: Path) -> None:
+    root = build_tree(
+        tmp_path,
+        {
+            "repository/account_repo.py": (
+                "SQL = 'SELECT 1'\ndef f(conn):\n    with conn.cursor() as c:\n"
+                "        c.execute(SQL)\n"
+            ),
+            "infra/db.py": "def f(conn):\n    conn.execute('SET TRANSACTION READ ONLY')\n",
+            "main.py": "def f(conn):\n    conn.execute('SELECT 1')\n",
+        },
+    )
+
+    assert sql_violations(root) == []
+
+
+def test_ordinary_words_and_calls_are_not_mistaken_for_sql(tmp_path: Path) -> None:
+    root = build_tree(
+        tmp_path,
+        {
+            "service/account_service.py": (
+                "def f(conn, pool):\n"
+                "    '''Selects and updates nothing; deletes nothing.'''\n"
+                "    message = 'Select an account to update'\n"
+                "    with pool.connection():\n"
+                "        return conn.autocommit, message, 'with care'\n"
+            ),
+        },
+    )
+
+    assert sql_violations(root) == []

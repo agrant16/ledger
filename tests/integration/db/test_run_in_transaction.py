@@ -25,8 +25,8 @@ import psycopg
 import pytest
 from psycopg_pool import ConnectionPool
 
-from ledger.accounts import create_account
 from ledger.errors import DuplicateAccountNameError, LedgerError, LedgerInvariantError
+from ledger.service.account_service import create_account
 from tests.db_helpers import VALID_HASH
 
 LONE_TRANSACTION = "INSERT INTO transactions (idempotency_key, request_hash) VALUES ('k', %s)"
