@@ -8,10 +8,10 @@ from ledger.service.decorators import transactional_service_method
 
 @transactional_service_method
 def create_account(
-    conn: psycopg.Connection, account_name: str, currency: str, allow_negative: bool = False
+    conn: psycopg.Connection, account_name: str, currency: str, allow_negative: bool
 ) -> Account:
     account = account_repo.insert_account(conn, account_name, currency, allow_negative)
-    account_repo.insert_balance(conn, account.id, allow_negative)
+    account_repo.insert_balance(conn, account.id, account.allow_negative)
     return account
 
 

@@ -14,8 +14,7 @@ INSERT_ACCOUNTS_SQL = """
 INSERT_BALANCES_SQL = """
                       INSERT INTO 
                          balances (account_id, allow_negative, balance_minor) 
-                         VALUES (%s, %s, 0)
-                         RETURNING account_id, allow_negative, balance_minor;
+                         VALUES (%s, %s, 0);
                       """
 
 GET_BALANCE_SQL = """
@@ -45,12 +44,11 @@ def insert_account(
             constraint = e.diag.constraint_name
             if constraint == "accounts_account_name_key":
                 raise DuplicateAccountNameError(account_name) from e
-            raise
-        except errors.CheckViolation as failure:
+        except errors.IntegrityError as failure:
             raise LedgerInvariantError("Critical error on in insert account") from failure
 
 
-def insert_balance(conn: psycopg.Connection, account_id: int, allow_negative: bool):
+def insert_balance(conn: psycopg.Connection, account_id: int, allow_negative: bool) -> None:
     with conn.cursor() as cursor:
         try:
             cursor.execute(INSERT_BALANCES_SQL, (account_id, allow_negative))
