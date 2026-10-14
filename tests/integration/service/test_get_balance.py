@@ -1,24 +1,27 @@
-"""get_balance (ledger/accounts.py; docs/design.md, GET /accounts/{id}/balance).
+"""get_balance (ledger/service/account_service.py; docs/design.md, GET /accounts/{id}/balance).
 
     get_balance(conn, account_id) -> Balance(account_id, currency, balance_minor)
 
-It reads the cached balance with one plain statement that joins `balances` to `accounts`, takes no
-row locks, and raises UnknownAccountError when there is no such account. It does not change
-anything, and the caller owns the transaction.
+The service reads the cached balance through the repository (`account_repo.find_balance`) and
+decides what the answer means: no such account is UnknownAccountError (a LedgerError), and an
+account that has no balances row is a bug (LedgerInvariantError), because create_account always
+writes both. It changes nothing, and the caller owns the transaction. The SQL itself (one plain
+statement, no row locks) is tested in tests/integration/db/test_account_repo.py.
 """
 
 import psycopg
 import pytest
-from psycopg_pool import ConnectionPool
 
-from ledger.accounts import create_account
 from ledger.errors import LedgerError, LedgerInvariantError, UnknownAccountError
+from ledger.infra.config import Settings
+from ledger.models.account_model import Balance
+from ledger.service.account_service import create_account
 
 
 @pytest.fixture
 def get_balance():
     """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.accounts import get_balance
+    from ledger.service.account_service import get_balance
 
     return get_balance
 
@@ -32,8 +35,6 @@ def set_cached_balance(conn: psycopg.Connection, account_id: int, balance_minor:
 def test_a_new_account_has_a_zero_balance_in_its_currency(
     clean_db: None, app_conn: psycopg.Connection, get_balance
 ) -> None:
-    from ledger.models.account_model import Balance
-
     account = create_account(app_conn, "customer:alice", "EUR", False)
 
     assert get_balance(app_conn, account.id) == Balance(account.id, "EUR", 0)
@@ -76,41 +77,8 @@ def test_an_unknown_account_raises_unknown_account_error(
     with pytest.raises(UnknownAccountError) as failure:
         get_balance(app_conn, 999_999)
 
+    assert isinstance(failure.value, LedgerError)
     assert "999999" in str(failure.value)
-
-
-def test_it_takes_no_row_locks(
-    clean_db: None,
-    app_conn: psycopg.Connection,
-    app_pool: ConnectionPool,
-    commit_setup,
-    get_balance,
-) -> None:
-    """Another connection holds the balances row FOR UPDATE, as a transfer in flight would. A
-    plain read must not wait for it: the reading connection refuses to wait more than 300 ms."""
-    account = create_account(app_conn, "customer:alice", "USD", False)
-    commit_setup()
-
-    with app_pool.connection() as holder:
-        holder.execute("SELECT 1 FROM balances WHERE account_id = %s FOR UPDATE", (account.id,))
-
-        app_conn.execute("SET LOCAL lock_timeout = '300ms'")
-        balance = get_balance(app_conn, account.id)
-
-    assert balance.balance_minor == 0
-
-
-def test_it_changes_nothing(clean_db: None, app_conn: psycopg.Connection, get_balance) -> None:
-    account = create_account(app_conn, "customer:alice", "USD", False)
-    set_cached_balance(app_conn, account.id, 12)
-
-    get_balance(app_conn, account.id)
-    get_balance(app_conn, account.id)
-
-    row = app_conn.execute(
-        "SELECT balance_minor FROM balances WHERE account_id = %s", (account.id,)
-    ).fetchone()
-    assert row == (12,)
 
 
 def test_an_account_with_no_balances_row_is_a_bug_and_not_a_balance(
@@ -129,3 +97,57 @@ def test_an_account_with_no_balances_row_is_a_bug_and_not_a_balance(
         get_balance(app_conn, row[0])
 
     assert not isinstance(failure.value, LedgerError)
+
+
+def test_it_refuses_an_autocommit_connection(
+    clean_db: None, settings: Settings, get_balance
+) -> None:
+    """Every service function that is given a connection assumes a transaction is in progress."""
+    with psycopg.connect(settings.app_url, autocommit=True) as conn:
+        with pytest.raises(LedgerInvariantError):
+            get_balance(conn, 1)
+
+
+# --- the decisions, with the repository answering what the test says ---------------------------
+
+
+@pytest.fixture
+def account_repo():
+    from ledger.repository import account_repo
+
+    return account_repo
+
+
+def test_the_service_asks_the_repository_and_returns_its_balance(
+    app_conn: psycopg.Connection, get_balance, account_repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    asked = []
+
+    def find_balance(conn, account_id):
+        asked.append((conn, account_id))
+        return Balance(account_id, "EUR", 42)
+
+    monkeypatch.setattr(account_repo, "find_balance", find_balance)
+
+    assert get_balance(app_conn, 7) == Balance(7, "EUR", 42)
+    assert asked == [(app_conn, 7)]
+
+
+def test_nothing_found_means_an_unknown_account(
+    app_conn: psycopg.Connection, get_balance, account_repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(account_repo, "find_balance", lambda conn, account_id: None)
+
+    with pytest.raises(UnknownAccountError):
+        get_balance(app_conn, 7)
+
+
+def test_an_account_without_a_balance_is_a_bug_whatever_the_repository_class_is(
+    app_conn: psycopg.Connection, get_balance, account_repo, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        account_repo, "find_balance", lambda conn, account_id: Balance(account_id, "USD", None)
+    )
+
+    with pytest.raises(LedgerInvariantError):
+        get_balance(app_conn, 7)

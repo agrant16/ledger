@@ -57,6 +57,11 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
 
+[tool.ruff.lint.isort]
+# Named explicitly so that import sorting never depends on which modules exist on disk (ruff's cache
+# and a half-finished move both made the local result differ from CI's).
+known-first-party = ["ledger", "tests"]
+
 [tool.sqlfluff.core]
 dialect = "postgres"
 templater = "raw"

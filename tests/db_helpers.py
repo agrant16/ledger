@@ -7,8 +7,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
 
-from ledger.accounts import create_account
 from ledger.models.account_model import Account
+from ledger.service.account_service import create_account
 
 # The database the whole test run uses. docker/roles/roles.sql creates it next to the service's own
 # database (`ledger`), because every test run empties its tables.
