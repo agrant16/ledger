@@ -45,9 +45,10 @@ def post(conn: psycopg.Connection, key: str, entries: list[Entry], reverses=None
 def test_it_returns_the_transaction_and_its_entries_in_entry_id_order(
     clean_db: None, app_conn: psycopg.Connection, repo, models
 ) -> None:
-    low = make_account(app_conn, "customer:low")
-    high = make_account(app_conn, "funding:usd", allow_negative=True)
-    tx = post(app_conn, "k1", [Entry(low.id, 100, "USD"), Entry(high.id, -100, "USD")])
+    low = make_account(app_conn, "funding:usd", allow_negative=True)
+    high = make_account(app_conn, "customer:high")
+    assert low.id < high.id
+    tx = post(app_conn, "k1", [Entry(high.id, 100, "USD"), Entry(low.id, -100, "USD")])
     stored = app_conn.execute(
         "SELECT id, account_id, amount_minor, currency FROM entries"
         " WHERE transaction_id = %s ORDER BY id",
@@ -60,7 +61,7 @@ def test_it_returns_the_transaction_and_its_entries_in_entry_id_order(
     assert result.id == tx
     assert result.reverses_transaction_id is None
     assert result.entries == tuple(models.TransferEntry(*row) for row in stored)
-    assert [entry.account_id for entry in result.entries] == [low.id, high.id]
+    assert [entry.account_id for entry in result.entries] == [high.id, low.id]
 
 
 def test_a_missing_transaction_is_none(clean_db: None, app_conn: psycopg.Connection, repo) -> None:

@@ -81,15 +81,16 @@ def test_it_returns_the_transfer_with_its_entries(
 def test_the_entries_are_in_the_order_they_were_written(
     clean_db: None, app_conn: psycopg.Connection, get_transfer
 ) -> None:
-    """Ordered by entry id: not by account id, and not debit before credit."""
-    low = make_account(app_conn, "customer:low")
-    high = make_account(app_conn, "funding:usd", allow_negative=True)
+    """Ordered by entry id: not by account id (the first entry written is for the account with
+    the higher id), and not debit before credit (the credit is written first)."""
+    low = make_account(app_conn, "funding:usd", allow_negative=True)
+    high = make_account(app_conn, "customer:high")
     assert low.id < high.id
-    tx = post(app_conn, "k1", [Entry(low.id, 100, "USD"), Entry(high.id, -100, "USD")])
+    tx = post(app_conn, "k1", [Entry(high.id, 100, "USD"), Entry(low.id, -100, "USD")])
 
     result = get_transfer(app_conn, tx)
 
-    assert [entry.account_id for entry in result.entries] == [low.id, high.id]
+    assert [entry.account_id for entry in result.entries] == [high.id, low.id]
     assert [entry.id for entry in result.entries] == sorted(entry.id for entry in result.entries)
 
 
