@@ -275,10 +275,16 @@ A ticked item means that piece of work is done and tested, not that the user-fac
 
 ### 5. Reversals
 
-- [ ] `POST /transfers/{id}/reverse`: mirror entries, idempotency key, one reversal per transfer enforced by a unique constraint, a reversal cannot itself be reversed, and 422 when funds have moved on
-- [ ] Tests per the Reversal row of the testing table, including two reversals fired at once
+- [ ] Mirrored entries: a named builder (like `entries_for_transfer`) takes the original transfer's entries and returns one entry per original, with the same account and currency and the amount negated (full reversals only); its output always sums to zero; unit-tested
+- [ ] `reverse_transaction` service function: loads the target (unknown is `UnknownTransferError`), refuses a target that is itself a reversal (`ReversalOfReversalError`, a service rule since the schema allows such a row), claims the key with `reverses_transaction_id`, and posts the mirrored entries through `post_transaction`, so locking, currency checks and the overdraft rule are the same as for any transfer
+- [ ] One reversal per transfer: a unique violation on `reverses_transaction_id` under a different key becomes `AlreadyReversedError`, while a same-key retry is still resolved first as a replay; the mapping uses the constraint's existing Postgres-generated name, `transactions_reverses_transaction_id_key`, and a test reads the name from `pg_constraint` so a rename cannot silently turn the 409 into a 500; update the two milestone 3 tests that pin the raw violation
+- [ ] Funds moved on: a reversal that would overdraw a protected account returns 422 (`InsufficientFundsError`), writes nothing, and leaves the transfer reversible later
+- [ ] `POST /transfers/{id}/reverse` route: requires `Idempotency-Key`, rejects a body (400), strict path id, the target id is part of the request hash, 201 with the transfer response shape, a replay returns the same response; OpenAPI description written
+- [ ] Reversal rules over HTTP: reversing twice (different keys) gives 409 `already-reversed`; reversing a reversal gives 409 `reversal-of-reversal`; an unknown transfer gives 404; and replaying a reversal's own key returns the original 201 and moves nothing a second time
+- [ ] Racing reversals (via the concurrency harness): two reversals of one transfer under different keys give exactly one 201 and one 409, and the balances are restored exactly once; two under the same key give one reversal and the same response to both
+- [ ] Property test: extend the existing Hypothesis state machine with a reverse rule; after every step the shared invariant check holds, and a transfer followed by its reversal restores every touched balance when nothing else touched those accounts in between
 
-**Done when:** a transfer plus its reversal restores every balance, and two racing reversals produce exactly one success and one 409.
+**Done when:** a transfer plus its reversal restores every balance; a reversal after the funds moved on returns 422 and leaves the transfer reversible; replaying a reversal's key moves nothing a second time; and two racing reversals produce exactly one success and one 409.
 
 ### 6. Reconciliation
 
