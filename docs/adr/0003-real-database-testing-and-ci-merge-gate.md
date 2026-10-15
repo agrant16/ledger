@@ -30,6 +30,7 @@ The properties this project claims (no double spend, no overdraft, entries that 
   - Intermediate commits on a branch may be red, because tests land before the implementation.
   - Tests that truncate tables must not share the dev database with data worth keeping.
   - `pytest-timeout` is deferred to milestone 4, when tests start to wait on locks.
+  - *Note (2026-10-15): `pytest-timeout` was in fact added earlier, with the separate test database change (#35); the 30-second timeout is set in `pyproject.toml`.*
 
 * **Alternatives Considered:**
   - **Mocking the database layer:** rejected, because it could not show lock, constraint, or trigger behavior.
