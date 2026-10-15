@@ -15,7 +15,7 @@ The ledger has invariants that must always hold: each transaction's entries sum 
   - **deferred constraint triggers** (migration 006): one on `entries` checks that a transaction's entries sum to zero within each currency, and one on `transactions` rejects a transaction with no entries. Both are `DEFERRABLE INITIALLY DEFERRED`, so they fire when the database transaction commits. A claim followed by a posting still commits as one unit. Both raise `check_violation`.
 - **The property test is a Hypothesis `RuleBasedStateMachine`** on a real database. It builds random sequences of account openings, funding transfers, balanced posts in one or two currencies, boundary spends, and five kinds of deliberately broken posts. It checks every invariant after every step, keeps an in-memory model of the balances, and requires that a rejected post leave the entries, transactions, and balances exactly as they were.
 - **Accepted posts really commit, and the database is emptied when each example starts and ends.** Savepoints cannot be used, because nothing inside one is committed and the triggers would never fire.
-- **Tests are proven able to fail.** The property test was run against eleven deliberately broken versions of `posting.py` and caught ten. The eleventh, a missing row lock, needs the concurrency tests of milestone 4.
+- **Tests are proven able to fail.** The property test was run against eleven deliberately broken versions of `posting.py` (since split into `service/posting_service.py` and `repository/posting_repo.py`, ADR 0013) and caught ten. The eleventh, a missing row lock, needs the concurrency tests of milestone 4.
 
 ## Consequences
 * **Positive:**
