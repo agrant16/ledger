@@ -157,7 +157,9 @@ Expected failures are `LedgerError` subclasses in `ledger/errors.py`. The API la
 | `AlreadyReversedError` | 409 | `already-reversed` | Transfer already reversed | The claim, from the unique link on `reverses_transaction_id` |
 | `ReversalOfReversalError` | 409 | `reversal-of-reversal` | A reversal cannot be reversed | The service layer, because the target has a non-null `reverses_transaction_id`; the schema allows such a row, so this is not a database rule |
 | `DuplicateAccountNameError` | 409 | `duplicate-account-name` | Duplicate account name | `create_account`, from the unique name |
-| `ServiceBusyError` | 503 | `service-busy` | Service busy | The retry wrapper: lock timeout, deadlock retries exhausted, pool wait timeout |
+| `ServiceBusyError` | 503 | `service-busy` | Service busy | `run_in_transaction`: a pool wait timeout (milestone 3), then a lock timeout, exhausted deadlock retries and a connection lost during commit (milestone 4) |
+
+The overall concurrency cap also returns a 503 with Retry-After, but the middleware answers it directly before any transaction starts, so it is not a `LedgerError`.
 
 **Error response format**
 
@@ -269,7 +271,7 @@ A ticked item means that piece of work is done and tested, not that the user-fac
 - [ ] Paging while transfers run: one reader walks an account's entries in small pages while writer threads post transfers into and out of it (via the harness, at the service layer); no entry appears twice, ids strictly decrease, and every entry committed before the walk started is returned
 - [ ] Control for that test: a deterministic test where one writer inserts an entry without the balances lock and commits after a later one, showing a page boundary can skip it; this is why every writer locks the balances row first
 - [ ] Server-process fixture: starts `uvicorn ledger.main:app` as a subprocess on a free port, with environment variables pointing it at `ledger_test`, waits for `/health`, captures its output, and stops it at teardown
-- [ ] End-to-end concurrency test over HTTP: 50 client threads released together by a barrier, each sending a transfer with its own `Idempotency-Key`; every response is 201 or 422, with no 5xx; afterwards the shared invariant check passes (read through the owner connection) and the entry count matches the number of 201s. The test server's concurrency cap is set above 50, so a 503 here would mean a bug
+- [ ] End-to-end concurrency test over HTTP: 50 client threads released together by a barrier, each sending a transfer with its own `Idempotency-Key`; every response is 201 or 422, with no 5xx; afterwards the shared invariant check passes (read through the owner connection) and the entry count matches the number of 201s. The fixture sets the concurrency cap above 50 and the pool wait (and, once it exists, the lock timeout) well above anything CI could hit, for example 10 seconds, under the 30-second test timeout, so a 503 here would mean a bug; the test also asserts that the captured server output has no WARNING lines
 - [ ] A script that runs the `tests/concurrency` folder 20 times in a row and stops at the first failure, documented in the README
 
 **Done when:** the 50-transfer test passes all 20 of its parametrized runs; the whole `tests/concurrency` folder passes 20 times in a row with no flaky failure; the opposing-transfers test never reports a deadlock while its negative control does; deadlocks, lock timeouts and a lost commit connection each return a 503 with Retry-After; and the HTTP concurrency test and the paging test pass.
