@@ -150,7 +150,11 @@ class LedgerMachine(RuleBasedStateMachine):
         try:
             self.post(entries)
         except InsufficientFundsError as failure:
-            assert overdrawn == (failure.account_id, failure.balance_minor, failure.amount_minor)
+            assert overdrawn == (
+                failure.account_id,
+                failure.balance_minor,
+                failure.net_change_minor,
+            )
             assert self.committed_state() == before, "a rejected post changed the ledger"
             event("post refused: insufficient funds")
             return

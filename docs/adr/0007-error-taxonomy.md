@@ -13,7 +13,7 @@ The service has to turn failures into HTTP responses, and not every failure is t
 - **The domain code is free of HTTP.** The API layer owns the status for each error in one table, resolved through the class hierarchy (a flat hierarchy with no intermediate bases). A completeness test asserts that every concrete `LedgerError` subclass has a status.
 - **`InvalidRequestError` is raised only by the API layer.** Pydantic validates strict types, unknown fields, ranges, and id bounds, and `RequestValidationError` is remapped to 400. The service layer raises only state-dependent errors; the database constraints are the last line of defense.
 - **Two reversal errors.** `AlreadyReversedError` comes from the unique link on `reverses_transaction_id`. `ReversalOfReversalError` is a service-layer check, since the schema allows such a row. Both are 409.
-- **Errors carry the data that helps.** `InsufficientFundsError` has `account_id`, `balance_minor`, and `amount_minor`; `DuplicateAccountNameError` has `account_name`.
+- **Errors carry the data that helps.** `InsufficientFundsError` has `account_id`, `balance_minor`, and `net_change_minor`; `DuplicateAccountNameError` has `account_name`.
 - **Database errors from CHECK constraints are not translated.** Validation belongs at the API boundary, so a CHECK that fires is a bug and surfaces as a logged 500. (Changed by ADR 0013: they are now translated into a `LedgerInvariantError` at the repository boundary and in `run_in_transaction`, still a bug and still a logged 500, but no longer a raw psycopg error.)
 
 ## Consequences

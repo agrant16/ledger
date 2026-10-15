@@ -168,7 +168,7 @@ def test_the_overdraft_check_uses_the_net_change_not_each_entry(
         post(api, app_conn, entries)
     assert failure.value.account_id == alice.id
     assert failure.value.balance_minor == 100
-    assert failure.value.amount_minor == -160
+    assert failure.value.net_change_minor == -160
     assert count(app_conn, "entries") == entries_before
     assert snapshot(app_conn) == before
 
@@ -270,7 +270,7 @@ def test_insufficient_funds_reports_the_account_balance_and_amount(
     assert isinstance(failure.value, LedgerError)
     assert failure.value.account_id == alice.id
     assert failure.value.balance_minor == 0
-    assert failure.value.amount_minor == -1
+    assert failure.value.net_change_minor == -1
     assert_nothing_written(app_conn, before)
 
 
@@ -587,7 +587,11 @@ def test_a_protected_account_that_would_go_negative_is_refused_with_the_figures(
     with pytest.raises(InsufficientFundsError) as failure:
         api.post_transaction(app_conn, 41, [Entry(1, -160, "USD"), Entry(2, 160, "USD")])
 
-    assert (failure.value.account_id, failure.value.balance_minor, failure.value.amount_minor) == (
+    assert (
+        failure.value.account_id,
+        failure.value.balance_minor,
+        failure.value.net_change_minor,
+    ) == (
         1,
         100,
         -160,
