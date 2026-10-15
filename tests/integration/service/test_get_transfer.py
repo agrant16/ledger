@@ -1,9 +1,9 @@
-"""get_transfer (ledger/service/posting_service.py; docs/design.md, Transfer response and
+"""get_transfer (ledger/service/transfer_service.py; docs/design.md, Transfer response and
 GET /transfers/{id}; ADR 0013).
 
     get_transfer(conn, transfer_id) -> Transfer
     Transfer(id, reverses_transaction_id, created_at, entries)
-    TransferEntry(id, account_id, amount_minor, currency)   (in ledger/models/posting_model.py)
+    TransferEntry(id, account_id, amount_minor, currency)   (in ledger/models/transfer_model.py)
 
 The service reads the transfer through the repository (`posting_repo.find_transfer`) and decides
 what the answer means; the SQL itself is tested in tests/integration/db/test_posting_repo_reads.py.
@@ -32,16 +32,16 @@ from tests.db_helpers import hash_for, make_account
 @pytest.fixture
 def get_transfer():
     """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.service.posting_service import get_transfer
+    from ledger.service.transfer_service import get_transfer
 
     return get_transfer
 
 
 @pytest.fixture
 def types():
-    from ledger.models import posting_model
+    from ledger.models import transfer_model
 
-    return posting_model
+    return transfer_model
 
 
 def post(

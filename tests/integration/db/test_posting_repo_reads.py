@@ -3,7 +3,7 @@
     find_transfer(conn, transfer_id) -> Transfer, or None
 
 Plain function that reads the `transactions` row and its `entries` and returns what the database
-says, as the models in ledger/models/posting_model.py: `Transfer(id, reverses_transaction_id,
+says, as the models in ledger/models/transfer_model.py: `Transfer(id, reverses_transaction_id,
 created_at, entries)` with `entries` a tuple of `TransferEntry(id, account_id, amount_minor,
 currency)` in entry-id order, and `created_at` a timezone-aware UTC datetime. It never judges:
 no such transaction is `None`, and a transaction with no entries is a Transfer whose `entries` is
@@ -31,9 +31,9 @@ def repo():
 
 @pytest.fixture
 def models():
-    from ledger.models import posting_model
+    from ledger.models import transfer_model
 
-    return posting_model
+    return transfer_model
 
 
 def post(conn: psycopg.Connection, key: str, entries: list[Entry], reverses=None) -> int:

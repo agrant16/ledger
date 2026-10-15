@@ -186,7 +186,7 @@ TOKYO = timezone(timedelta(hours=9))
 
 
 def transfer(created_at: datetime, reverses: int | None = None):
-    from ledger.models.posting_model import Transfer, TransferEntry
+    from ledger.models.transfer_model import Transfer, TransferEntry
 
     return Transfer(
         id=7,
