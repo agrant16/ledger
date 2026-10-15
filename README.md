@@ -30,6 +30,10 @@ This starts PostgreSQL 18 and the service on http://localhost:8000. The first st
 
 To apply migrations by hand against the local database: `PYTHONPATH=src uv run python -m ledger.migrate`.
 
+To start over with an empty local database, run `PYTHONPATH=src uv run python scripts/reset_db.py` (add `--yes` to skip the confirmation). It deletes all data in the database named by `DATABASE_OWNER_URL`, restarts the identity counters at 1 and re-applies every migration. It refuses any host that is not this machine. The test suite uses its own `ledger_test` database, so it is unaffected.
+
+To fill the local database with accounts for manual API testing, run `PYTHONPATH=src uv run python scripts/seed_dev.py`. It creates a funding account (`allow_negative`) and five protected customer accounts for each of USD and EUR through `create_account`, all with a balance of 0, and skips any name that already exists, so it is safe to run on a database that holds data you created through the API. `reset_db.py --seed` does both in one command, and the ids are then always the same (funding accounts 1 and 2, USD customers 3 to 7, EUR customers 8 to 12).
+
 ## Running tests
 
 Tests run against a real PostgreSQL, never mocks. Start the database, then run pytest:
