@@ -88,13 +88,3 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
         raise LedgerInvariantError(
             f"Critical Error: Not all balances were updated for account {missing_id}"
         )
-
-
-@transactional_service_method
-def get_transfer(conn: psycopg.Connection, transfer_id: int) -> Transfer:
-    transfer = posting_repo.find_transfer(conn, transfer_id)
-    if transfer is None:
-        raise UnknownTransferError(f"Transfer {transfer_id} not found")
-    if not transfer.entries:
-        raise LedgerInvariantError(f"Critical error: transfer {transfer_id} has no entry records")
-    return transfer
