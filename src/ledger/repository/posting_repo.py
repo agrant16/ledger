@@ -4,7 +4,8 @@ import psycopg
 from psycopg import errors
 
 from ledger.errors import LedgerInvariantError
-from ledger.models.posting_model import Entry, LockedAccount, Transfer, TransferEntry
+from ledger.models.posting_model import Entry, LockedAccount
+from ledger.models.transfer_model import Transfer, TransferEntry
 
 INSERT_CLAIM_SQL = """
                      INSERT INTO 
