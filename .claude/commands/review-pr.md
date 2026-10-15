@@ -84,6 +84,7 @@ myself" areas, as if an interviewer asked. Then draft, but do not post, text for
 notes section.
 
 ## 8. Wrap up
+
 When I say the review is finished, write a short wrap-up for the PR: each finding and how it
 was resolved (fixed, deferred, or decided against, with the reason), plus any decisions we made
 that aren't in the code. Draft it for me to approve; do not post it. Once I've approved add
