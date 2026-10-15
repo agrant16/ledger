@@ -8,7 +8,8 @@ from ledger.errors import (
     InsufficientFundsError,
     LedgerInvariantError,
     UnbalancedEntriesError,
-    UnknownAccountError, UnknownTransferError,
+    UnknownAccountError,
+    UnknownTransferError,
 )
 from ledger.models.posting_model import Claim, Entry, Transfer
 from ledger.repository import posting_repo
@@ -103,6 +104,7 @@ def entries_for_transfer(
             currency=currency,
         ),
     ]
+
 
 def get_transfer(conn: psycopg.Connection, transfer_id: int) -> Transfer:
     transfer = posting_repo.find_transfer(conn, transfer_id)

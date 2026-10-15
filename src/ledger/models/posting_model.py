@@ -1,5 +1,5 @@
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -36,8 +36,3 @@ class Transfer:
     reverses_transaction_id: int
     created_at: datetime
     entries: tuple[TransferEntry, ...]
-
-
-
-
-    
