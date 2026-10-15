@@ -288,10 +288,17 @@ A ticked item means that piece of work is done and tested, not that the user-fac
 
 ### 6. Reconciliation
 
-- [ ] Reconciliation job: cached balances versus entries, flagging any mismatch; runs in a read-only REPEATABLE READ snapshot so live traffic cannot cause false drift
-- [ ] Compare entries against an imported statement CSV and report differences
+- [ ] Balance drift query: one statement compares each account's cached balance with the sum of its entries and returns `Drift(account_id, cached_minor, computed_minor)` for every mismatch, including an account with no balances row; a clean database returns none; a balance corrupted through the owner role is caught; an account with no entries and a zero balance is clean
+- [ ] Snapshot: the job runs its checks in one read-only REPEATABLE READ transaction, so live traffic cannot cause false drift; a test holds the snapshot open, commits a transfer on another connection, and shows the job reports no drift; a control runs the same two statements at READ COMMITTED and shows false drift. One statement is already consistent at READ COMMITTED; the snapshot matters because the job runs several statements that must agree
+- [ ] Extra integrity checks in the same snapshot: every transaction sums to zero per currency, every transaction has entries, and the sum of all balances in each currency is zero
+- [ ] Job entry point `python -m ledger.reconcile`: connects as the app role, uses `configure_logging()`, prints one line per mismatch, and exits 0 when clean, 1 when drift is found, and 2 on an error; documented in the README
+- [ ] Statement format in the design doc: one statement covers one account (`--account ID`), the file has a header row and the columns `transaction_id,amount_minor,currency` with integer minor-unit amounts, `--from` and `--to` (both required, UTC ISO 8601, from inclusive and to exclusive) select the account's entries by `transactions.created_at`, and a difference is one of three kinds: an entry in the ledger but not on the statement, a statement line with no ledger entry, or a matching `transaction_id` with a different amount or currency. A transaction id repeated on the statement is a file error, and a transaction with two entries for the one account is reported as an error, not matched
+- [ ] Statement CSV parser (pure, unit-tested): strict header, integer amounts (a decimal such as `12.50` is rejected), currency format, repeated transaction ids rejected; every malformed row is an error that names its line number, and nothing is compared when the file is malformed
+- [ ] Statement comparison: given the parsed lines and the account's entries in the window, returns the differences by kind; tested against the database with each kind
+- [ ] Job integration: `python -m ledger.reconcile --statement FILE --account ID --from T --to T` runs the comparison in the same snapshot as the balance check, prints one line per difference, and uses the same exit codes (0, 1, 2); a malformed file exits 2
+- [ ] Round trip: a statement generated from the ledger itself shows no differences, and changing, deleting or adding one line gives exactly one difference of the right kind
 
-**Done when:** a deliberately corrupted balance is caught by the job.
+**Done when:** a deliberately corrupted balance is caught by the job, which exits 1 and names the account; a transfer committed during a run does not cause false drift; and a statement generated from the ledger shows no differences, while a changed, missing or extra line is reported.
 
 ### 7. Polish and proof
 
