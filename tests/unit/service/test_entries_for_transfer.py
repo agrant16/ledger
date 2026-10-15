@@ -1,4 +1,4 @@
-"""entries_for_transfer (ledger/service/posting_service.py; docs/design.md, Transfer request).
+"""entries_for_transfer (ledger/service/transfer_service.py; docs/design.md, Transfer request).
 
     entries_for_transfer(from_account_id, to_account_id, amount_minor, currency) -> list[Entry]
 
@@ -28,7 +28,7 @@ MAX_AMOUNT = 99_900_000_000
 @pytest.fixture
 def build():
     """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.service.posting_service import entries_for_transfer
+    from ledger.service.transfer_service import entries_for_transfer
 
     return entries_for_transfer
 
@@ -79,7 +79,7 @@ DISTINCT_IDS = st.tuples(st.integers(1, BIGINT_MAX), st.integers(1, BIGINT_MAX))
     currency=st.from_regex(r"[A-Z]{3}", fullmatch=True),
 )
 def test_the_entries_always_balance(ids, amount, currency) -> None:
-    from ledger.service.posting_service import entries_for_transfer
+    from ledger.service.transfer_service import entries_for_transfer
 
     sender, receiver = ids
     entries = entries_for_transfer(sender, receiver, amount, currency)

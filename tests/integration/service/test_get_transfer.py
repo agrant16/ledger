@@ -1,9 +1,9 @@
-"""get_transfer (ledger/service/posting_service.py; docs/design.md, Transfer response and
+"""get_transfer (ledger/service/transfer_service.py; docs/design.md, Transfer response and
 GET /transfers/{id}; ADR 0013).
 
     get_transfer(conn, transfer_id) -> Transfer
     Transfer(id, reverses_transaction_id, created_at, entries)
-    TransferEntry(id, account_id, amount_minor, currency)   (in ledger/models/posting_model.py)
+    TransferEntry(id, account_id, amount_minor, currency)   (in ledger/models/transfer_model.py)
 
 The service reads the transfer through the repository (`posting_repo.find_transfer`) and decides
 what the answer means; the SQL itself is tested in tests/integration/db/test_posting_repo_reads.py.
@@ -24,6 +24,7 @@ import pytest
 
 from ledger.errors import LedgerError, LedgerInvariantError, UnknownTransferError
 from ledger.infra.config import Settings
+from ledger.models import transfer_model
 from ledger.models.posting_model import Entry
 from ledger.service.posting_service import claim_transaction, post_transaction
 from tests.db_helpers import hash_for, make_account
@@ -32,16 +33,16 @@ from tests.db_helpers import hash_for, make_account
 @pytest.fixture
 def get_transfer():
     """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.service.posting_service import get_transfer
+    from ledger.service.transfer_service import get_transfer
 
     return get_transfer
 
 
 @pytest.fixture
 def types():
-    from ledger.models import posting_model
+    from ledger.models import transfer_model
 
-    return posting_model
+    return transfer_model
 
 
 def post(
@@ -73,8 +74,8 @@ def test_it_returns_the_transfer_with_its_entries(
     assert result.id == tx
     assert result.reverses_transaction_id is None
     assert result.entries == (
-        types.TransferEntry(first, funding.id, -500, "USD"),
-        types.TransferEntry(second, alice.id, 500, "USD"),
+        transfer_model.TransferEntry(first, funding.id, -500, "USD"),
+        transfer_model.TransferEntry(second, alice.id, 500, "USD"),
     )
 
 

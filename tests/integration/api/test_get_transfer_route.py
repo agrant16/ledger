@@ -7,7 +7,7 @@ Contract these tests expect:
   real app serves `GET /transfers/{transfer_id}`.
 - The route takes the pool from the `get_pool` dependency and does all of its database work in one
   `run_in_transaction(pool, work, read_only=True)` call.
-- The module imports `get_transfer` (from ledger.service.posting_service) and calls it by that
+- The module imports `get_transfer` (from ledger.service.transfer_service) and calls it by that
   name, so a test can replace it. The response is built by `TransferResponse.from_model`
   (tests/unit/api/test_transfer_schema.py).
 - 200 with {"id", "reverses_transaction_id", "created_at", "entries": [{"id", "account_id",

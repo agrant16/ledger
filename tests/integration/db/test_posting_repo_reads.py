@@ -3,7 +3,7 @@
     find_transfer(conn, transfer_id) -> Transfer, or None
 
 Plain function that reads the `transactions` row and its `entries` and returns what the database
-says, as the models in ledger/models/posting_model.py: `Transfer(id, reverses_transaction_id,
+says, as the models in ledger/models/transfer_model.py: `Transfer(id, reverses_transaction_id,
 created_at, entries)` with `entries` a tuple of `TransferEntry(id, account_id, amount_minor,
 currency)` in entry-id order, and `created_at` a timezone-aware UTC datetime. It never judges:
 no such transaction is `None`, and a transaction with no entries is a Transfer whose `entries` is
@@ -16,6 +16,7 @@ from datetime import timedelta
 import psycopg
 import pytest
 
+from ledger.models import transfer_model
 from ledger.models.posting_model import Entry
 from ledger.service.posting_service import claim_transaction, post_transaction
 from tests.db_helpers import hash_for, make_account
@@ -31,9 +32,9 @@ def repo():
 
 @pytest.fixture
 def models():
-    from ledger.models import posting_model
+    from ledger.models import transfer_model
 
-    return posting_model
+    return transfer_model
 
 
 def post(conn: psycopg.Connection, key: str, entries: list[Entry], reverses=None) -> int:
@@ -60,7 +61,7 @@ def test_it_returns_the_transaction_and_its_entries_in_entry_id_order(
     assert isinstance(result, models.Transfer)
     assert result.id == tx
     assert result.reverses_transaction_id is None
-    assert result.entries == tuple(models.TransferEntry(*row) for row in stored)
+    assert result.entries == tuple(transfer_model.TransferEntry(*row) for row in stored)
     assert [entry.account_id for entry in result.entries] == [high.id, low.id]
 
 

@@ -4,7 +4,7 @@ from ledger.api.rest.dependencies import get_pool
 from ledger.api.rest.schemas.transfer_schema import TransferResponse
 from ledger.api.rest.schemas.types import TransferIdInPath
 from ledger.infra.db import run_in_transaction
-from ledger.service.posting_service import get_transfer
+from ledger.service.transfer_service import get_transfer
 
 router = APIRouter()
 
