@@ -2,7 +2,7 @@ import psycopg
 from psycopg import errors
 
 from ledger.errors import LedgerInvariantError
-from ledger.models.posting_model import Entry, LockedAccount
+from ledger.models.posting_model import Entry, LockedAccount, Transfer, TransferEntry
 
 INSERT_CLAIM_SQL = """
                      INSERT INTO 
@@ -49,6 +49,26 @@ LOCK_ACCOUNTS_SQL = """
                     ORDER BY b.account_id ASC
                     FOR UPDATE OF b;
                     """
+
+
+SELECT_TRANSFER_SQL = """
+                      SELECT 
+                          id, 
+                          reverses_transaction_id, 
+                          created_at 
+                      FROM transactions 
+                      WHERE id = %s;
+                      """
+
+
+SELECT_ENTRIES_SQL = """
+                     SELECT 
+                         account_id, 
+                         amount_minor, 
+                         currency 
+                     FROM entries 
+                     WHERE transaction_id = %s;
+                     """
 
 
 def insert_claim(
@@ -108,3 +128,18 @@ def apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> se
             return updated_accounts
     except errors.IntegrityError as failure:
         raise LedgerInvariantError("Critical error on balance update") from failure
+
+
+def find_transfer(conn: psycopg.Connection, id: int) -> Transfer | None:
+    with conn.cursor() as cursor:
+        cursor.execute(SELECT_TRANSFER_SQL, (id,))
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        cursor.execute(SELECT_ENTRIES_SQL, (id,))
+        entries: list[TransferEntry]= []
+        for i in range(0, cursor.rowcount):
+            row = cursor.fetchone()
+            if row is not None:
+                entries.append(TransferEntry(*row))
+        return Transfer(transfer_id=row[0], reverses_transaction_id=row[1], created_at=row[2], entries=tuple(entries))
