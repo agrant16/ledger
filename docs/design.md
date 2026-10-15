@@ -186,7 +186,7 @@ The hash is computed over a normalized form of the request, so a harmless differ
 
 A replay must return exactly what the original request returned, so the response contains only what can be rebuilt from the stored transaction and its entries.
 
-- **Body:** the transaction `id`, `reverses_transaction_id` (null for a normal transfer, so a reversal is recognizable), `created_at`, and the list of entries (`id`, `account_id`, `amount_minor`, `currency`). `GET /transfers/{id}` returns the same shape.
+- **Body:** the transaction `id`, `reverses_transaction_id` (null for a normal transfer, so a reversal is recognizable), `created_at`, and the list of entries (`id`, `account_id`, `amount_minor`, `currency`). `GET /transfers/{id}` returns the same shape. `created_at` is ISO 8601 in UTC with a trailing `Z` (for example `2026-10-13T10:11:12.123456Z`), whatever time zone the database session uses. The entries are in the order they were written (by entry id). A transfer is visible only once its transaction has committed, and always with all of its entries, never part of one; a transaction found with no entries is a bug (a logged 500), not an empty transfer. An unknown id is a 404, and an id that is not plain decimal digits from 1 to 9,223,372,036,854,775,807 is a 400.
 - **Not included:** account balances, which change after the transfer and could not be reproduced on a replay.
 - **Status code:** a replay returns the same status code as the original (201 for a created transfer), not a different one.
 

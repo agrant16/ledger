@@ -6,9 +6,12 @@ from collections.abc import Callable
 from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
+from psycopg_pool import ConnectionPool
 
 from ledger.models.account_model import Account
+from ledger.models.posting_model import Entry
 from ledger.service.account_service import create_account
+from ledger.service.posting_service import claim_transaction, post_transaction
 
 # The database the whole test run uses. docker/roles/roles.sql creates it next to the service's own
 # database (`ledger`), because every test run empties its tables.
@@ -90,3 +93,38 @@ def wait_until_waiting_for_a_lock(
             return
         time.sleep(0.01)
     raise AssertionError(f"backend {pid} never waited for a lock (it finished, or never started)")
+
+
+def commit_accounts(pool: ConnectionPool) -> tuple[Account, Account, Account]:
+    """Committed USD accounts for tests that read through another connection: a funding account
+    (allowed to go negative, the source of money), alice and bob. Remember to reset the database
+    afterwards; the pool commits when the block ends."""
+    with pool.connection() as conn:
+        funding = create_account(conn, "funding:usd", "USD", True)
+        alice = create_account(conn, "customer:alice", "USD", False)
+        bob = create_account(conn, "customer:bob", "USD", False)
+    return funding, alice, bob
+
+
+def commit_transfer(
+    pool: ConnectionPool,
+    key: str,
+    from_account_id: int,
+    to_account_id: int,
+    amount_minor: int,
+    currency: str = "USD",
+    reverses_transaction_id: int | None = None,
+) -> int:
+    """Claim a key and post a two-entry transfer in its own committed transaction. Returns the
+    transaction id."""
+    with pool.connection() as conn:
+        claim = claim_transaction(conn, key, hash_for(key), reverses_transaction_id)
+        post_transaction(
+            conn,
+            claim.transaction_id,
+            [
+                Entry(from_account_id, -amount_minor, currency),
+                Entry(to_account_id, amount_minor, currency),
+            ],
+        )
+        return claim.transaction_id
