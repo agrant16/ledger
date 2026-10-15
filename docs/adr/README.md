@@ -7,7 +7,7 @@ Short records of the larger decisions behind the ledger service, in the format o
 | [0001](0001-raw-sql-and-plain-sql-migrations.md) | Raw SQL with psycopg, plain-SQL migrations, integer minor units | 2026-10-08 | Accepted |
 | [0002](0002-database-roles-and-least-privilege.md) | Owner and app roles, explicit per-table grants | 2026-10-08 | Accepted |
 | [0003](0003-real-database-testing-and-ci-merge-gate.md) | Real-database tests written first, CI as the merge gate | 2026-10-08 | Accepted |
-| [0004](0004-synchronous-handlers-and-fixed-connection-pool.md) | Synchronous handlers, fixed pool, one connection per request | 2026-10-08 | Accepted |
+| [0004](0004-synchronous-handlers-and-fixed-connection-pool.md) | Synchronous handlers, fixed pool, one connection per request | 2026-10-08 | Accepted (Partially Implemented) |
 | [0005](0005-caller-owned-transactions-and-claim-post-split.md) | Caller-owned transactions, claim and post as two functions | 2026-10-09 | Accepted |
 | [0006](0006-row-locking-and-overdraft-check.md) | Ascending row locks at READ COMMITTED, overdraft check on the locked balance | 2026-10-09 | Accepted |
 | [0007](0007-error-taxonomy.md) | Expected failures versus bugs, status mapping in the API layer | 2026-10-09 | Accepted |

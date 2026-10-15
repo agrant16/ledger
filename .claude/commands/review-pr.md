@@ -6,8 +6,7 @@ allowed-tools: Read, Grep, Glob, Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh
 
 Review pull request $ARGUMENTS. If no number was given, review the PR for the current branch.
 
-This is a review only. Do not edit files, commit, push, or post anything to GitHub. Report findings
-to me here.
+This is a review only. Do not edit files, commit, and push. Posting is allowed as step 8 describes.
 
 ## 1. Load context first
 
@@ -88,4 +87,4 @@ notes section.
 When I say the review is finished, write a short wrap-up for the PR: each finding and how it
 was resolved (fixed, deferred, or decided against, with the reason), plus any decisions we made
 that aren't in the code. Draft it for me to approve; do not post it. Once I've approved add 
-the wrap up to the PR.
+the wrap up to the PR as a comment via `gh pr comment`.
