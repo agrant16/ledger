@@ -38,13 +38,6 @@ def get_transfer():
     return get_transfer
 
 
-@pytest.fixture
-def types():
-    from ledger.models import transfer_model
-
-    return transfer_model
-
-
 def post(
     conn: psycopg.Connection, key: str, entries: list[Entry], reverses: int | None = None
 ) -> int:
@@ -61,7 +54,7 @@ def entry_ids(conn: psycopg.Connection, transaction_id: int) -> list[int]:
 
 
 def test_it_returns_the_transfer_with_its_entries(
-    clean_db: None, app_conn: psycopg.Connection, get_transfer, types
+    clean_db: None, app_conn: psycopg.Connection, get_transfer
 ) -> None:
     funding = make_account(app_conn, "funding:usd", allow_negative=True)
     alice = make_account(app_conn, "customer:alice")
@@ -70,7 +63,7 @@ def test_it_returns_the_transfer_with_its_entries(
 
     result = get_transfer(app_conn, tx)
 
-    assert isinstance(result, types.Transfer)
+    assert isinstance(result, transfer_model.Transfer)
     assert result.id == tx
     assert result.reverses_transaction_id is None
     assert result.entries == (

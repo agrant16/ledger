@@ -30,13 +30,6 @@ def repo():
     return posting_repo
 
 
-@pytest.fixture
-def models():
-    from ledger.models import transfer_model
-
-    return transfer_model
-
-
 def post(conn: psycopg.Connection, key: str, entries: list[Entry], reverses=None) -> int:
     claim = claim_transaction(conn, key, hash_for(key), reverses)
     post_transaction(conn, claim.transaction_id, entries)
@@ -44,7 +37,7 @@ def post(conn: psycopg.Connection, key: str, entries: list[Entry], reverses=None
 
 
 def test_it_returns_the_transaction_and_its_entries_in_entry_id_order(
-    clean_db: None, app_conn: psycopg.Connection, repo, models
+    clean_db: None, app_conn: psycopg.Connection, repo
 ) -> None:
     low = make_account(app_conn, "funding:usd", allow_negative=True)
     high = make_account(app_conn, "customer:high")
@@ -58,7 +51,7 @@ def test_it_returns_the_transaction_and_its_entries_in_entry_id_order(
 
     result = repo.find_transfer(app_conn, tx)
 
-    assert isinstance(result, models.Transfer)
+    assert isinstance(result, transfer_model.Transfer)
     assert result.id == tx
     assert result.reverses_transaction_id is None
     assert result.entries == tuple(transfer_model.TransferEntry(*row) for row in stored)
