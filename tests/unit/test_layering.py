@@ -82,6 +82,16 @@ REQUIRED_MODULES = [
     "api/rest/routers/transfers.py",
 ]
 
+# Names that moved between modules (milestone 3, ADR 0013): old module -> (new module, names). A
+# move that leaves a copy behind passes every other test, because nothing calls the old copy.
+MOVED_NAMES = {
+    "service/posting_service.py": (
+        "service/transfer_service.py",
+        {"get_transfer", "entries_for_transfer"},
+    ),
+    "models/posting_model.py": ("models/transfer_model.py", {"Transfer", "TransferEntry"}),
+}
+
 # The API layer lives in the rest package and nothing else sits directly under api/.
 API_ROOT_MODULES = {"__init__"}
 API_PACKAGES = {"rest"}
@@ -111,6 +121,28 @@ def import_violations(root: Path) -> list[str]:
                     if imported == prefix or imported.startswith(prefix + "."):
                         problems.append(f"{name} ({layer}) imports {imported}")
                         break
+    return problems
+
+
+def defined_names(path: Path) -> set[str]:
+    """The functions and classes defined at the top level of a module."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return {
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef)
+    }
+
+
+def move_violations(root: Path, moves: dict[str, tuple[str, set[str]]]) -> list[str]:
+    """Names that were meant to move but are still defined where they started, or missing from
+    where they were going. `moves` maps the old module path to (new module path, names)."""
+    problems: list[str] = []
+    for old, (new, names) in moves.items():
+        for name in sorted(names & defined_names(root / old)):
+            problems.append(f"{name} is still defined in {old}: it moved to {new}")
+        for name in sorted(names - defined_names(root / new)):
+            problems.append(f"{name} is not defined in {new}")
     return problems
 
 
@@ -147,6 +179,10 @@ def test_imports_in_the_source_tree_follow_the_layer_rules() -> None:
 
 def test_sql_lives_only_in_the_repository() -> None:
     assert sql_violations(SRC) == []
+
+
+def test_moved_names_are_defined_only_in_their_new_module() -> None:
+    assert move_violations(SRC, MOVED_NAMES) == []
 
 
 def test_the_root_of_the_package_holds_only_entry_points_and_the_modules_still_to_split() -> None:
@@ -252,6 +288,68 @@ def test_an_import_inside_a_function_or_a_type_checking_block_is_caught(tmp_path
 
     flagged = {message.split(" ")[0] for message in import_violations(root)}
     assert flagged == {"ledger.service.a", "ledger.service.b"}
+
+
+# --- the move rule: it must catch a copy left behind -------------------------------------------
+
+MOVE = {"service/old.py": ("service/new.py", {"get_transfer"})}
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        # copied, not moved: both modules define it
+        {
+            "service/old.py": "def get_transfer():\n    pass\n",
+            "service/new.py": "def get_transfer():\n    pass\n",
+        },
+        # a decorated copy, and a class copy, are still copies
+        {
+            "service/old.py": "@wrap\ndef get_transfer():\n    pass\n",
+            "service/new.py": "def get_transfer():\n    pass\n",
+        },
+        {
+            "service/old.py": "class get_transfer:\n    pass\n",
+            "service/new.py": "def get_transfer():\n    pass\n",
+        },
+        # deleted, never added to the new module
+        {"service/old.py": "", "service/new.py": ""},
+        # only imported into the new module, not defined there
+        {
+            "service/old.py": "",
+            "service/new.py": "from ledger.service.old import get_transfer\n",
+        },
+    ],
+    ids=["copied", "decorated copy", "class copy", "lost", "imported only"],
+)
+def test_a_copy_left_behind_or_a_name_lost_is_caught(tmp_path: Path, files: dict[str, str]) -> None:
+    root = build_tree(tmp_path, files)
+
+    assert move_violations(root, MOVE) != []
+
+
+def test_a_clean_move_has_no_violations(tmp_path: Path) -> None:
+    root = build_tree(
+        tmp_path,
+        {
+            "service/old.py": "def other():\n    pass\n",
+            "service/new.py": "def get_transfer():\n    pass\n",
+        },
+    )
+
+    assert move_violations(root, MOVE) == []
+
+
+def test_a_nested_function_of_the_same_name_is_not_a_copy(tmp_path: Path) -> None:
+    root = build_tree(
+        tmp_path,
+        {
+            "service/old.py": "def other():\n    def get_transfer():\n        pass\n",
+            "service/new.py": "def get_transfer():\n    pass\n",
+        },
+    )
+
+    assert move_violations(root, MOVE) == []
 
 
 # --- the SQL rule: it must catch what it claims to catch --------------------------------------
