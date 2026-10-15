@@ -61,7 +61,7 @@ Write tests against these properties, not against whatever the current code happ
 
 ## Working style
 
-- Work one milestone at a time, and keep each change small enough for me to review. A milestone's "Done when" line is its acceptance check.
+- Work one checkbox at a time, in milestone order, and keep each change small enough for me to review. A checkbox normally gets one pull request; if one needs two, split it into two PRs and say so before starting. A milestone's "Done when" line is its acceptance check.
 - Make small, focused commits with clear messages. Don't bundle unrelated changes.
 - Before writing code for a non-trivial feature, briefly state the approach and any tradeoffs so I can weigh in.
 - Explain any non-obvious design choice in plain terms, so I can explain and defend my decisions.
