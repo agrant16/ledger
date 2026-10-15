@@ -106,6 +106,7 @@ def entries_for_transfer(
     ]
 
 
+@transactional_service_method
 def get_transfer(conn: psycopg.Connection, transfer_id: int) -> Transfer:
     transfer = posting_repo.find_transfer(conn, transfer_id)
     if transfer is None:

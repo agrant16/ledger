@@ -1,3 +1,4 @@
+from datetime import UTC
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -29,7 +30,7 @@ class TransferEntryResponse(BaseModel):
 
 class TransferResponse(BaseModel):
     id: int
-    reverses_transaction_id: int
+    reverses_transaction_id: int | None
     created_at: str
     entries: list[TransferEntryResponse]
 
@@ -38,7 +39,7 @@ class TransferResponse(BaseModel):
         return cls(
             id=transfer.id,
             reverses_transaction_id=transfer.reverses_transaction_id,
-            created_at=transfer.created_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            created_at=transfer.created_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
             entries=[
                 TransferEntryResponse(
                     id=entry.id,

@@ -1,3 +1,5 @@
+from datetime import UTC
+
 import psycopg
 from psycopg import errors
 
@@ -63,12 +65,13 @@ SELECT_TRANSFER_SQL = """
 
 SELECT_ENTRIES_SQL = """
                      SELECT
-                        transaction_id,
+                         id,
                          account_id, 
                          amount_minor, 
                          currency 
                      FROM entries 
-                     WHERE transaction_id = %s;
+                     WHERE transaction_id = %s
+                     ORDER BY id;
                      """
 
 
@@ -134,15 +137,15 @@ def apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> se
 def find_transfer(conn: psycopg.Connection, id: int) -> Transfer | None:
     with conn.cursor() as cursor:
         cursor.execute(SELECT_TRANSFER_SQL, (id,))
-        row = cursor.fetchone()
-        if row is None:
+        transfer_row = cursor.fetchone()
+        if transfer_row is None:
             return None
         cursor.execute(SELECT_ENTRIES_SQL, (id,))
-        entries: list[TransferEntry] = []
-        for _i in range(0, cursor.rowcount):
-            row = cursor.fetchone()
-            if row is not None:
-                entries.append(TransferEntry(*row))
+        entries_rows = cursor.fetchall()
+        entries: list[TransferEntry] = [TransferEntry(*row) for row in entries_rows]
         return Transfer(
-            id=row[0], reverses_transaction_id=row[1], created_at=row[2], entries=tuple(entries)
+            id=transfer_row[0],
+            reverses_transaction_id=transfer_row[1],
+            created_at=transfer_row[2].astimezone(UTC),
+            entries=tuple(entries),
         )

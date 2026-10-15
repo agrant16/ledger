@@ -28,5 +28,7 @@ def get_transfer_by_id(
     request: Request,
     pool=Depends(get_pool),  # noqa: B008
 ) -> TransferResponse:
-    transfer = run_in_transaction(pool, lambda conn: get_transfer(conn, transfer_id))
+    transfer = run_in_transaction(
+        pool, lambda conn: get_transfer(conn, transfer_id), read_only=True
+    )
     return TransferResponse.from_model(transfer)
