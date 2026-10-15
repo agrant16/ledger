@@ -34,7 +34,7 @@ class Transfer:
     transfer_id: int
     reverses_transaction_id: int
     created_at: datetime
-    entries: list[TransferEntry]
+    entries: tuple[TransferEntry, ...]
 
 
 
