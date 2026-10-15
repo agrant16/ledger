@@ -1,12 +1,12 @@
 """Resets the local development database and re-applies every migration (a manual-testing tool).
 
-Run with: PYTHONPATH=src uv run python scripts/reset_db.py [--yes]
+Run with: PYTHONPATH=src uv run python scripts/reset_db.py [--yes] [--seed]
 
 Drops every table and function in the public schema of the database named by DATABASE_OWNER_URL
 (the local `ledger` database by default), then runs the migrations again from the first one. All
 data is lost, identity counters start again at 1, and every grant to the app role is re-created
 by the migrations. The database, its owner and the schema's access rules (docker/roles/roles.sql)
-are left as they are.
+are left as they are. With --seed it then runs scripts/seed_dev.py's seeding.
 
 It connects as the owner role, like the migration runner, and refuses any host that is not this
 machine. The tests use their own database (`ledger_test`), which this script does not touch unless
@@ -18,6 +18,7 @@ import sys
 from urllib.parse import urlsplit
 
 import psycopg
+from seed_dev import seed
 
 from ledger.infra.config import load_settings
 from ledger.migrate import run_migrations
@@ -63,6 +64,7 @@ def drop_everything(owner_url: str) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--yes", action="store_true", help="do not ask for confirmation")
+    parser.add_argument("--seed", action="store_true", help="seed the accounts after the reset")
     args = parser.parse_args()
 
     settings = load_settings()
@@ -81,6 +83,11 @@ def main() -> int:
     for name in run_migrations(settings.owner_url, settings.migrations_dir):
         print(f"applied {name}")
     print(f"database {database!r} reset")
+    if args.seed:
+        created, _ = seed(settings.app_url)
+        for line in created:
+            print(f"created account {line}")
+        print(f"database {database!r} seeded: {len(created)} created")
     return 0
 
 
