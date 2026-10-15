@@ -31,6 +31,7 @@ The properties this project claims (no double spend, no overdraft, entries that 
   - Tests that truncate tables must not share the dev database with data worth keeping.
   - `pytest-timeout` is deferred to milestone 4, when tests start to wait on locks.
   - *Note (2026-10-15): `pytest-timeout` was in fact added earlier, with the separate test database change (#35); the 30-second timeout is set in `pyproject.toml`.*
+  - *Note (2026-10-15): the 85% coverage floor above was the starting value, set on 2026-10-08 (#3) while there was little code to measure. Pull request #35 (merged 2026-10-13) raised it to 95%, a couple of points below the roughly 97% baseline measured in milestone 3. `pyproject.toml` holds the current value.*
 
 * **Alternatives Considered:**
   - **Mocking the database layer:** rejected, because it could not show lock, constraint, or trigger behavior.
