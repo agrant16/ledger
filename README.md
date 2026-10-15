@@ -30,6 +30,8 @@ This starts PostgreSQL 18 and the service on http://localhost:8000. The first st
 
 To apply migrations by hand against the local database: `PYTHONPATH=src uv run python -m ledger.migrate`.
 
+To start over with an empty local database, run `PYTHONPATH=src uv run python scripts/reset_db.py` (add `--yes` to skip the confirmation). It deletes all data in the database named by `DATABASE_OWNER_URL`, restarts the identity counters at 1 and re-applies every migration. It refuses any host that is not this machine. The test suite uses its own `ledger_test` database, so it is unaffected.
+
 ## Running tests
 
 Tests run against a real PostgreSQL, never mocks. Start the database, then run pytest:
