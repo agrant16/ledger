@@ -9,10 +9,8 @@ from ledger.errors import (
     LedgerInvariantError,
     UnbalancedEntriesError,
     UnknownAccountError,
-    UnknownTransferError,
 )
 from ledger.models.posting_model import Claim, Entry
-from ledger.models.transfer_model import Transfer
 from ledger.repository import posting_repo
 from ledger.service.decorators import transactional_service_method
 
