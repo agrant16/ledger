@@ -194,6 +194,8 @@ A replay must return exactly what the original request returned, so the response
 
 Seven milestones, built in order. Finish each milestone before starting the next; each ends with something that can be demoed.
 
+A ticked item means that piece of work is done and tested, not that the user-facing feature works end to end: a service function can be ticked before any route calls it. The milestone's "Done when" line is the acceptance check for the whole milestone.
+
 ### 1. Foundation
 
 - [x] Repo, README stub, `docker compose up` starts Postgres and the app
@@ -220,23 +222,40 @@ Seven milestones, built in order. Finish each milestone before starting the next
 
 ### 3. API and idempotency
 
-- [ ] Five of the six endpoints from the API section, with OpenAPI docs generated; `POST /transfers/{id}/reverse` arrives in milestone 5, after the locking from milestone 4
-- [ ] `psycopg_pool` wiring: a fixed pool of 10 connections, the handler thread limit set to 20 at startup, both read from environment variables, an overall concurrency cap that returns 503 above it (also from an environment variable), and pool wait and lock timeouts mapped to 503 (the values and retry behavior are tuned in milestone 4)
-- [ ] `Idempotency-Key` stored with a hash of the normalized request (see Request hash in the API section), so a reversal's target transfer is part of the hash; tests cover key order, whitespace, and explicit-default variants hashing the same
-- [ ] Request validation per the Transfer request section: strict types, unknown fields rejected, the amount cap, the id bounds on bodies, paths, and cursors, and validation errors mapped to 400 instead of FastAPI's default 422, with integration tests for the fixed order of checks
-- [ ] Error mapping: each `LedgerError` subclass returns its status, `type` and `title` from the Error model table as an RFC 9457 problem with a request id (see Error response format), HTTP errors from Starlette use the same shape, and a bug returns a logged 500 with the transaction rolled back and no retry: a `LedgerInvariantError`, the balances CHECK firing (a normal overdraft is a 422), or the zero-sum or no-entries trigger from milestone 2. Tests fire each safety net through the API
-- [ ] Entries pagination per the API table: default 50, maximum 200, out-of-range `limit` and undecodable `cursor` both 400, `limit + 1` to detect a next page, and tests that walking every page of an account returns each entry exactly once, including the exact-multiple-of-limit case
+- [x] `POST /accounts`
+- [x] `GET /accounts/{id}/balance`
+- [x] `GET /transfers/{id}`
+- [x] A fixed `psycopg_pool` pool of 10 connections with a 2-second wait for one, both read from environment variables
+- [x] `Idempotency-Key` stored with a hash of the normalized request (see Request hash in the API section), so a reversal's target transfer is part of the hash; tests cover key order, whitespace, and explicit-default variants hashing the same. The service layer (`request_hash`, `claim_transaction`) is done; `POST /transfers` is the first route to use it
+- [x] Request validation per the Transfer request section: strict types, unknown fields rejected, the amount cap and the id bounds on bodies and paths, and validation errors mapped to 400 instead of FastAPI's default 422
+- [x] Error mapping: each `LedgerError` subclass returns its status, `type` and `title` from the Error model table as an RFC 9457 problem with a request id (see Error response format), HTTP errors from Starlette use the same shape, and a bug returns a logged 500 with the transaction rolled back and no retry. Covered by a completeness test and by test-only routes, plus a commit-time failure through the real transaction helper
 - [x] The OpenAPI description of the balance endpoint states that it reads the cached balance, may not include a transfer still in flight, and never shows part of a transfer
-- [ ] Replay, mismatched-body, and failed-then-retried cases all behave as specified
-- [ ] Failed transfers do not burn the key: the key is inserted inside the transfer's own database transaction, so a failure rolls it back; a test injects a failure after the key insert and asserts the key is free to reuse
+- [ ] `POST /transfers`: require and validate the `Idempotency-Key` header (1 to 255 characters, no NUL or lone surrogate), hash the request, claim the key, post unless it is a replay, and return the stored rows (201 on replay too); the replay, mismatch, and failed-then-retried items below are its tests
+- [ ] Integration tests for the fixed order of checks in the Error behavior section: stateless checks, key claim, account and currency, then lock and funds, so a request with several problems always gets the same error
+- [ ] Replay: the same key and the same request sequentially returns the original response with the same status (201), rebuilt from the stored rows, and moves nothing a second time (entries and balances unchanged); a replayed reversal key is covered in milestone 5
+- [ ] Mismatch: the same key with a different method, path or body returns 409 with the `idempotency-conflict` type, moves nothing, and does not repeat the key or the hashes in the response
+- [ ] Failed-then-retried: a request that fails with a 400, 404 or 422 stores nothing, and a retry with the same key is evaluated fresh against current balances (for example a 422, then fund the account, then the same key succeeds)
+- [ ] Concurrent same key: two simultaneous requests with the same key and body produce exactly one transfer and both get the same response; the same key with different bodies gives one success and one 409
+- [ ] Failed transfers do not burn the key: the key is inserted inside the transfer's own database transaction, so a failure rolls it back; a test injects an unexpected exception after the key insert (not one of the safety-net cases above) and asserts the key is free to reuse
+- [ ] Safety nets through `POST /transfers`: a `LedgerInvariantError` (unbalanced entries), the balances CHECK, the zero-sum trigger and the no-entries trigger each return a 500 `about:blank` problem with a generic detail, log the exception at ERROR, persist nothing, leave the same `Idempotency-Key` reusable, are not retried, and leave the pool healthy; a normal overdraft is the control and returns 422
+- [ ] Entry history query for one account (service and repository layers): newest first by entry id (never by `created_at`), fetches `limit + 1` rows to learn whether another page exists, reads each entry's `created_at` by joining `transactions`; an unknown account is a 404 and a real account with no entries returns an empty page
+- [ ] Entries cursor: the base64url of the last returned entry id, opaque and unsigned; undecodable text and an id outside the id bounds are both 400; unit-tested without a database
+- [ ] `GET /accounts/{id}/entries` route per the API table: `limit` (default 50, 1 to 200, anything else a 400 and never clamped) and an optional `cursor`; the response is `{ "entries": [...], "next_cursor": "..." }` with `next_cursor` null on the last page and no total count; OpenAPI description written
+- [ ] Walking every page of an account returns each entry exactly once, including an exact multiple of the limit, a single page, and an account with no entries
+- [ ] A pool wait timeout becomes `ServiceBusyError` and a 503 with a Retry-After header, tested with an exhausted pool (the values are tuned in milestone 4)
+- [ ] Handler thread limit set to 20 at startup, read from an environment variable
+- [ ] Overall concurrency cap: an ASGI middleware, inside the request-id middleware, returns a 503 with Retry-After above the cap, read from an environment variable; tested by holding requests with a barrier
+- [ ] One INFO line at startup records the effective pool, thread limit and concurrency cap settings
+- [ ] OpenAPI: each route has a summary and description, and its error responses (`application/problem+json`) are documented; `/openapi.json` lists the five endpoints
+- Note: `POST /transfers/{id}/reverse`, the sixth endpoint in the API section, arrives in milestone 5, after the locking from milestone 4
 
-**Done when:** a replay test and a concurrent same-key test both pass.
+**Done when:** all five endpoints work against a real Postgres; the replay test and the concurrent same-key test both pass; every safety net returns a logged 500 and leaves the key reusable; walking every page of an account returns each entry exactly once; and a request beyond the pool or the concurrency cap gets a 503 with Retry-After.
 
 ### 4. Concurrency
 
 - [ ] Prove under concurrency that the ascending-account-id row locking built in milestone 2 (`SELECT ... FOR UPDATE` on distinct accounts, with the overdraft check reading the balance that same statement returns, never an earlier plain SELECT) stops opposing transfers from deadlocking
 - [ ] Use row locks at the default READ COMMITTED isolation, and write down why serializable was not chosen
-- [ ] Bounded retry on deadlock (3 attempts with a randomized delay of roughly 10 to 50 ms, retrying the whole transaction including the key claim), plus a `SET LOCAL lock_timeout` of 2 seconds so a stuck request fails with a 503 instead of hanging; exhausting the deadlock retries also returns 503. A connection-pool wait timeout of 2 seconds returns the same 503. These are starting values to tune from load-test results
+- [ ] Bounded retry on deadlock (3 attempts with a randomized delay of roughly 10 to 50 ms, retrying the whole transaction including the key claim), plus a `SET LOCAL lock_timeout` of 2 seconds so a stuck request fails with a 503 instead of hanging, with the lock timeout error mapped to `ServiceBusyError` here (moved from milestone 3, since it can only be tested once the setting exists); exhausting the deadlock retries also returns 503. A connection-pool wait timeout of 2 seconds returns the same 503, mapped in milestone 3. These are starting values to tune from load-test results
 - [ ] Test: 50 concurrent transfers across a few accounts never overdraw and never change the total; opposing transfers (A to B and B to A) never deadlock. These call the service layer directly from 50 threads, each with its own connection from a test pool of at least 50, released together with a barrier, with no sleeps; the database is reset between the 20 runs and the random seed is logged. After each run, check the per-currency total, that no protected account is negative, that every balance equals the sum of its entries, and that the entry count matches the successful transfers
 - [ ] Test: one end-to-end concurrency test through a real server process over HTTP
 - [ ] Test: paging through an account's entries while transfers run never skips an entry
