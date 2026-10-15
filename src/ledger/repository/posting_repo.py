@@ -62,7 +62,8 @@ SELECT_TRANSFER_SQL = """
 
 
 SELECT_ENTRIES_SQL = """
-                     SELECT 
+                     SELECT
+                        transaction_id,
                          account_id, 
                          amount_minor, 
                          currency 
@@ -142,4 +143,4 @@ def find_transfer(conn: psycopg.Connection, id: int) -> Transfer | None:
             row = cursor.fetchone()
             if row is not None:
                 entries.append(TransferEntry(*row))
-        return Transfer(transfer_id=row[0], reverses_transaction_id=row[1], created_at=row[2], entries=tuple(entries))
+        return Transfer(id=row[0], reverses_transaction_id=row[1], created_at=row[2], entries=tuple(entries))

@@ -24,6 +24,7 @@ class LockedAccount:
 
 @dataclass(frozen=True)
 class TransferEntry:
+    id: int
     account_id: int
     amount_minor: int
     currency: str
@@ -31,7 +32,7 @@ class TransferEntry:
 
 @dataclass(frozen=True)
 class Transfer:
-    transfer_id: int
+    id: int
     reverses_transaction_id: int
     created_at: datetime
     entries: tuple[TransferEntry, ...]
