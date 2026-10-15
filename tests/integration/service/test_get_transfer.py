@@ -24,6 +24,7 @@ import pytest
 
 from ledger.errors import LedgerError, LedgerInvariantError, UnknownTransferError
 from ledger.infra.config import Settings
+from ledger.models import transfer_model
 from ledger.models.posting_model import Entry
 from ledger.service.posting_service import claim_transaction, post_transaction
 from tests.db_helpers import hash_for, make_account
@@ -73,8 +74,8 @@ def test_it_returns_the_transfer_with_its_entries(
     assert result.id == tx
     assert result.reverses_transaction_id is None
     assert result.entries == (
-        types.TransferEntry(first, funding.id, -500, "USD"),
-        types.TransferEntry(second, alice.id, 500, "USD"),
+        transfer_model.TransferEntry(first, funding.id, -500, "USD"),
+        transfer_model.TransferEntry(second, alice.id, 500, "USD"),
     )
 
 

@@ -16,6 +16,7 @@ from datetime import timedelta
 import psycopg
 import pytest
 
+from ledger.models import transfer_model
 from ledger.models.posting_model import Entry
 from ledger.service.posting_service import claim_transaction, post_transaction
 from tests.db_helpers import hash_for, make_account
@@ -60,7 +61,7 @@ def test_it_returns_the_transaction_and_its_entries_in_entry_id_order(
     assert isinstance(result, models.Transfer)
     assert result.id == tx
     assert result.reverses_transaction_id is None
-    assert result.entries == tuple(models.TransferEntry(*row) for row in stored)
+    assert result.entries == tuple(transfer_model.TransferEntry(*row) for row in stored)
     assert [entry.account_id for entry in result.entries] == [high.id, low.id]
 
 
