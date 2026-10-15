@@ -17,17 +17,17 @@ The service records money movements between accounts and guarantees they balance
 | Concurrency safety and reconciliation | Multi-region or sharding (discuss only) |
 | Tests, CI, load test, README | Production deployment |
 
-**Stack:** Python 3 with FastAPI, PostgreSQL, pytest with Hypothesis, Docker Compose, GitHub Actions.
+**Stack:** Python 3.13 with FastAPI (synchronous handlers), PostgreSQL 18 accessed with raw SQL through `psycopg` and `psycopg_pool`, `uv`, `ruff` and SQLFluff, pytest with Hypothesis, Locust, Docker Compose, GitHub Actions.
 
 **Stack decisions:**
 
-- **Language:** Python 3 (decided; Java with Spring Boot was the considered alternative).
+- **Language:** Python 3.13 (decided; Java with Spring Boot was the considered alternative). The version is pinned by `requires-python` in `pyproject.toml` and by the Dockerfile's base image.
 - **Database access:** raw SQL, no ORM, so locking and isolation levels are explicit and easy to explain.
 - **Concurrency model:** synchronous handlers. Concurrency tests still fire parallel requests with threads.
 - **Connection pool:** `psycopg_pool`, a fixed pool of 10 connections, with the handler thread pool set to 20 at startup (FastAPI's default is 40). The extra threads wait on the pool with a timeout, so a request that cannot get a connection becomes a bounded 503. The thread limit alone does not bound queueing, because requests beyond 20 in flight wait for a handler thread with no timeout, so the service also has an overall concurrency cap that rejects requests above it with a 503 (uvicorn's `--limit-concurrency`, or a small middleware). Both sizes come from environment variables, and the values used are recorded with every benchmark. A request uses one connection for its whole transaction and never takes a second one while holding the first, since a full pool of requests each waiting for a second connection would deadlock the service.
 - **Request transactions:** a route calls `run_in_transaction(pool, work)` once (`ledger/infra/db.py`). It runs `work(conn)`, which does all of the request's database work, on one pooled connection as one database transaction and commits inside the handler, so a failure at commit, where the deferred triggers fire, is still a logged 500. A violated database constraint that reaches it is translated into a `LedgerInvariantError` chained to the psycopg error, so no raw integrity error crosses a layer (ADR 0013). `work` is a function so milestone 4's deadlock retry can run the whole body again. Reads pass `read_only=True`, which starts the transaction with `SET TRANSACTION READ ONLY`. See ADR 0011.
 - **Migrations:** numbered plain SQL files, applied by a small runner (no Alembic). Once a migration is merged it is never edited except for formatting and comments; a schema change is a new migration (migration 005, for example, renames `accounts.name` to `accounts.account_name`).
-- **Dependencies:** `uv` with `pyproject.toml`, Python 3.13.
+- **Dependencies:** `uv` with `pyproject.toml`.
 - **Linter/formatter:** `ruff` for Python, and SQLFluff (PostgreSQL dialect) for the migrations. SQLFluff's keyword rule means a SQL identifier must not be a keyword, which is why the account name column is `account_name` and not `name`.
 - **Database:** PostgreSQL 18, pinned in Docker Compose and CI.
 - **Load testing:** Locust (Python, so no extra language).
