@@ -2,7 +2,7 @@
 
 A small double-entry ledger service that keeps money correct under retries, concurrency, and failures. It records money movements between accounts and guarantees they balance; it does not move real money.
 
-> **Status:** early development. Milestones 1 (foundation: schema for accounts, transactions and entries, role setup, CI) and 2 (the double-entry core) are complete and milestone 3 (the API and idempotency) is next. Most of what's described below is still planned. See [docs/design.md](docs/design.md) for the full scope, API contract, and milestone plan.
+> **Status:** early development. Milestones 1 (foundation: schema for accounts, transactions and entries, role setup, CI) and 2 (the double-entry core) are complete and milestone 3 (the API and idempotency) is in progress: account creation, the balance endpoint and `GET /transfers/{id}` are done, while posting transfers and the entries history are still to come. The rest of what's described below is still planned. See [docs/design.md](docs/design.md) for the full scope, API contract, and milestone plan.
 
 ## What it does
 
@@ -58,14 +58,14 @@ docker compose exec -T db psql -U postgres -d ledger -v ON_ERROR_STOP=1 -v testd
 
 ## API
 
-| Endpoint | Purpose | Planned in |
+| Endpoint | Purpose | Status |
 | --- | --- | --- |
-| `POST /accounts` | Create an account (`account_name` and `currency`; names are unique) | Milestone 3 |
-| `GET /accounts/{id}/balance` | Cached balance; reflects committed transfers and never shows part of one | Milestone 3 |
-| `POST /transfers` | Move money between two accounts (requires `Idempotency-Key`) | Milestone 3 |
-| `GET /transfers/{id}` | Fetch one transfer with its entries | Milestone 3 |
-| `GET /accounts/{id}/entries` | Entry history, newest first, with cursor pagination | Milestone 3 |
-| `POST /transfers/{id}/reverse` | Undo a transfer with a compensating transaction (requires `Idempotency-Key`) | Milestone 5 |
+| `POST /accounts` | Create an account (`account_name` and `currency`; names are unique) | Done |
+| `GET /accounts/{id}/balance` | Cached balance; reflects committed transfers and never shows part of one | Done |
+| `POST /transfers` | Move money between two accounts (requires `Idempotency-Key`) | Planned in milestone 3 |
+| `GET /transfers/{id}` | Fetch one transfer with its entries | Done |
+| `GET /accounts/{id}/entries` | Entry history, newest first, with cursor pagination | Planned in milestone 3 |
+| `POST /transfers/{id}/reverse` | Undo a transfer with a compensating transaction (requires `Idempotency-Key`) | Planned in milestone 5 |
 
 Request and response shapes, error codes, and idempotency rules are specified in [docs/design.md](docs/design.md).
 
