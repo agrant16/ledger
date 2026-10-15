@@ -152,7 +152,7 @@ Expected failures are `LedgerError` subclasses in `ledger/errors.py`. The API la
 | `UnknownAccountError` | 404 | `unknown-account` | Unknown account | The service layer |
 | `UnknownTransferError` | 404 | `unknown-transfer` | Unknown transfer | The service layer (`GET /transfers/{id}` and reverse) |
 | `CurrencyMismatchError` | 400 | `currency-mismatch` | Currency mismatch | `post_transaction` |
-| `InsufficientFundsError` | 422 | `insufficient-funds` | Insufficient funds | `post_transaction`; carries the account, its balance and the amount |
+| `InsufficientFundsError` | 422 | `insufficient-funds` | Insufficient funds | `post_transaction`; carries the account, its balance and the net change |
 | `IdempotencyConflictError` | 409 | `idempotency-conflict` | Idempotency key reused | `claim_transaction` |
 | `AlreadyReversedError` | 409 | `already-reversed` | Transfer already reversed | The claim, from the unique link on `reverses_transaction_id` |
 | `ReversalOfReversalError` | 409 | `reversal-of-reversal` | A reversal cannot be reversed | The service layer, because the target has a non-null `reverses_transaction_id`; the schema allows such a row, so this is not a database rule |
@@ -166,7 +166,7 @@ The overall concurrency cap also returns a 503 with Retry-After, but the middlew
 Every error response is an RFC 9457 problem (`application/problem+json`), described in ADR 0009.
 
 - **Members:** `type`, `title`, `status`, `detail` and `instance`, plus extension members. There is no `code` member. `type` is the URN `urn:ledger:error:` plus the name in the table, stored in the API-layer table and not derived from the class name; `title` is the fixed string from the table.
-- **Domain errors:** `detail` is the exception's message. Extension members carry the data the error already holds: `account_id`, `balance_minor` and `amount_minor` for `InsufficientFundsError`, and `account_name` for `DuplicateAccountNameError`. A `ServiceBusyError` also sends a `Retry-After` header.
+- **Domain errors:** `detail` is the exception's message. Extension members carry the data the error already holds: `account_id`, `balance_minor` and `net_change_minor` (the change the transfer would make to that account's balance) for `InsufficientFundsError`, and `account_name` for `DuplicateAccountNameError`. A `ServiceBusyError` also sends a `Retry-After` header.
 - **Validation errors** (400): an `errors` list. A body problem has a `pointer` (an RFC 6901 JSON Pointer such as `/amount_minor`, or the empty pointer for a problem with the whole body, including malformed JSON); a path, query or header problem has a `parameter` naming it. The client's input is never echoed back.
 - **HTTP errors** from Starlette or a route (an unknown route, a wrong method): the same shape, with type `about:blank` and the HTTP status phrase as the `title`; a 405 keeps its `Allow` header. A status that cannot carry a body (1xx, 204, 205, 304) is sent with no body at all. A status code Python has no name for gets the title `HTTP Error`, and a `detail` that is not a string is converted to one.
 - **Bugs:** one catch-all handler for anything that is not a `LedgerError` or a 503 class returns 500 with type `about:blank`, the title "Internal Server Error" and a fixed generic `detail` that never repeats the exception.

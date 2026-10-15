@@ -34,7 +34,7 @@ PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
         422,
         "urn:ledger:error:insufficient-funds",
         "Insufficient funds",
-        extensions=("account_id", "balance_minor", "amount_minor"),
+        extensions=("account_id", "balance_minor", "net_change_minor"),
     ),
     IdempotencyConflictError: ProblemSpec(
         409, "urn:ledger:error:idempotency-conflict", "Idempotency key reused"

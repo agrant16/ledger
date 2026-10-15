@@ -56,13 +56,13 @@ class CurrencyMismatchError(LedgerError):
 
 
 class InsufficientFundsError(LedgerError):
-    def __init__(self, account_id, balance_minor, amount_minor):
+    def __init__(self, account_id, balance_minor, net_change_minor):
         self.account_id = account_id
         self.balance_minor = balance_minor
-        self.amount_minor = amount_minor
+        self.net_change_minor = net_change_minor
         super().__init__(
             f"Insufficient funds: account {self.account_id}, current balance {self.balance_minor},"
-            f" net change {self.amount_minor}"
+            f" net change {self.net_change_minor}"
         )
 
 

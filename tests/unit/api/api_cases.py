@@ -48,7 +48,7 @@ EXPECTED: dict[type[LedgerError], tuple[int, str, str]] = {
 
 # Members a problem body carries beyond type, title, status, detail and instance.
 EXTENSIONS: dict[type[LedgerError], dict[str, object]] = {
-    InsufficientFundsError: {"account_id": 7, "balance_minor": 100, "amount_minor": -250},
+    InsufficientFundsError: {"account_id": 7, "balance_minor": 100, "net_change_minor": -250},
     DuplicateAccountNameError: {"account_name": "customer:alice"},
 }
 
