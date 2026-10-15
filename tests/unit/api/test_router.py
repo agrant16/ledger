@@ -30,11 +30,13 @@ ENDPOINTS = {
     ("/accounts", ("POST",)),
     ("/accounts/{account_id}/balance", ("GET",)),
     ("/health", ("GET",)),
+    ("/transfers/{transfer_id}", ("GET",)),
 }
 # The endpoints that appear in the OpenAPI document (/health is for the platform, not for clients).
 DOCUMENTED = {
     ("/accounts", "post"),
     ("/accounts/{account_id}/balance", "get"),
+    ("/transfers/{transfer_id}", "get"),
 }
 DOCUMENTATION_ROUTES = {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
 

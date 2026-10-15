@@ -8,6 +8,8 @@ wrong kind is never converted, unknown fields are rejected, the two accounts mus
 every problem is reported together.
 """
 
+from datetime import UTC, datetime, timedelta, timezone
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -171,3 +173,67 @@ def test_through_a_route_the_json_kinds_are_strict(model) -> None:
     same = client.post("/transfers", json={**VALID, "to_account_id": 12})
     assert same.status_code == 400
     assert same.json()["errors"][0]["pointer"] == ""
+
+
+# --- TransferResponse -------------------------------------------------------------------------
+#
+#     TransferResponse.from_model(Transfer) -> id, reverses_transaction_id, created_at, entries
+#
+# `created_at` is ISO 8601 in UTC with a trailing Z, built here from the model's aware datetime.
+# This is the body of GET /transfers/{id} and, later, of POST /transfers, byte for byte.
+
+TOKYO = timezone(timedelta(hours=9))
+
+
+def transfer(created_at: datetime, reverses: int | None = None):
+    from ledger.models.posting_model import Transfer, TransferEntry
+
+    return Transfer(
+        id=7,
+        reverses_transaction_id=reverses,
+        created_at=created_at,
+        entries=(TransferEntry(1, 10, -500, "USD"), TransferEntry(2, 11, 500, "USD")),
+    )
+
+
+@pytest.fixture
+def response_model():
+    from ledger.api.rest.schemas.transfer_schema import TransferResponse
+
+    return TransferResponse
+
+
+def test_the_response_has_exactly_the_documented_fields(response_model) -> None:
+    body = response_model.from_model(transfer(datetime(2026, 10, 13, 10, 11, 12, tzinfo=UTC)))
+
+    assert body.model_dump(mode="json") == {
+        "id": 7,
+        "reverses_transaction_id": None,
+        "created_at": "2026-10-13T10:11:12Z",
+        "entries": [
+            {"id": 1, "account_id": 10, "amount_minor": -500, "currency": "USD"},
+            {"id": 2, "account_id": 11, "amount_minor": 500, "currency": "USD"},
+        ],
+    }
+
+
+def test_the_response_carries_the_reversed_id(response_model) -> None:
+    body = response_model.from_model(transfer(datetime(2026, 1, 1, tzinfo=UTC), reverses=3))
+
+    assert body.model_dump(mode="json")["reverses_transaction_id"] == 3
+
+
+def test_microseconds_are_kept_and_the_time_ends_in_z(response_model) -> None:
+    created = datetime(2026, 10, 13, 10, 11, 12, 123456, tzinfo=UTC)
+
+    body = response_model.from_model(transfer(created)).model_dump(mode="json")
+
+    assert body["created_at"] == "2026-10-13T10:11:12.123456Z"
+
+
+def test_a_time_in_another_zone_is_written_as_the_same_instant_in_utc(response_model) -> None:
+    created = datetime(2026, 10, 13, 19, 11, 12, tzinfo=TOKYO)
+
+    body = response_model.from_model(transfer(created)).model_dump(mode="json")
+
+    assert body["created_at"] == "2026-10-13T10:11:12Z"

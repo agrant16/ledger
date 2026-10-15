@@ -84,3 +84,9 @@ IdempotencyKey = Annotated[
     ),
     AfterValidator(_no_nul),
 ]
+
+TransferIdInPath = Annotated[
+    int,
+    BeforeValidator(_canonical_digits_to_int),
+    Field(ge=1, le=POSTGRES_BIG_INT, description=f"A strict integer from 1 to {POSTGRES_BIG_INT}"),
+]

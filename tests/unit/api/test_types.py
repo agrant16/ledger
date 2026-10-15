@@ -9,6 +9,7 @@ that works with pydantic's TypeAdapter:
     AccountIdInPath  the same id as it arrives in a URL: a string of canonical decimal digits
                      (no sign, spaces, underscores, leading zeros or decimal point), converted to
                      an int and range-checked; usable as a FastAPI path parameter
+    TransferIdInPath a transfer id in a URL, with the same rules as AccountIdInPath
     AmountMinor      a strict integer from 1 to 99,900,000,000
     Currency         a string of exactly three uppercase ASCII letters
     AccountName      1 to 100 characters (code points); no leading or trailing space, tab,
@@ -111,6 +112,40 @@ def test_an_account_id_in_a_path_rejects_anything_but_canonical_digits(path_clie
     body = response.json()
     assert body["type"] == "urn:ledger:error:invalid-request"
     assert body["errors"][0]["parameter"] == "account_id"
+
+
+@pytest.fixture
+def transfer_path_client(types) -> TestClient:
+    from ledger.api.rest.error_handlers import install_error_handling
+
+    app = FastAPI()
+    install_error_handling(app)
+
+    @app.get("/transfers/{transfer_id}")
+    def read(transfer_id: types.TransferIdInPath) -> dict[str, int]:
+        return {"id": transfer_id}
+
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.mark.parametrize("raw", ["1", "10", "205", str(BIGINT_MAX)])
+def test_a_transfer_id_in_a_path_accepts_canonical_digits(transfer_path_client, raw) -> None:
+    response = transfer_path_client.get(f"/transfers/{raw}")
+
+    assert response.status_code == 200
+    assert response.json() == {"id": int(raw)}
+
+
+@pytest.mark.parametrize(
+    "raw", ["0", "-1", "012", "%2B12", "%2012", "1_000", "12.0", "abc", str(BIGINT_MAX + 1)]
+)
+def test_a_transfer_id_in_a_path_rejects_anything_but_canonical_digits(
+    transfer_path_client, raw
+) -> None:
+    response = transfer_path_client.get(f"/transfers/{raw}")
+
+    assert response.status_code == 400
+    assert response.json()["errors"][0]["parameter"] == "transfer_id"
 
 
 # --- amounts ----------------------------------------------------------------------------------

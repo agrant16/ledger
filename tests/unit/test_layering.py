@@ -77,6 +77,7 @@ REQUIRED_MODULES = [
     "api/rest/routers/__init__.py",
     "api/rest/routers/accounts.py",
     "api/rest/routers/health.py",
+    "api/rest/routers/transfers.py",
 ]
 
 # The API layer lives in the rest package and nothing else sits directly under api/.
