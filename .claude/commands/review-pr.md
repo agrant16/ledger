@@ -6,7 +6,7 @@ allowed-tools: Read, Grep, Glob, Bash(gh pr view:*), Bash(gh pr diff:*), Bash(gh
 
 Review pull request $ARGUMENTS. If no number was given, review the PR for the current branch.
 
-This is a review only. Do not edit files, commit, and push. Posting is allowed as step 8 describes.
+This is a review only. Do not edit files, commit, or push. Posting is allowed as step 8 describes. Report findings to me here.
 
 ## 1. Load context first
 
