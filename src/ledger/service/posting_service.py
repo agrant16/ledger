@@ -11,7 +11,8 @@ from ledger.errors import (
     UnknownAccountError,
     UnknownTransferError,
 )
-from ledger.models.posting_model import Claim, Entry, Transfer
+from ledger.models.posting_model import Claim, Entry
+from ledger.models.transfer_model import Transfer
 from ledger.repository import posting_repo
 from ledger.service.decorators import transactional_service_method
 
@@ -87,23 +88,6 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
         raise LedgerInvariantError(
             f"Critical Error: Not all balances were updated for account {missing_id}"
         )
-
-
-def entries_for_transfer(
-    from_account_id: int, to_account_id: int, amount_minor: int, currency: str
-) -> list[Entry]:
-    return [
-        Entry(
-            account_id=from_account_id,
-            amount_minor=-amount_minor,
-            currency=currency,
-        ),
-        Entry(
-            account_id=to_account_id,
-            amount_minor=amount_minor,
-            currency=currency,
-        ),
-    ]
 
 
 @transactional_service_method

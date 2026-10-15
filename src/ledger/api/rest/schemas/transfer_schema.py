@@ -4,7 +4,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ledger.api.rest.schemas.types import AccountId, AmountMinor, Currency
-from ledger.models.posting_model import Transfer
+from ledger.models.transfer_model import Transfer
 
 
 class TransferRequest(BaseModel):
