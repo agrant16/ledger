@@ -69,6 +69,7 @@ Write tests against these properties, not against whatever the current code happ
 - Dependencies beyond the stack above, schema changes, and changes to the public API need my approval first. Adding the pre-approved stack's own packages during scaffolding is fine.
 - Every change goes on its own branch and a pull request, never straight to `main`. Both CI checks (`lint-and-test` and `compose-smoke`) must pass, and PRs are squash-merged, so intermediate commits on a branch may be red. A pull request whose tests are committed ahead of the implementation is opened as a draft and stays one until its checks pass.
 - For the items on my "I write myself" list, Claude writes the tests first from `docs/design.md` and I write the implementation; the tests stay red until it exists.
+- Tests written ahead of their implementation import the code under test lazily, inside a fixture (docstring: "Imported lazily so these tests fail one by one while the module does not exist yet."), so each test fails on its own and not the whole file at collection. Claude replaces that fixture with a normal top-level import in the finish step below. Existing lazy fixtures are left alone until a dedicated clean-up, done in small PRs.
 - Every pull request description has three parts, which Claude writes when the PR is opened and keeps current as it changes: the scope (the milestone item or component the PR addresses); the tests (what was written or run, and which correctness rules or `docs/design.md` sections they enforce); and the review notes (what Claude scaffolded, what remains for me to implement, and any edge cases we discussed).
 
 ### Workflow for a checkbox that involves tests and code
@@ -80,7 +81,7 @@ Follow these steps in order. Each approval is mine to give, so don't skip ahead.
 3. **Test rundown.** Before anything is committed, Claude gives me a rundown of the tests: the files they add, how many tests each file adds, a summary of each test (what it does and which design constraint or correctness rule it checks), and how we know they work (for example that they fail for the expected reason against the missing code, or that a control shows they can fail).
 4. **Draft PR.** Once I approve the tests, Claude commits them, pushes the branch and opens the pull request as a draft, because the tests fail CI until the implementation exists. My approval of the tests is the go-ahead for that commit, push and pull request.
 5. **What is left.** Once the tests are committed and the pull request has its initial description, Claude lists the work left for me to implement.
-6. **Finish.** When I have an implementation and everything is green, we finalize the pull request and Claude brings its description up to date, moves it out of draft, and reminds me to run `/clear` and then `/review-pr <PR number>`.
+6. **Finish.** When I have an implementation and everything is green, we finalize the pull request: Claude replaces the lazy-import fixtures in the PR's tests with top-level imports (and reruns the tests), brings its description up to date, moves it out of draft, and reminds me to run `/clear` and then `/review-pr <PR number>`.
 
 For work on Claude's own list, such as scaffolding or test infrastructure, Claude does the implementation after step 4 and the same finish applies once it is green.
 
