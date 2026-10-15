@@ -1,6 +1,6 @@
 # ADR [Number]: [Short Title of the Decision]
 
-* **Status:** [Draft | Proposed | Accepted | Rejected | Superseded by [ADR-XXXX]]
+* **Status:** [Draft | Proposed | Accepted | Rejected | Superseded by [ADR-XXXX]]. An Accepted ADR that is not yet fully built may add the suffix "(partly implemented)" with a short note on what is missing; drop the suffix when the work is done.
 * **Date:** [YYYY-MM-DD]
 * **Deciders:** [Your Name / Human Architect & Claude (AI collaborator)]
 

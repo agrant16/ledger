@@ -61,15 +61,28 @@ Write tests against these properties, not against whatever the current code happ
 
 ## Working style
 
-- Work one milestone at a time, and keep each change small enough for me to review. A milestone's "Done when" line is its acceptance check.
+- Work one checkbox at a time, in milestone order, and keep each change small enough for me to review. A checkbox normally gets one pull request; if one needs two, split it into two PRs and say so before starting. If a pull request is growing beyond what I can review in one sitting, stop and propose a split before going on, as with the layering refactor, whose step 2 was split into two PRs, 2a (accounts) and 2b (posting) (ADR 0013); it is a judgement call, not a line count, and the decision is mine. Tests, docs and scaffolding that a checkbox needs belong in its PR; unrelated clean-ups do not, and go in their own. A milestone's "Done when" line is its acceptance check.
 - Make small, focused commits with clear messages. Don't bundle unrelated changes.
-- Before writing code for a non-trivial feature, briefly state the approach and any tradeoffs so I can weigh in.
+- Before writing code for a non-trivial feature, briefly state the approach and any tradeoffs so I can weigh in (step 1 of the workflow below).
 - Explain any non-obvious design choice in plain terms, so I can explain and defend my decisions.
 - Record the larger design decisions as architecture decision records in `docs/adr/`, using `docs/adr/template.md`. An ADR goes in the same pull request as the code it describes, like the design doc update, starts as `Draft`, is marked `Accepted` in the PR that merges it, and gets a row in the index at `docs/adr/README.md`. One ADR can cover a group of related decisions, so group them by theme and date, not one per decision. Claude drafts them from our discussions and the code, and I review them.
 - Dependencies beyond the stack above, schema changes, and changes to the public API need my approval first. Adding the pre-approved stack's own packages during scaffolding is fine.
-- Every change goes on its own branch and a pull request, never straight to `main`. Both CI checks (`lint-and-test` and `compose-smoke`) must pass, and PRs are squash-merged, so intermediate commits on a branch may be red.
+- Every change goes on its own branch and a pull request, never straight to `main`. Both CI checks (`lint-and-test` and `compose-smoke`) must pass, and PRs are squash-merged, so intermediate commits on a branch may be red. A pull request whose tests are committed ahead of the implementation is opened as a draft and stays one until its checks pass.
 - For the items on my "I write myself" list, Claude writes the tests first from `docs/design.md` and I write the implementation; the tests stay red until it exists.
 - Every pull request description has three parts, which Claude writes when the PR is opened and keeps current as it changes: the scope (the milestone item or component the PR addresses); the tests (what was written or run, and which correctness rules or `docs/design.md` sections they enforce); and the review notes (what Claude scaffolded, what remains for me to implement, and any edge cases we discussed).
+
+### Workflow for a checkbox that involves tests and code
+
+Follow these steps in order. Each approval is mine to give, so don't skip ahead. The rules above all still apply.
+
+1. **Plan.** We plan the current task: state the approach and tradeoffs, and settle the details.
+2. **Tests.** Once I approve the plan, Claude writes the tests, if there are any.
+3. **Test rundown.** Before anything is committed, Claude gives me a rundown of the tests: the files they add, how many tests each file adds, a summary of each test (what it does and which design constraint or correctness rule it checks), and how we know they work (for example that they fail for the expected reason against the missing code, or that a control shows they can fail).
+4. **Draft PR.** Once I approve the tests, Claude commits them, pushes the branch and opens the pull request as a draft, because the tests fail CI until the implementation exists. My approval of the tests is the go-ahead for that commit, push and pull request.
+5. **What is left.** Once the tests are committed and the pull request has its initial description, Claude lists the work left for me to implement.
+6. **Finish.** When I have an implementation and everything is green, we finalize the pull request and Claude brings its description up to date, moves it out of draft, and reminds me to run `/clear` and then `/review-pr <PR number>`.
+
+For work on Claude's own list, such as scaffolding or test infrastructure, Claude does the implementation after step 4 and the same finish applies once it is green.
 
 ## Commands
 
