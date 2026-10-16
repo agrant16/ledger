@@ -2,7 +2,7 @@
 
 A small double-entry ledger service that keeps money correct under retries, concurrency, and failures. It records money movements between accounts and guarantees they balance; it does not move real money.
 
-> **Status:** early development. Milestones 1 (foundation: schema for accounts, transactions and entries, role setup, CI) and 2 (the double-entry core) are complete and milestone 3 (the API and idempotency) is in progress: account creation, the balance endpoint and `GET /transfers/{id}` are done, while posting transfers and the entries history are still to come. The rest of what's described below is still planned. See [docs/design.md](docs/design.md) for the full scope, API contract, and milestone plan.
+> **Status:** early development. Milestones 1 (foundation: schema for accounts, transactions and entries, role setup, CI) and 2 (the double-entry core) are complete and milestone 3 (the API and idempotency) is in progress: account creation, the balance endpoint, `GET /transfers/{id}` and idempotent `POST /transfers` are done, while the entries history and the overload handling (pool timeout, thread limit, concurrency cap) are still to come. The rest of what's described below is still planned. See [docs/design.md](docs/design.md) for the full scope, API contract, and milestone plan.
 
 ## What it does
 
@@ -46,7 +46,7 @@ uv run ruff format --check .
 uv run sqlfluff lint migrations/
 ```
 
-The tests are laid out by kind: `tests/unit` needs no database (`uv run pytest tests/unit`), `tests/integration`, `tests/property` and `tests/e2e` do. `tests/e2e` holds the tests that cross layers on purpose (the whole app, concurrent requests, the commit-time safety net). See ADRs 0010 and 0013.
+The tests are laid out by kind: `tests/unit` needs no database (`uv run pytest tests/unit`), `tests/integration`, `tests/property` and `tests/e2e` do. `tests/integration/api` checks the HTTP contract through `TestClient` and may use mocks, injected failures and held locks. `tests/e2e` is black-box: it runs against a live server process, and every action and assertion goes over the network, with no `TestClient`, direct database access or monkeypatching in the test body. Its funding accounts come from the seed script, run as a separate process. Some existing files in `tests/e2e` do not meet this yet and are being moved (#61). See ADRs 0010 and 0013.
 
 CI runs `uv run pytest --cov`, which also measures branch coverage and fails below the floor set in `pyproject.toml`; run the same command locally to see which lines are missed.
 
@@ -66,7 +66,7 @@ docker compose exec -T db psql -U postgres -d ledger -v ON_ERROR_STOP=1 -v testd
 | --- | --- | --- |
 | `POST /accounts` | Create an account (`account_name` and `currency`; names are unique) | Done |
 | `GET /accounts/{id}/balance` | Cached balance; reflects committed transfers and never shows part of one | Done |
-| `POST /transfers` | Move money between two accounts (requires `Idempotency-Key`) | Planned in milestone 3 |
+| `POST /transfers` | Move money between two accounts (requires `Idempotency-Key`) | Done |
 | `GET /transfers/{id}` | Fetch one transfer with its entries | Done |
 | `GET /accounts/{id}/entries` | Entry history, newest first, with cursor pagination | Planned in milestone 3 |
 | `POST /transfers/{id}/reverse` | Undo a transfer with a compensating transaction (requires `Idempotency-Key`) | Planned in milestone 5 |
