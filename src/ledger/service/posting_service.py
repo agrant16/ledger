@@ -11,8 +11,10 @@ from ledger.errors import (
     UnknownAccountError,
 )
 from ledger.models.posting_model import Claim, Entry
+from ledger.models.transfer_model import Transfer
 from ledger.repository import posting_repo
 from ledger.service.decorators import transactional_service_method
+from ledger.service.transfer_service import entries_for_transfer, get_transfer
 
 
 @transactional_service_method
@@ -86,3 +88,23 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
         raise LedgerInvariantError(
             f"Critical Error: Not all balances were updated for account {missing_id}"
         )
+
+
+@transactional_service_method
+def claim_and_post(
+    conn: psycopg.Connection,
+    idempotency_key: str,
+    request_hash: str,
+    from_account_id: int,
+    to_account_id: int,
+    currency: str,
+    amount_minor: int,
+) -> Transfer:
+    claim = claim_transaction(conn, idempotency_key, request_hash)
+    if not claim.replay:
+        post_transaction(
+            conn,
+            claim.transaction_id,
+            entries_for_transfer(from_account_id, to_account_id, amount_minor, currency),
+        )
+    return get_transfer(conn, claim.transaction_id)
