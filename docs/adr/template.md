@@ -23,3 +23,5 @@
 
 * **Alternatives Considered:**
   - *Alternative 1 (e.g., SQLAlchemy ORM): Why was it rejected?*
+
+*Once this ADR is Accepted, do not rewrite its decision. Record a later change as a dated note under the section it affects, or as a new ADR that supersedes this one (see CLAUDE.md).*
