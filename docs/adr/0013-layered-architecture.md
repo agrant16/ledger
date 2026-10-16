@@ -16,7 +16,7 @@
   | `ledger/errors.py` | The error taxonomy (ADR 0007). |
   | `ledger/models/` | Domain dataclasses by area: `account_model.py`, `posting_model.py`, `transfer_model.py`. Used by the repositories, the services and the API's response schemas. |
   | `ledger/repository/` | Plain functions that run parameterized SQL on the connection they are given and return models: `account_repo.py`, `posting_repo.py`. No classes. |
-  | `ledger/service/` | The business rules: `account_service.py`, `posting_service.py`, `transfer_service.py`, and `decorators.py`. A service function takes the request's connection and never commits. |
+  | `ledger/service/` | The business rules: `account_service.py`, `posting_service.py` (`claim_transaction`, `post_transaction`, and `claim_and_post`, which composes the two for `POST /transfers`), `transfer_service.py`, and `decorators.py`. A service function takes the request's connection and never commits. |
   | `ledger/infra/` | `db.py` (`create_pool`, `run_in_transaction`), `config.py`, `logging_config.py` (log format, request-id variable and record factory, the uvicorn duplicate filter). |
   | `ledger/api/rest/` | `router.py` (one aggregate router for `main.py`), `routers/`, `schemas/` (request and response models and the shared validated types), `middleware/`, the RFC 9457 error handling (`problems.py`, the status table, and `error_handlers.py`, the handlers), and the idempotency request hash (`idempotency.py`). The entries of a transfer are built in the service layer (`entries_for_transfer`), not in the API layer, so the whole claim, build and post flow runs inside one `run_in_transaction` call. A later `api/grpc/` or `api/graphql/` would sit beside it. |
 

@@ -1,12 +1,61 @@
-from fastapi import APIRouter, Depends, Request
+from http import HTTPStatus
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Header, Request
 
 from ledger.api.rest.dependencies import get_pool
-from ledger.api.rest.schemas.transfer_schema import TransferResponse
-from ledger.api.rest.schemas.types import TransferIdInPath
+from ledger.api.rest.idempotency import request_hash
+from ledger.api.rest.schemas.transfer_schema import TransferRequest, TransferResponse
+from ledger.api.rest.schemas.types import IdempotencyKey, TransferIdInPath
 from ledger.infra.db import run_in_transaction
+from ledger.service.posting_service import claim_and_post
 from ledger.service.transfer_service import get_transfer
 
 router = APIRouter()
+
+
+@router.post(
+    path="",
+    status_code=HTTPStatus.CREATED,
+    response_model=TransferResponse,
+    summary="Move money between two accounts",
+    description=(
+        "Moves `amount_minor` (a positive integer in minor units, such as cents) of one "
+        "currency from `from_account_id` to `to_account_id`. The response is the new transfer "
+        "with its two entries: a negative one for the source account and a positive one for "
+        "the destination. Both accounts must exist, be different, and hold that currency. "
+        "An account that is not allowed to go negative cannot be overdrawn: the request is "
+        "refused with a 422 and nothing is written.\n\n"
+        "The `Idempotency-Key` header is required: 1 to 255 characters, chosen by the client. "
+        "Sending the same key with the same method, path and body again is a replay. It "
+        "returns 201 with the same body as the first request, rebuilt from the stored "
+        "transfer, and moves nothing a second time, even if the source account could no "
+        "longer afford it. The same key with a different request is a 409, which means the "
+        "client has a bug. A request that fails with a 400, 404 or 422 does not use up its "
+        "key, so it can be retried with the same key and is checked again against current "
+        "balances. A 503 means the request may not have completed; retrying with the same key is "
+        "safe either way."
+    ),
+)
+def create_transfer(
+    body: TransferRequest,
+    idempotency_key: Annotated[IdempotencyKey, Header()],
+    request: Request,
+    pool=Depends(get_pool),  # noqa: B008
+) -> TransferResponse:
+    transfer = run_in_transaction(
+        pool,
+        lambda conn: claim_and_post(
+            conn,
+            idempotency_key,
+            request_hash(request.method, request.url.path, body),
+            body.from_account_id,
+            body.to_account_id,
+            body.currency,
+            body.amount_minor,
+        ),
+    )
+    return TransferResponse.from_model(transfer)
 
 
 @router.get(

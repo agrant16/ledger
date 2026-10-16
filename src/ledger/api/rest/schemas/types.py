@@ -80,7 +80,7 @@ IdempotencyKey = Annotated[
         strict=True,
         min_length=1,
         max_length=255,
-        description="A string with 1 to 255 characters; no NUL; no surrogates",
+        description="A string with 1 to 255 characters; no NUL",
     ),
     AfterValidator(_no_nul),
 ]
