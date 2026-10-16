@@ -3,9 +3,9 @@ ADR 0011).
 
 The deferred constraint triggers fire when the database transaction commits. Because the route
 commits inside run_in_transaction, that failure still happens inside the handler, and the PR 1
-catch-all turns it into a logged 500. These tests prove it end to end without any transfer code: a
-throwaway route inserts a `transactions` row with no entries, which the no-entries trigger refuses
-at commit.
+catch-all turns it into a logged 500. These tests prove it through the HTTP contract without any
+transfer code: a throwaway route inserts a `transactions` row with no entries, which the no-entries
+trigger refuses at commit.
 """
 
 import logging
