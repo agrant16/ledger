@@ -1,5 +1,5 @@
-"""POST /transfers with the same Idempotency-Key sent at the same time (docs/design.md, M3:
-"Concurrent same key"; Correctness rules 2 and 3; ADR 0012).
+"""POST /transfers sent at the same time (docs/design.md, M3: "Concurrent same key"; Correctness
+rules 2 and 3; ADR 0012).
 
 The key claim is `INSERT ... ON CONFLICT DO NOTHING`. A second claim of a key whose first claim is
 still uncommitted waits on the first transaction, and then sees how it ended:
@@ -10,7 +10,12 @@ still uncommitted waits on the first transaction, and then sees how it ended:
 
 The deterministic tests hold the first request's transaction open on a connection of their own, so
 the second request is provably stuck behind it before the first one is resolved. The barrier tests
-release two real requests together and check what must hold whichever one wins.
+release two real requests together and check what must hold whichever one wins. They only sample
+the interleaving: a pass does not show that the two requests really overlapped, which is what the
+deterministic tests are for.
+
+The last test is rule 3: two requests with different keys whose amounts together exceed the
+balance, so exactly one may succeed.
 
 There is no lock timeout until milestone 4, so every wait here has its own timeout: a hang must
 fail the test, not the suite.
@@ -37,6 +42,11 @@ from tests.db_helpers import commit_accounts, commit_transfer, reset_database
 
 WAIT_SECONDS = 10
 KEY = "same-key"
+FUNDED = 1000  # what alice holds when a test starts
+AMOUNT = 300  # an ordinary transfer, well within FUNDED
+OTHER_AMOUNT = AMOUNT + 1  # the "different body" of a same-key request
+TAKEOVER_AMOUNT = 400  # the second request's amount when it takes over a rolled-back key
+CONTENDED_AMOUNT = 600  # two of these exceed FUNDED, one fits
 
 
 @pytest.fixture
@@ -58,13 +68,13 @@ def client(app: FastAPI) -> TestClient:
 
 @pytest.fixture
 def accounts(app: FastAPI, app_pool: ConnectionPool):
-    """Committed funding, alice (funded with 1000) and bob accounts."""
+    """Committed funding, alice (funded with FUNDED) and bob accounts."""
     funding, alice, bob = commit_accounts(app_pool)
-    commit_transfer(app_pool, "fund-alice", funding.id, alice.id, 1000)
+    commit_transfer(app_pool, "fund-alice", funding.id, alice.id, FUNDED)
     return funding, alice, bob
 
 
-def body_for(accounts, amount_minor: int = 300) -> dict:
+def body_for(accounts, amount_minor: int = AMOUNT) -> dict:
     _, alice, bob = accounts
     return {
         "from_account_id": alice.id,
@@ -74,7 +84,7 @@ def body_for(accounts, amount_minor: int = 300) -> dict:
     }
 
 
-def post(client: TestClient, accounts, amount_minor: int = 300, key: str = KEY):
+def post(client: TestClient, accounts, amount_minor: int = AMOUNT, key: str = KEY):
     return client.post(
         "/transfers", json=body_for(accounts, amount_minor), headers={"Idempotency-Key": key}
     )
@@ -99,16 +109,22 @@ def balance(owner_conn: psycopg.Connection, account_id: int) -> int:
 def wait_until_a_backend_is_blocked(
     owner_conn: psycopg.Connection, holder_pid: int, request: Future
 ) -> None:
-    """Wait until some session other than the holder has a lock request that is not granted.
+    """Wait until some session other than the holder is waiting on a transaction id.
 
     The blocked session is the route's own pooled connection, whose pid the test cannot see, so it
-    is found through pg_locks (readable by any role). Gives up early if the request has already
-    finished, which would mean it never waited.
+    is found through pg_locks (readable by any role; pg_stat_activity would hide the app role's
+    query text from the owner role). A claim that conflicts with an uncommitted one waits on the
+    other transaction's id. A wait for a balances row would look the same, but cannot happen here:
+    the claim is step 2 of the request and the locks are step 4, and the holder already has the
+    balances locks. Gives up early if the request has already finished, which would mean it never
+    waited.
     """
     deadline = time.monotonic() + WAIT_SECONDS
     while time.monotonic() < deadline and not request.done():
         waiting = owner_conn.execute(
-            "SELECT count(*) FROM pg_locks WHERE NOT granted AND pid <> %s", (holder_pid,)
+            "SELECT count(*) FROM pg_locks "
+            "WHERE NOT granted AND locktype = 'transactionid' AND pid <> %s",
+            (holder_pid,),
         ).fetchone()[0]
         if waiting:
             return
@@ -154,7 +170,7 @@ def test_a_same_key_same_body_request_waits_and_replays_the_committed_transfer(
     entries = count(owner_conn, "entries")
 
     first_id, second = second_request_behind_an_open_claim(
-        client, owner_conn, app_pool, accounts, 300, 300, lambda conn: conn.commit()
+        client, owner_conn, app_pool, accounts, AMOUNT, AMOUNT, lambda conn: conn.commit()
     )
 
     assert second.status_code == 201
@@ -162,8 +178,8 @@ def test_a_same_key_same_body_request_waits_and_replays_the_committed_transfer(
     assert second.text == client.get(f"/transfers/{first_id}").text
     assert count(owner_conn, "transactions") == transfers + 1
     assert count(owner_conn, "entries") == entries + 2
-    assert balance(owner_conn, alice.id) == 700
-    assert balance(owner_conn, bob.id) == 300
+    assert balance(owner_conn, alice.id) == FUNDED - AMOUNT
+    assert balance(owner_conn, bob.id) == AMOUNT
 
 
 def test_a_same_key_different_body_request_waits_and_is_a_409(
@@ -173,7 +189,7 @@ def test_a_same_key_different_body_request_waits_and_is_a_409(
     transfers = count(owner_conn, "transactions")
 
     _, second = second_request_behind_an_open_claim(
-        client, owner_conn, app_pool, accounts, 300, 301, lambda conn: conn.commit()
+        client, owner_conn, app_pool, accounts, AMOUNT, OTHER_AMOUNT, lambda conn: conn.commit()
     )
 
     assert second.status_code == 409
@@ -181,8 +197,8 @@ def test_a_same_key_different_body_request_waits_and_is_a_409(
     assert second.json()["type"] == "urn:ledger:error:idempotency-conflict"
     assert KEY not in second.text
     assert count(owner_conn, "transactions") == transfers + 1
-    assert balance(owner_conn, alice.id) == 700
-    assert balance(owner_conn, bob.id) == 300
+    assert balance(owner_conn, alice.id) == FUNDED - AMOUNT
+    assert balance(owner_conn, bob.id) == AMOUNT
 
 
 def test_a_waiting_request_takes_the_key_over_when_the_first_claim_rolls_back(
@@ -192,29 +208,40 @@ def test_a_waiting_request_takes_the_key_over_when_the_first_claim_rolls_back(
     transfers = count(owner_conn, "transactions")
 
     first_id, second = second_request_behind_an_open_claim(
-        client, owner_conn, app_pool, accounts, 300, 400, lambda conn: conn.rollback()
+        client,
+        owner_conn,
+        app_pool,
+        accounts,
+        AMOUNT,
+        TAKEOVER_AMOUNT,
+        lambda conn: conn.rollback(),
     )
 
     assert second.status_code == 201
     assert second.json()["id"] != first_id
     assert count(owner_conn, "transactions") == transfers + 1
-    assert balance(owner_conn, alice.id) == 600
-    assert balance(owner_conn, bob.id) == 400
+    assert balance(owner_conn, alice.id) == FUNDED - TAKEOVER_AMOUNT
+    assert balance(owner_conn, bob.id) == TAKEOVER_AMOUNT
 
 
 # --- two real requests released together --------------------------------------------------------
 
 
-def fire_together(client: TestClient, accounts, amounts: tuple[int, int]):
-    """Send one request per amount with KEY, released by a barrier, and return both responses."""
+def fire_together(
+    client: TestClient, accounts, amounts: tuple[int, int], keys: tuple[str, str] = (KEY, KEY)
+):
+    """Send one request per amount (each with its key, KEY by default), released by a barrier, and
+    return both responses."""
     barrier = threading.Barrier(len(amounts))
 
-    def send(amount_minor: int):
+    def send(amount_minor: int, key: str):
         barrier.wait(timeout=WAIT_SECONDS)
-        return post(client, accounts, amount_minor)
+        return post(client, accounts, amount_minor, key)
 
     with ThreadPoolExecutor(max_workers=len(amounts)) as executor:
-        futures = [executor.submit(send, amount) for amount in amounts]
+        futures = [
+            executor.submit(send, amount, key) for amount, key in zip(amounts, keys, strict=True)
+        ]
         return [future.result(timeout=WAIT_SECONDS) for future in futures]
 
 
@@ -226,14 +253,14 @@ def test_two_simultaneous_identical_requests_make_one_transfer_and_get_one_answe
     transfers = count(owner_conn, "transactions")
     entries = count(owner_conn, "entries")
 
-    first, second = fire_together(client, accounts, (300, 300))
+    first, second = fire_together(client, accounts, (AMOUNT, AMOUNT))
 
     assert first.status_code == second.status_code == 201
     assert first.text == second.text
     assert count(owner_conn, "transactions") == transfers + 1
     assert count(owner_conn, "entries") == entries + 2
-    assert balance(owner_conn, alice.id) == 700
-    assert balance(owner_conn, bob.id) == 300
+    assert balance(owner_conn, alice.id) == FUNDED - AMOUNT
+    assert balance(owner_conn, bob.id) == AMOUNT
 
 
 @pytest.mark.parametrize("attempt", range(10))
@@ -242,7 +269,7 @@ def test_two_simultaneous_requests_with_different_bodies_give_one_success_and_on
 ) -> None:
     _, alice, bob = accounts
     transfers = count(owner_conn, "transactions")
-    amounts = (300, 301)
+    amounts = (AMOUNT, OTHER_AMOUNT)
 
     responses = fire_together(client, accounts, amounts)
 
@@ -251,5 +278,29 @@ def test_two_simultaneous_requests_with_different_bodies_give_one_success_and_on
     loser = responses[[r.status_code for r in responses].index(409)]
     assert loser.json()["type"] == "urn:ledger:error:idempotency-conflict"
     assert count(owner_conn, "transactions") == transfers + 1
-    assert balance(owner_conn, alice.id) == 1000 - winner_amount
+    assert balance(owner_conn, alice.id) == FUNDED - winner_amount
     assert balance(owner_conn, bob.id) == winner_amount
+
+
+@pytest.mark.parametrize("attempt", range(10))
+def test_two_simultaneous_requests_that_together_overdraw_give_one_201_and_one_422(
+    client: TestClient, owner_conn: psycopg.Connection, accounts, attempt: int
+) -> None:
+    """Rule 3: different keys, so neither request is a replay and both reach the balance lock. Only
+    one of them fits in FUNDED, and the other must see the first one's committed balance."""
+    _, alice, bob = accounts
+    transfers = count(owner_conn, "transactions")
+    entries = count(owner_conn, "entries")
+    assert 2 * CONTENDED_AMOUNT > FUNDED >= CONTENDED_AMOUNT
+
+    responses = fire_together(
+        client, accounts, (CONTENDED_AMOUNT, CONTENDED_AMOUNT), keys=("first-key", "second-key")
+    )
+
+    assert sorted(r.status_code for r in responses) == [201, 422]
+    loser = next(r for r in responses if r.status_code == 422)
+    assert loser.json()["type"] == "urn:ledger:error:insufficient-funds"
+    assert count(owner_conn, "transactions") == transfers + 1
+    assert count(owner_conn, "entries") == entries + 2
+    assert balance(owner_conn, alice.id) == FUNDED - CONTENDED_AMOUNT
+    assert balance(owner_conn, bob.id) == CONTENDED_AMOUNT

@@ -36,8 +36,9 @@ from ledger.repository import posting_repo
 from tests.db_helpers import commit_accounts, commit_transfer, reset_database
 
 KEY = "net-key"
-OVERDRAFT_AMOUNT = 1500  # alice holds 1000
-NORMAL_AMOUNT = 300
+FUNDED = 1000  # what alice holds when a test starts
+NORMAL_AMOUNT = 300  # within FUNDED
+OVERDRAFT_AMOUNT = FUNDED + 500  # more than alice holds
 
 # What the generic 500 body must never contain: the database's own words.
 LEAKS = ("integrity", "constraint", "trigger", "balances", "entries", "check", "boom")
@@ -63,9 +64,9 @@ def client(pool: ConnectionPool) -> TestClient:
 
 @pytest.fixture
 def accounts(pool: ConnectionPool):
-    """Committed funding, alice (funded with 1000) and bob accounts."""
+    """Committed funding, alice (funded with FUNDED) and bob accounts."""
     funding, alice, bob = commit_accounts(pool)
-    commit_transfer(pool, "fund-alice", funding.id, alice.id, 1000)
+    commit_transfer(pool, "fund-alice", funding.id, alice.id, FUNDED)
     return funding, alice, bob
 
 
@@ -161,19 +162,46 @@ def break_the_no_entries(monkeypatch: pytest.MonkeyPatch) -> list:
         calls.append(1)
 
     monkeypatch.setattr(posting_repo, "insert_entries", write_nothing)
+    # Deliberate order: claim_and_post reads the stored transfer before the commit. Stubbed, that
+    # read does not raise, so the failure comes from the trigger at commit (the test asserts the
+    # cause, so a reordering that let the read raise first would fail it).
     monkeypatch.setattr(posting_service, "get_transfer", lambda conn, transfer_id: None)
     return calls
 
 
+# net -> (how to break it, amount to send, logged exception type, database cause or None). The cause
+# is (psycopg error type, text its constraint name or message must contain): it proves the failure
+# came from the database safety net and not from an earlier check in the service. All three
+# database nets raise check_violation, so the type alone cannot tell them apart.
 NETS = {
-    "unbalanced-entries": (break_the_entries, NORMAL_AMOUNT, UnbalancedEntriesError),
-    "balances-check": (break_the_balances_check, OVERDRAFT_AMOUNT, LedgerInvariantError),
-    "zero-sum-trigger": (break_the_zero_sum, NORMAL_AMOUNT, LedgerInvariantError),
-    "no-entries-trigger": (break_the_no_entries, NORMAL_AMOUNT, LedgerInvariantError),
+    "unbalanced-entries": (break_the_entries, NORMAL_AMOUNT, UnbalancedEntriesError, None),
+    "balances-check": (
+        break_the_balances_check,
+        OVERDRAFT_AMOUNT,
+        LedgerInvariantError,
+        (psycopg.errors.CheckViolation, "balances_protected_nonnegative"),
+    ),
+    "zero-sum-trigger": (
+        break_the_zero_sum,
+        NORMAL_AMOUNT,
+        LedgerInvariantError,
+        (psycopg.errors.CheckViolation, "do not sum to zero"),
+    ),
+    "no-entries-trigger": (
+        break_the_no_entries,
+        NORMAL_AMOUNT,
+        LedgerInvariantError,
+        (psycopg.errors.CheckViolation, "at least one record in entries"),
+    ),
 }
 
 
-def assert_a_generic_500(response, caplog: pytest.LogCaptureFixture, error_type: type) -> None:
+def assert_a_generic_500(
+    response,
+    caplog: pytest.LogCaptureFixture,
+    error_type: type,
+    cause: tuple[type, str] | None = None,
+) -> None:
     assert response.status_code == 500
     assert response.headers["content-type"].startswith("application/problem+json")
     body = response.json()
@@ -185,7 +213,15 @@ def assert_a_generic_500(response, caplog: pytest.LogCaptureFixture, error_type:
     errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
     assert len(errors) == 1
     assert errors[0].exc_info is not None
-    assert isinstance(errors[0].exc_info[1], error_type)
+    logged = errors[0].exc_info[1]
+    assert isinstance(logged, error_type)
+    if cause is None:
+        assert logged.__cause__ is None
+    else:
+        cause_type, needle = cause
+        assert isinstance(logged.__cause__, cause_type)
+        diag = logged.__cause__.diag
+        assert needle in f"{diag.constraint_name} {diag.message_primary}"
     assert errors[0].request_id == response.headers["X-Request-ID"]
 
 
@@ -239,14 +275,14 @@ def test_a_safety_net_is_a_logged_generic_500_that_persists_nothing(
     caplog: pytest.LogCaptureFixture,
     net: str,
 ) -> None:
-    break_it, amount, error_type = NETS[net]
+    break_it, amount, error_type, cause = NETS[net]
     caplog.set_level(logging.DEBUG)
     before = stored(owner_conn)
     calls = break_it(monkeypatch)
 
     response = post(client, accounts, amount)
 
-    assert_a_generic_500(response, caplog, error_type)
+    assert_a_generic_500(response, caplog, error_type, cause)
     assert stored(owner_conn) == before
     assert calls == [1]  # the broken step ran once: nothing retried the request
 
@@ -259,7 +295,7 @@ def test_the_key_and_the_pool_are_usable_after_a_safety_net(
     monkeypatch: pytest.MonkeyPatch,
     net: str,
 ) -> None:
-    break_it, amount, _ = NETS[net]
+    break_it, amount, _, _ = NETS[net]
     before = stored(owner_conn)
     break_it(monkeypatch)
     assert post(client, accounts, amount).status_code == 500
@@ -271,8 +307,8 @@ def test_the_key_and_the_pool_are_usable_after_a_safety_net(
     assert retried.status_code == 201  # the key was not burned (a burned key would be a 409)
     transfers, entries, balances = stored(owner_conn)
     assert (transfers, entries) == (before[0] + 1, before[1] + 2)
-    assert dict(balances)[accounts[1].id] == 700
-    assert dict(balances)[accounts[2].id] == 300
+    assert dict(balances)[accounts[1].id] == FUNDED - NORMAL_AMOUNT
+    assert dict(balances)[accounts[2].id] == NORMAL_AMOUNT
 
 
 def test_the_control_a_normal_overdraft_is_a_422_not_a_500(
@@ -294,7 +330,7 @@ def test_every_net_is_reached_by_a_request_that_is_valid_apart_from_the_break(
     """Guards the matrix itself: without the break, the amounts the nets use give 201 or 422, so a
     500 above can only come from the break."""
     outcomes: dict[int, int] = {}
-    for amount in {amount for _, amount, _ in NETS.values()}:
+    for amount in {amount for _, amount, _, _ in NETS.values()}:
         outcomes[amount] = post(client, accounts, amount, key=f"plain-{amount}").status_code
 
     assert outcomes == {NORMAL_AMOUNT: 201, OVERDRAFT_AMOUNT: 422}
