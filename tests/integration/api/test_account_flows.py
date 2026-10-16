@@ -1,7 +1,9 @@
-"""Account flows through the whole stack (docs/design.md, API; ADRs 0011 and 0013).
+"""Account flows through the HTTP contract and the real database (docs/design.md, API; ADRs 0011
+and 0013).
 
-These tests cross layers on purpose, so they live in e2e and not with the HTTP-contract tests in
-tests/integration/api: a route, the service, the repository and the real database in one flow.
+These tests use TestClient and hold a row lock on the real database for determinism, so they are
+integration tests, not black-box e2e tests (ADR 0010): a route, the service, the repository and the
+database in one flow.
 
 - Creating an account through the route writes the account and its zero balance row together.
 - Two creates of the same name at the same moment give one 201 and one 409.
