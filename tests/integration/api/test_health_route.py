@@ -11,7 +11,7 @@ Contract these tests expect:
   exception is logged once. (When the pool-wiring work maps a pool timeout to a 503, this test
   changes with it.)
 
-The real app answering on /health is tested in tests/e2e/test_health.py and the compose smoke job.
+The real app answering on /health is tested in test_real_app_error_handling.py and the compose smoke job.
 """
 
 import logging
