@@ -9,7 +9,8 @@ database checks are tested on `claim_and_post` in tests/integration/service/test
   `run_in_transaction(pool, lambda conn: claim_and_post(conn, ...))` call.
 - 201 with the same body `GET /transfers/{id}` returns, for a new request and for a replay alike.
 - `Idempotency-Key` is required and is 1 to 255 characters without a NUL: anything else is a 400
-  whose `errors` item has `parameter` "Idempotency-Key". Header and body problems are reported
+  whose `errors` item has `parameter` "idempotency-key" (the lowercase name FastAPI reports;
+  header names are case-insensitive, RFC 9110). Header and body problems are reported
   together, and a bad request is rejected before the key is claimed, so the key stays free.
 - The same key with a different request is a 409 `idempotency-conflict` that repeats neither the
   key nor the hashes. Domain failures use their usual statuses: 404 unknown-account, 400
@@ -179,7 +180,7 @@ def test_a_missing_key_is_a_400_naming_the_header(
     assert response.status_code == 400
     assert response.headers["content-type"] == "application/problem+json"
     assert response.json()["type"] == "urn:ledger:error:invalid-request"
-    assert [e["parameter"] for e in response.json()["errors"]] == ["Idempotency-Key"]
+    assert [e["parameter"] for e in response.json()["errors"]] == ["idempotency-key"]
     assert transaction_count(owner_conn) == transactions
 
 
@@ -192,7 +193,7 @@ def test_an_invalid_key_is_a_400_naming_the_header(
     response = post(client, accounts, key=key)
 
     assert response.status_code == 400
-    assert [e["parameter"] for e in response.json()["errors"]] == ["Idempotency-Key"]
+    assert [e["parameter"] for e in response.json()["errors"]] == ["idempotency-key"]
     assert transaction_count(owner_conn) == transactions
 
 
@@ -209,7 +210,7 @@ def test_header_and_body_problems_are_reported_together(client: TestClient, acco
 
     assert response.status_code == 400
     errors = response.json()["errors"]
-    assert {e.get("parameter") for e in errors} >= {"Idempotency-Key"}
+    assert {e.get("parameter") for e in errors} >= {"idempotency-key"}
     assert {e.get("pointer") for e in errors} >= {"/amount_minor"}
 
 
@@ -315,6 +316,6 @@ def test_the_operation_is_documented(client: TestClient) -> None:
     assert "Idempotency-Key" in description
     assert "replay" in description.lower()
     assert "201" in operation["responses"]
-    header = next(p for p in operation["parameters"] if p["name"] == "Idempotency-Key")
+    header = next(p for p in operation["parameters"] if p["name"] == "idempotency-key")
     assert header["in"] == "header"
     assert header["required"] is True
