@@ -48,7 +48,7 @@ def create_transfer(
         lambda conn: claim_and_post(
             conn,
             idempotency_key,
-            request_hash(request.method.upper(), request.url.path, body),
+            request_hash(request.method, request.url.path, body),
             body.from_account_id,
             body.to_account_id,
             body.currency,
