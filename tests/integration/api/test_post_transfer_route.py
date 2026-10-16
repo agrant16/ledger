@@ -32,7 +32,6 @@ from tests.db_helpers import commit_accounts, commit_transfer, reset_database
 @pytest.fixture
 def app(app_pool: ConnectionPool, owner_conn: psycopg.Connection) -> FastAPI:
     """A throwaway app with the real router, the error handling and the shared test pool."""
-
     reset_database(owner_conn)
     application = FastAPI()
     install_error_handling(application)
@@ -259,6 +258,9 @@ def test_an_unknown_account_is_a_404_and_the_key_stays_free(
     assert response.status_code == 404
     assert response.json()["type"] == "urn:ledger:error:unknown-account"
     assert transaction_count(owner_conn) == transactions
+    # The key is free: the same key with a different, valid request is a 201, not a 409.
+    retried = post(client, accounts, to_account_id=bob.id)
+    assert retried.status_code == 201
 
 
 def test_a_currency_mismatch_is_a_400(
