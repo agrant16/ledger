@@ -38,15 +38,9 @@ from ledger.errors import (
 from ledger.infra.config import Settings
 from ledger.infra.db import run_in_transaction
 from ledger.models.transfer_model import Transfer
+from ledger.service.posting_service import claim_and_post
+from ledger.service.transfer_service import get_transfer
 from tests.db_helpers import commit_accounts, commit_transfer, hash_for, reset_database
-
-
-@pytest.fixture
-def claim_and_post():
-    """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.service.posting_service import claim_and_post
-
-    return claim_and_post
 
 
 @pytest.fixture
@@ -61,7 +55,6 @@ def world(app_pool: ConnectionPool, owner_conn: psycopg.Connection):
 
 def run(
     pool: ConnectionPool,
-    claim_and_post,
     key: str,
     from_account_id: int,
     to_account_id: int,
@@ -111,11 +104,11 @@ def balance(owner_conn: psycopg.Connection, account_id: int) -> int:
 
 
 def test_a_new_request_posts_two_entries_and_returns_the_stored_transfer(
-    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world, claim_and_post
+    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world
 ) -> None:
     _, alice, bob = world
 
-    transfer = run(app_pool, claim_and_post, "k1", alice.id, bob.id, 300)
+    transfer = run(app_pool, "k1", alice.id, bob.id, 300)
 
     assert transfer.reverses_transaction_id is None
     assert [(e.account_id, e.amount_minor, e.currency) for e in transfer.entries] == [
@@ -131,25 +124,23 @@ def test_a_new_request_posts_two_entries_and_returns_the_stored_transfer(
 
 
 def test_the_returned_transfer_is_the_one_that_was_committed(
-    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world, claim_and_post
+    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world
 ) -> None:
     """The response is rebuilt from stored rows, so a later read agrees with it exactly."""
-    from ledger.service.transfer_service import get_transfer
-
     _, alice, bob = world
 
-    transfer = run(app_pool, claim_and_post, "k1", alice.id, bob.id, 300)
+    transfer = run(app_pool, "k1", alice.id, bob.id, 300)
 
     assert run_in_transaction(app_pool, lambda conn: get_transfer(conn, transfer.id)) == transfer
 
 
 def test_the_entries_sum_to_zero_and_the_cached_balances_equal_the_entries(
-    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world, claim_and_post
+    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world
 ) -> None:
     """Correctness rules 1 and 5 after a posted request."""
     _, alice, bob = world
 
-    transfer = run(app_pool, claim_and_post, "k1", alice.id, bob.id, 300)
+    transfer = run(app_pool, "k1", alice.id, bob.id, 300)
 
     assert sum(e.amount_minor for e in transfer.entries) == 0
     for account in (alice, bob):
@@ -164,29 +155,29 @@ def test_the_entries_sum_to_zero_and_the_cached_balances_equal_the_entries(
 
 
 def test_a_replay_returns_the_original_transfer_and_moves_nothing(
-    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world, claim_and_post
+    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world
 ) -> None:
     """Correctness rule 2: the same key and request never apply twice."""
     _, alice, bob = world
-    first = run(app_pool, claim_and_post, "k1", alice.id, bob.id, 300)
+    first = run(app_pool, "k1", alice.id, bob.id, 300)
     after_first = stored(owner_conn)
 
-    again = run(app_pool, claim_and_post, "k1", alice.id, bob.id, 300)
+    again = run(app_pool, "k1", alice.id, bob.id, 300)
 
     assert again == first
     assert stored(owner_conn) == after_first
 
 
 def test_a_replay_does_not_check_the_funds_again(
-    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world, claim_and_post
+    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world
 ) -> None:
     """The claim ends the request: alice has spent everything, and the replay is still the
     original answer, not an insufficient-funds error."""
     _, alice, bob = world
-    first = run(app_pool, claim_and_post, "k1", alice.id, bob.id, 1000)
+    first = run(app_pool, "k1", alice.id, bob.id, 1000)
     assert balance(owner_conn, alice.id) == 0
 
-    again = run(app_pool, claim_and_post, "k1", alice.id, bob.id, 1000)
+    again = run(app_pool, "k1", alice.id, bob.id, 1000)
 
     assert again == first
     assert balance(owner_conn, alice.id) == 0
@@ -196,16 +187,15 @@ def test_a_replay_does_not_check_the_funds_again(
 
 
 def test_the_same_key_with_a_different_request_is_a_conflict_and_moves_nothing(
-    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world, claim_and_post
+    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world
 ) -> None:
     _, alice, bob = world
-    run(app_pool, claim_and_post, "k1", alice.id, bob.id, 300)
+    run(app_pool, "k1", alice.id, bob.id, 300)
     before = stored(owner_conn)
 
     with pytest.raises(IdempotencyConflictError) as failure:
         run(
             app_pool,
-            claim_and_post,
             "k1",
             alice.id,
             bob.id,
@@ -220,17 +210,16 @@ def test_the_same_key_with_a_different_request_is_a_conflict_and_moves_nothing(
 
 
 def test_the_key_claim_is_checked_before_the_accounts(
-    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world, claim_and_post
+    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world
 ) -> None:
     """Step 1 before step 2: a used key with a different request naming an unknown account is a
     409, not a 404."""
     _, alice, bob = world
-    run(app_pool, claim_and_post, "k1", alice.id, bob.id, 300)
+    run(app_pool, "k1", alice.id, bob.id, 300)
 
     with pytest.raises(IdempotencyConflictError):
         run(
             app_pool,
-            claim_and_post,
             "k1",
             alice.id,
             bob.id + 1000,
@@ -243,33 +232,33 @@ def test_the_key_claim_is_checked_before_the_accounts(
 
 
 def test_an_unknown_account_is_checked_before_the_currency(
-    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world, claim_and_post
+    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world
 ) -> None:
     """Step 2: unknown account (404) comes before currency mismatch (400)."""
     _, alice, bob = world
 
     with pytest.raises(UnknownAccountError):
-        run(app_pool, claim_and_post, "k1", alice.id, bob.id + 1000, 300, currency="EUR")
+        run(app_pool, "k1", alice.id, bob.id + 1000, 300, currency="EUR")
 
 
 def test_a_currency_mismatch_is_checked_before_the_funds(
-    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world, claim_and_post
+    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world
 ) -> None:
     """Steps 2 before 3: a currency mismatch on a transfer that is also too large is a 400."""
     _, alice, bob = world
 
     with pytest.raises(CurrencyMismatchError):
-        run(app_pool, claim_and_post, "k1", alice.id, bob.id, 5000, currency="EUR")
+        run(app_pool, "k1", alice.id, bob.id, 5000, currency="EUR")
 
 
 def test_insufficient_funds_is_reported_when_nothing_else_is_wrong(
-    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world, claim_and_post
+    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world
 ) -> None:
     """The control for the order tests above."""
     _, alice, bob = world
 
     with pytest.raises(InsufficientFundsError) as failure:
-        run(app_pool, claim_and_post, "k1", alice.id, bob.id, 1500)
+        run(app_pool, "k1", alice.id, bob.id, 1500)
 
     assert failure.value.account_id == alice.id
     assert failure.value.balance_minor == 1000
@@ -302,7 +291,6 @@ def test_a_failed_request_stores_nothing_and_leaves_the_key_free(
     app_pool: ConnectionPool,
     owner_conn: psycopg.Connection,
     world,
-    claim_and_post,
     request_kwargs,
     expected_error,
 ) -> None:
@@ -314,7 +302,6 @@ def test_a_failed_request_stores_nothing_and_leaves_the_key_free(
     with pytest.raises(expected_error):
         run(
             app_pool,
-            claim_and_post,
             "k1",
             alice.id,
             bob.id + request_kwargs["to_offset"],
@@ -325,7 +312,6 @@ def test_a_failed_request_stores_nothing_and_leaves_the_key_free(
     assert stored(owner_conn) == before
     other = run(
         app_pool,
-        claim_and_post,
         "k1",
         alice.id,
         bob.id,
@@ -336,16 +322,16 @@ def test_a_failed_request_stores_nothing_and_leaves_the_key_free(
 
 
 def test_a_request_that_failed_for_funds_succeeds_once_the_account_is_funded(
-    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world, claim_and_post
+    app_pool: ConnectionPool, owner_conn: psycopg.Connection, world
 ) -> None:
     """Failed-then-retried: the retry with the same key and request is evaluated against the
     balance as it is now."""
     funding, alice, bob = world
     with pytest.raises(InsufficientFundsError):
-        run(app_pool, claim_and_post, "k1", alice.id, bob.id, 1500)
+        run(app_pool, "k1", alice.id, bob.id, 1500)
     commit_transfer(app_pool, "top-up", funding.id, alice.id, 1000)
 
-    transfer = run(app_pool, claim_and_post, "k1", alice.id, bob.id, 1500)
+    transfer = run(app_pool, "k1", alice.id, bob.id, 1500)
 
     assert [e.amount_minor for e in transfer.entries] == [-1500, 1500]
     assert balance(owner_conn, alice.id) == 500
@@ -355,7 +341,7 @@ def test_a_request_that_failed_for_funds_succeeds_once_the_account_is_funded(
 
 
 def test_it_refuses_an_autocommit_connection(
-    settings: Settings, owner_conn: psycopg.Connection, world, claim_and_post
+    settings: Settings, owner_conn: psycopg.Connection, world
 ) -> None:
     """The claim and the posting must share one transaction, so a failure rolls back both."""
     _, alice, bob = world
