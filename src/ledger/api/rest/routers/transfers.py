@@ -1,6 +1,7 @@
 from http import HTTPStatus
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Header, Request
 
 from ledger.api.rest.dependencies import get_pool
 from ledger.api.rest.idempotency import request_hash
@@ -37,7 +38,7 @@ router = APIRouter()
 )
 def create_transfer(
     body: TransferRequest,
-    idempotency_key: IdempotencyKey,
+    idempotency_key: Annotated[IdempotencyKey, Header()],
     request: Request,
     pool=Depends(get_pool),  # noqa: B008
 ) -> TransferResponse:
