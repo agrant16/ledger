@@ -33,7 +33,8 @@ router = APIRouter()
         "longer afford it. The same key with a different request is a 409, which means the "
         "client has a bug. A request that fails with a 400, 404 or 422 does not use up its "
         "key, so it can be retried with the same key and is checked again against current "
-        "balances. A 503 means nothing was written and the same key is safe to retry."
+        "balances. A 503 means the request may not have completed; retrying with the same key is "
+        "safe either way."
     ),
 )
 def create_transfer(
