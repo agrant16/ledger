@@ -70,13 +70,13 @@ Write tests against these properties, not against whatever the current code happ
 - Every change goes on its own branch and a pull request, never straight to `main`. Both CI checks (`lint-and-test` and `compose-smoke`) must pass, and PRs are squash-merged, so intermediate commits on a branch may be red. A pull request whose tests are committed ahead of the implementation is opened as a draft and stays one until its checks pass.
 - For the items on my "I write myself" list, Claude writes the tests first from `docs/design.md` and I write the implementation; the tests stay red until it exists.
 - Tests written ahead of their implementation import the code under test lazily, inside a fixture (docstring: "Imported lazily so these tests fail one by one while the module does not exist yet."), so each test fails on its own and not the whole file at collection. Claude replaces that fixture with a normal top-level import in the finish step below. Existing lazy fixtures are left alone until a dedicated clean-up, done in small PRs.
-- Every pull request description has three parts, which Claude writes when the PR is opened and keeps current as it changes: the scope (the milestone item or component the PR addresses); the tests (what was written or run, and which correctness rules or `docs/design.md` sections they enforce); and the review notes (what Claude scaffolded, what remains for me to implement, and any edge cases we discussed).
+- Every pull request description has three parts, which Claude writes when the PR is opened and keeps current as it changes: the scope (the milestone item or component the PR addresses); the tests (what was written or run, and which correctness rules or `docs/design.md` sections they enforce); and the review notes (what Claude scaffolded, what remains for me to implement, and any edge cases we discussed). The description also names the issue the PR implements with `Closes #N`, and links related issues.
 
 ### Workflow for a checkbox that involves tests and code
 
 Follow these steps in order. Each approval is mine to give, so don't skip ahead. The rules above all still apply.
 
-1. **Plan.** We plan the current task: state the approach and tradeoffs, and settle the details.
+1. **Plan.** We plan the current task: state the approach and tradeoffs, and settle the details. Claude then drafts the issue for it (see Issues and the project board) and creates it once I approve.
 2. **Tests.** Once I approve the plan, Claude writes the tests, if there are any.
 3. **Test rundown.** Before anything is committed, Claude gives me a rundown of the tests: the files they add, how many tests each file adds, a summary of each test (what it does and which design constraint or correctness rule it checks), and how we know they work (for example that they fail for the expected reason against the missing code, or that a control shows they can fail).
 4. **Draft PR.** Once I approve the tests, Claude commits them, pushes the branch and opens the pull request as a draft, because the tests fail CI until the implementation exists. My approval of the tests is the go-ahead for that commit, push and pull request.
@@ -84,6 +84,19 @@ Follow these steps in order. Each approval is mine to give, so don't skip ahead.
 6. **Finish.** When I have an implementation and everything is green, we finalize the pull request: Claude replaces the lazy-import fixtures in the PR's tests with top-level imports (and reruns the tests), brings its description up to date, moves it out of draft, and reminds me to run `/clear` and then `/review-pr <PR number>`.
 
 For work on Claude's own list, such as scaffolding or test infrastructure, Claude does the implementation after step 4 and the same finish applies once it is green.
+
+## Issues and the project board
+
+Work is tracked as GitHub issues in this repository, on the Ledger Project board (`https://github.com/users/agrant16/projects/1`), so there is a ticket for each piece of implementation work. Claude creates and updates them with the `gh` CLI (it needs the `project` token scope).
+
+- **One issue per checkbox,** or per pull request when the checkboxes are bundled into one PR (like the three safety-net items of PR 5c). Issues are created when we plan the checkbox (step 1 of the workflow below), not for the whole backlog up front.
+- **Claude drafts, I approve.** Claude shows me the title, body, labels, milestone and board status, and creates the issue only after I say yes. The same goes for any later edit that changes its meaning.
+- **Milestone:** `M1` to `M7`, matching the headings in `docs/design.md`.
+- **Owner label:** `owner:alan` (an item on my "I write myself" list), `owner:claude` (an item on Claude's list), or `owner:shared` (Claude writes the tests, I write the code). If an item falls between the two lists, ask me, as with any other task.
+- **Type label:** `type:task` for implementation work on a design checkbox, `type:decision` for a deferred design decision to revisit.
+- **Board status:** `Todo` when created, `In Progress` when work starts, `Done` when the PR merges (`Closes #N` closes the issue).
+- **Body:** the scope (the checkboxes as a task list, quoted from `docs/design.md`), the correctness rules it defends, and any notes that are not in the design doc. The design doc stays the source of truth; an issue points to it and does not replace it.
+- **Deferred decisions** go in a `type:decision` issue with the trigger for revisiting them, so they are not left only as a sentence in a doc.
 
 ## Commands
 
