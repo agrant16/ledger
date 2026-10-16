@@ -91,9 +91,9 @@ Work is tracked as GitHub issues in this repository, on the Ledger Project board
 
 - **One issue per checkbox,** or per pull request when the checkboxes are bundled into one PR (like the three safety-net items of PR 5c). Issues are created when we plan the checkbox (step 1 of the workflow below), not for the whole backlog up front.
 - **Claude drafts, I approve.** Claude shows me the title, body, labels, milestone and board status, and creates the issue only after I say yes. The same goes for any later edit that changes its meaning.
-- **Milestone:** `M1` to `M7`, matching the headings in `docs/design.md`.
+- **Milestone:** `M1` to `M7`, matching the headings in `docs/design.md`. A `type:tech-debt` issue has none, because it is not a design checkbox.
 - **Owner label:** `owner:alan` (an item on my "I write myself" list), `owner:claude` (an item on Claude's list), or `owner:shared` (Claude writes the tests, I write the code). If an item falls between the two lists, ask me, as with any other task.
-- **Type label:** `type:task` for implementation work on a design checkbox, `type:decision` for a deferred design decision to revisit.
+- **Type label:** `type:task` for implementation work on a design checkbox, `type:decision` for a deferred design decision to revisit, `type:tech-debt` for a clean-up of existing code, tests or docs with no behavior change (for example replacing the old lazy-import test fixtures).
 - **Board status:** `Todo` when created, `In Progress` when work starts, `Done` when the PR merges (`Closes #N` closes the issue).
 - **Body:** the scope (the checkboxes as a task list, quoted from `docs/design.md`), the correctness rules it defends, and any notes that are not in the design doc. The design doc stays the source of truth; an issue points to it and does not replace it.
 - **Deferred decisions** go in a `type:decision` issue with the trigger for revisiting them, so they are not left only as a sentence in a doc.
