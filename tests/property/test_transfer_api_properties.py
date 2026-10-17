@@ -33,7 +33,6 @@ from typing import Any
 
 import psycopg
 import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from hypothesis import HealthCheck, event, settings
 from hypothesis import strategies as st
@@ -44,11 +43,9 @@ from hypothesis.stateful import (
     precondition,
     rule,
 )
-from psycopg_pool import ConnectionPool
 
-from ledger.api.rest.error_handlers import install_error_handling
-from ledger.api.rest.router import router
 from ledger.infra.config import load_settings
+from ledger.main import app
 from ledger.service.account_service import create_account
 from tests.db_helpers import reset_database
 from tests.ledger_invariants import assert_ledger_consistent
@@ -69,14 +66,15 @@ class TransferApiMachine(RuleBasedStateMachine):
         super().__init__()
         config = load_settings()
         self.owner = psycopg.connect(config.owner_url, autocommit=True)
-        reset_database(self.owner)
-        self.pool = ConnectionPool(config.app_url, min_size=1, max_size=2, timeout=5, open=True)
-        app = FastAPI()
-        install_error_handling(app)
-        app.include_router(router)
-        app.state.pool = self.pool
-        self.client = TestClient(app, raise_server_exceptions=False)
-        self.client.__enter__()
+        try:
+            reset_database(self.owner)
+            # The real app: entering the client runs its lifespan, which opens the real pool.
+            self.client = TestClient(app, raise_server_exceptions=False)
+            self.client.__enter__()
+        except BaseException:
+            self.owner.close()
+            raise
+        self.pool = app.state.pool
         # account id -> (currency, allow_negative); the model of what each balance must be
         self.accounts: dict[int, tuple[str, bool]] = {}
         self.model: dict[int, int] = {}
@@ -84,12 +82,12 @@ class TransferApiMachine(RuleBasedStateMachine):
         self.funding: dict[str, int] = {}
         # idempotency key -> (request body, the 201 response body) for every accepted request
         self.accepted: dict[str, tuple[dict, dict]] = {}
+        # accounts whose balance changed since the last step; GET /balance is checked for these
         self.touched: set[int] = set()
         self.counter = itertools.count(1)
 
     def teardown(self) -> None:
-        self.client.__exit__(None, None, None)
-        self.pool.close()
+        self.client.__exit__(None, None, None)  # runs the lifespan shutdown, which closes the pool
         reset_database(self.owner)
         self.owner.close()
 
@@ -170,9 +168,7 @@ class TransferApiMachine(RuleBasedStateMachine):
         event("transfer accepted")
 
     def unchanged(self, before) -> None:
-        assert self.committed_state() == before, (
-            "a request that must move nothing changed the ledger"
-        )
+        assert self.committed_state() == before, "a request that must move nothing changed it"
 
     # --- rules --------------------------------------------------------------------------------
 
@@ -299,9 +295,17 @@ class TransferApiMachine(RuleBasedStateMachine):
             )
             bad = self.body(sender, receiver, self.model[sender] + 1)
             self.assert_problem(self.send(bad, key), 422, "insufficient-funds")
+            self.unchanged(before)
+            event(f"request failed: {kind}")
+            # Fund the sender by one, then send the very same request under the same key: it is
+            # evaluated fresh against the new balance and succeeds (docs/design.md, milestone 3).
+            self.attempt(self.body(self.funding[currency], sender, 1), self.new_key())
+            self.attempt(bad, key)
+            return
         self.unchanged(before)
         event(f"request failed: {kind}")
         # The key is free: a different, valid request may use it, whatever the failed one was.
+        # (The overdraft kind retries the same request, above.)
         self.attempt(self.body(sender, receiver, amount), key)
 
     # --- invariants, checked after every step ------------------------------------------------
@@ -345,4 +349,4 @@ TransferApiMachine.TestCase.settings = settings(
 )
 
 # Every accepted request really commits and every step makes several HTTP calls, so this is slow.
-TestTransferApiProperties = pytest.mark.timeout(300)(TransferApiMachine.TestCase)
+TestTransferApiProperties = pytest.mark.timeout(120)(TransferApiMachine.TestCase)
