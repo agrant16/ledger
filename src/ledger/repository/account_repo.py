@@ -28,6 +28,16 @@ GET_BALANCE_SQL = """
                   WHERE a.id = %s;
                   """
 
+GET_ACCOUNT_BY_NAME_SQL = """
+                          SELECT 
+                              id, 
+                              account_name, 
+                              currency, 
+                              allow_negative
+                          FROM accounts 
+                          WHERE account_name = %s;
+                          """
+
 
 def insert_account(
     conn: psycopg.Connection, account_name: str, currency: str, allow_negative: bool
@@ -66,3 +76,12 @@ def find_balance(conn: psycopg.Connection, account_id: int) -> Balance | None:
         if row is None:
             return None
         return Balance(account_id=row[0], currency=row[1], balance_minor=row[2])
+
+
+def find_account_by_name(conn: psycopg.Connection, account_name: str) -> Account | None:
+    with conn.cursor() as cursor:
+        cursor.execute(GET_ACCOUNT_BY_NAME_SQL, (account_name,))
+        row = cursor.fetchone()
+        if row is None:
+            return None
+        return Account(id=row[0], account_name=row[1], currency=row[2], allow_negative=row[3])

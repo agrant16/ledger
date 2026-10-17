@@ -284,6 +284,59 @@ def test_a_larger_count_adds_accounts_and_keeps_the_ones_it_has(
     ]
 
 
+def test_a_matching_account_in_the_middle_is_skipped_and_the_gaps_are_filled(
+    fresh_db: None,
+    seed,
+    output: Path,
+    app_conn: psycopg.Connection,
+    owner_conn: psycopg.Connection,
+) -> None:
+    """Only funding:USD:3 exists, and it is what the script would have made. Asking for five makes
+    the other four, keeps the existing one and lists all five ids in index order."""
+    existing = create_account(app_conn, "funding:USD:3", "USD", True)
+    app_conn.commit()
+
+    assert run(seed, output, "--currency", "USD", "--per-currency", "5") == 0
+
+    by_name = ids_by_name(owner_conn)
+    assert set(by_name) == set(expected_names("USD", 5))
+    assert by_name["funding:USD:3"] == existing.id
+    assert read_file(output) == {
+        "funding_accounts": {"USD": [by_name[name] for name in expected_names("USD", 5)]}
+    }
+
+
+def test_when_every_requested_account_exists_their_ids_are_reported_and_nothing_is_created(
+    fresh_db: None, seed, tmp_path: Path, owner_conn: psycopg.Connection
+) -> None:
+    first, second = tmp_path / "first.json", tmp_path / "second.json"
+    args = ("--currency", "USD", "--per-currency", "5")
+    run(seed, first, *args)
+    created = accounts(owner_conn)
+
+    assert run(seed, second, *args) == 0
+
+    assert accounts(owner_conn) == created
+    assert read_file(second) == read_file(first)
+    assert read_file(second)["funding_accounts"]["USD"] == [row[0] for row in created]
+
+
+def test_a_smaller_count_than_exists_reports_only_the_requested_accounts(
+    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+) -> None:
+    """Asking for fewer than exist neither deletes nor lists the extra ones."""
+    run(seed, output, "--currency", "USD", "--per-currency", "5")
+    before = ids_by_name(owner_conn)
+
+    assert run(seed, output, "--currency", "USD", "--per-currency", "2") == 0
+
+    assert ids_by_name(owner_conn) == before
+    assert read_file(output)["funding_accounts"]["USD"] == [
+        before["funding:USD"],
+        before["funding:USD:2"],
+    ]
+
+
 # --- an existing account that is not what the script would have made --------------------------
 
 
