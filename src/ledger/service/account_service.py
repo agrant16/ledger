@@ -25,3 +25,8 @@ def get_balance(conn: psycopg.Connection, account_id: int) -> Balance:
         raise LedgerInvariantError(f"Critical error: Account {account_id} has no balance row")
 
     return balance
+
+
+@transactional_service_method
+def find_account_by_name(conn: psycopg.Connection, account_name: str) -> Account | None:
+    return account_repo.find_account_by_name(conn, account_name)
