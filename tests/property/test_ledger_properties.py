@@ -57,6 +57,7 @@ from ledger.models.posting_model import Entry
 from ledger.service.account_service import create_account
 from ledger.service.posting_service import claim_transaction, post_transaction
 from tests.db_helpers import VALID_HASH, reset_database
+from tests.ledger_invariants import assert_ledger_consistent
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
 
@@ -279,37 +280,7 @@ class LedgerMachine(RuleBasedStateMachine):
 
     @invariant()
     def the_ledger_is_consistent(self) -> None:
-        def scalar(sql: str) -> int:
-            row = self.owner.execute(sql).fetchone()
-            assert row is not None
-            return row[0]
-
-        assert not scalar(
-            "SELECT count(*) FROM (SELECT 1 FROM entries GROUP BY transaction_id, currency"
-            " HAVING sum(amount_minor) <> 0) t"
-        ), "a transaction does not sum to zero in some currency"
-
-        assert not scalar(
-            "SELECT count(*) FROM (SELECT 1 FROM entries GROUP BY currency"
-            " HAVING sum(amount_minor) <> 0) t"
-        ), "a currency does not sum to zero across all accounts"
-
-        assert not scalar(
-            "SELECT count(*) FROM balances b"
-            " LEFT JOIN (SELECT account_id, sum(amount_minor) AS total FROM entries"
-            "            GROUP BY account_id) e ON e.account_id = b.account_id"
-            " WHERE b.balance_minor <> COALESCE(e.total, 0)"
-        ), "a cached balance differs from the sum of its entries"
-
-        assert not scalar(
-            "SELECT count(*) FROM balances WHERE NOT allow_negative AND balance_minor < 0"
-        ), "a protected account is negative"
-
-        assert not scalar(
-            "SELECT count(*) FROM entries e JOIN accounts a ON a.id = e.account_id"
-            " WHERE e.currency <> a.currency"
-        ), "an entry's currency differs from its account's"
-
+        assert_ledger_consistent(self.owner)
         assert self.committed_state()[2] == self.model, "the database and the model disagree"
 
 
