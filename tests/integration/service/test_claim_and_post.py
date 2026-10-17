@@ -137,7 +137,7 @@ def test_the_returned_transfer_is_the_one_that_was_committed(
 def test_the_entries_sum_to_zero_and_the_cached_balances_equal_the_entries(
     app_pool: ConnectionPool, owner_conn: psycopg.Connection, world
 ) -> None:
-    """Correctness rules 1 and 5 after a posted request."""
+    """Correctness rules 1 and 3 after a posted request."""
     _, alice, bob = world
 
     transfer = run(app_pool, "k1", alice.id, bob.id, 300)
@@ -157,7 +157,7 @@ def test_the_entries_sum_to_zero_and_the_cached_balances_equal_the_entries(
 def test_a_replay_returns_the_original_transfer_and_moves_nothing(
     app_pool: ConnectionPool, owner_conn: psycopg.Connection, world
 ) -> None:
-    """Correctness rule 2: the same key and request never apply twice."""
+    """Correctness rule 5: the same key and request never apply twice."""
     _, alice, bob = world
     first = run(app_pool, "k1", alice.id, bob.id, 300)
     after_first = stored(owner_conn)

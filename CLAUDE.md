@@ -48,14 +48,15 @@ If I ask Claude to write something from my "I write myself" list, ask me to conf
 
 These properties must always hold. Tests should check them directly, preferably as property-based tests and concurrency tests, not only example-based ones.
 
-- Every transaction's entries sum to zero per currency (debits equal credits).
-- Replaying the same transfer request with the same idempotency key never applies it twice.
-- No account balance goes negative under concurrent transfers, except accounts created with `allow_negative` true (the funding accounts).
-- Ledger entries are append-only, and the database itself refuses UPDATE and DELETE on them for the service's role (the owner role, used only for migrations and test fixtures, is not restricted). Corrections are made with new entries, never by editing or deleting old ones.
-- The cached balance always equals the sum of that account's entries.
-- Every entry's currency matches its account's currency.
+1. Every transaction's entries sum to zero per currency (debits equal credits).
+2. Ledger entries are never changed after they are written, and the database itself refuses UPDATE and DELETE on them for the service's role (the owner role, used only for migrations and test fixtures, is not restricted). Corrections are made with new entries, never by editing or deleting old ones.
+3. The cached balance always equals the sum of that account's entries.
+4. An account with `allow_negative` false never goes below zero, including under concurrent transfers. The funding accounts (`allow_negative` true) are the exception.
+5. The same idempotency key never moves money twice: replaying the same transfer request with the same key never applies it twice.
+6. Every entry's currency matches its account's currency.
 
-These mirror the invariants list in `docs/design.md`. If the two ever disagree, tell me and we'll fix both.
+
+These mirror the invariants list in `docs/design.md`, in the same order. Cite a rule by its number in that list (in tests, docstrings, PR descriptions and issues). If the two ever disagree, tell me and we'll fix both.
 
 Write tests against these properties, not against whatever the current code happens to do. If a test fails, don't change the test to match the code without telling me why.
 

@@ -36,11 +36,13 @@ changed to pass.
 Check the diff against each of these, and say which ones the change could affect:
 
 1. Entries sum to zero per currency in every transaction.
-2. A replayed idempotency key never applies a transfer twice.
-3. No protected account goes negative under concurrency.
-4. Entries are append-only, enforced by the database for the app role.
-5. The cached balance equals the sum of the account's entries.
+2. Entries are append-only, enforced by the database for the app role.
+3. The cached balance equals the sum of the account's entries.
+4. No protected account (`allow_negative` false) goes negative, including under concurrency.
+5. A replayed idempotency key never applies a transfer twice.
 6. Every entry's currency matches its account's.
+
+Number rules as in the invariants list in `docs/design.md`.
 
 Conventions: integer minor units, never floats; one database transaction per request on one
 connection; balances rows locked with `SELECT ... FOR UPDATE` in ascending account id at READ

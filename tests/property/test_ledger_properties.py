@@ -5,11 +5,15 @@ them, and posting valid and deliberately broken sets of entries, in two currenci
 protected and allow_negative accounts. After every step it checks the invariants from the design:
 
 1. Every transaction's entries sum to zero per currency.
-2. The per-currency total across all accounts stays at zero.
 3. Every cached balance equals the sum of that account's entries.
 4. No protected account is ever negative.
-5. A rejected post leaves the entries, transactions and balances exactly as they were.
 6. Every entry's currency matches its account's.
+
+The numbers are those of the invariants list in docs/design.md. Rules 2 (entries are append-only,
+tested by the privilege tests) and 5 (a key never moves money twice, which needs repeated keys, so
+the API-level machine planned in #77 covers it) are not checked here. Two more checks are not
+numbered rules: the per-currency total across all accounts stays at zero, and a rejected post
+leaves the entries, transactions and balances exactly as they were.
 
 A small in-memory model of the balances sits next to the database. Each rule builds a post with at
 most one defect, so the outcome it expects is known by construction; the model is only needed to
