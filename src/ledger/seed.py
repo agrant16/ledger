@@ -1,13 +1,14 @@
 import argparse
 import json
+import os
 import re
 import sys
+import tempfile
 
 import psycopg
 
-from ledger.errors import DuplicateAccountNameError, LedgerInvariantError
+from ledger.errors import CurrencyMismatchError, DuplicateAccountNameError, LedgerInvariantError
 from ledger.infra.config import load_settings
-from ledger.infra.db import create_pool
 from ledger.models.account_model import Account
 from ledger.repository.account_repo import find_account_by_name
 from ledger.service.account_service import create_account
@@ -86,11 +87,11 @@ def ensure_funding_account(
                     f"Account {account_name} was a duplicate but cannot be found"
                 ) from None
     if account.currency != currency:
-        raise Exception(
+        raise CurrencyMismatchError(
             f"Account {account_name} already exists but currency does not match {account.currency}"
         )
     if not account.allow_negative:
-        raise Exception(f"Account {account_name} already exists but is a protected account")
+        raise ValueError(f"Account {account_name} already exists but is a protected account")
     return account, created
 
 
@@ -109,9 +110,19 @@ def create_accounts(
     return accounts, report
 
 
-def write_file(accounts: dict[str, dict[str, list[int]]], path: str) -> None:
-    with open(path, "w") as output_file:
-        json.dump(accounts, output_file)
+def write_file(accounts: dict[str, dict[str, list[int]]], target_path: str) -> None:
+    target_dir = os.path.dirname(os.path.abspath(target_path))
+    tmp_file = tempfile.NamedTemporaryFile(dir=target_dir, delete=False, mode="w", encoding="utf-8")
+
+    try:
+        with tmp_file:
+            json.dump(accounts, tmp_file)
+        os.replace(tmp_file.name, target_path)
+    except OSError as e:
+        # 5. Clean up the temp file if anything fails before the replace happens
+        if os.path.exists(tmp_file.name):
+            os.unlink(tmp_file.name)
+        raise e
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -119,10 +130,8 @@ def main(argv: list[str] | None = None) -> int:
     # dict.fromkeys drops repeated currencies and keeps the order they were given in.
     currencies = list(dict.fromkeys(args.currency))
 
-    pool = create_pool(load_settings())
     try:
-        pool.open()
-        with pool.connection() as conn:
+        with psycopg.connect(load_settings().app_url) as conn:
             with conn.transaction():
                 accounts, report = create_accounts(conn, currencies, args.per_currency)
         for line in report:
@@ -130,11 +139,9 @@ def main(argv: list[str] | None = None) -> int:
         write_file(accounts, args.output)
         print(f"seeded {len(report)} funding accounts, ids written to {args.output}")
         return 0
-    except Exception as e:
+    except RuntimeError as e:
         print(f"Seed failed with error: {e}", file=sys.stderr)
         return 1
-    finally:
-        pool.close()
 
 
 if __name__ == "__main__":
