@@ -5,8 +5,10 @@ import sys
 
 import psycopg
 
+from ledger.errors import DuplicateAccountNameError, LedgerInvariantError
 from ledger.infra.config import load_settings
 from ledger.infra.db import create_pool
+from ledger.models.account_model import Account
 from ledger.repository.account_repo import find_account_by_name
 from ledger.service.account_service import create_account
 
@@ -22,7 +24,8 @@ class OverrideAppendAction(argparse._AppendAction):
 
 
 def currency_validator(value: str) -> str:
-    if not re.match(r"^[A-Z]{3}$", value):
+    # fullmatch, not match with ^...$: `$` also matches before a trailing newline.
+    if not re.fullmatch(r"[A-Z]{3}", value):
         raise argparse.ArgumentTypeError(
             f"'{value}' is not a valid format. Must be 3 uppercase letters, e.g. 'USD' or 'EUR'."
         )
@@ -30,7 +33,7 @@ def currency_validator(value: str) -> str:
 
 
 def per_currency_validator(value: str) -> int:
-    if not re.match(r"^[1-9]+$", value):
+    if not re.fullmatch(r"[1-9][0-9]*", value):
         raise argparse.ArgumentTypeError("--per-currency must be positive integer.")
     return int(value)
 
@@ -60,28 +63,50 @@ def set_up_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def ensure_funding_account(
+    conn: psycopg.Connection, account_name: str, currency: str
+) -> tuple[Account, bool]:
+    """The funding account with this name and whether this call created it.
+
+    An existing account is accepted only if it is what we would have created. The insert runs in a
+    savepoint: if another run commits the same name first, the unique violation would otherwise
+    abort the whole database transaction. After it, the name is looked up again.
+    """
+    account = find_account_by_name(conn, account_name)
+    created = False
+    if account is None:
+        try:
+            with conn.transaction():
+                account = create_account(conn, account_name, currency, allow_negative=True)
+            created = True
+        except DuplicateAccountNameError:
+            account = find_account_by_name(conn, account_name)
+            if account is None:
+                raise LedgerInvariantError(
+                    f"Account {account_name} was a duplicate but cannot be found"
+                ) from None
+    if account.currency != currency:
+        raise Exception(
+            f"Account {account_name} already exists but currency does not match {account.currency}"
+        )
+    if not account.allow_negative:
+        raise Exception(f"Account {account_name} already exists but is a protected account")
+    return account, created
+
+
 def create_accounts(
     conn: psycopg.Connection, currencies: list[str], n: int
-) -> dict[str, dict[str, list[int]]] | int:
+) -> tuple[dict[str, dict[str, list[int]]], list[str]]:
+    """The ids file content and one report line per account."""
     accounts = {"funding_accounts": {currency: [] for currency in currencies}}
+    report: list[str] = []
     for currency in currencies:
         for i in range(0, n):
             account_name = f"funding:{currency}" if i == 0 else f"funding:{currency}:{i + 1}"
-            account = find_account_by_name(conn, account_name)
-            if account is None:
-                account = create_account(conn, account_name, currency, allow_negative=True)
-            else:
-                if account.currency != currency:
-                    raise Exception(
-                        f"Account {account_name} already exists but currency does not "
-                        f"match {account.currency}"
-                    )
-                elif not account.allow_negative:
-                    raise Exception(
-                        f"Account {account_name} already exists but is a protected account"
-                    )
+            account, created = ensure_funding_account(conn, account_name, currency)
             accounts["funding_accounts"][currency].append(account.id)
-    return accounts
+            report.append(f"{'created' if created else 'exists '} {account_name} (id {account.id})")
+    return accounts, report
 
 
 def write_file(accounts: dict[str, dict[str, list[int]]], path: str) -> None:
@@ -90,26 +115,21 @@ def write_file(accounts: dict[str, dict[str, list[int]]], path: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = set_up_parser()
-    args = None
-    if argv:
-        args = parser.parse_args(argv)
-    else:
-        args = parser.parse_args()
+    args = set_up_parser().parse_args(argv)  # None reads sys.argv; a usage error exits with 2
+    # dict.fromkeys drops repeated currencies and keeps the order they were given in.
+    currencies = list(dict.fromkeys(args.currency))
 
     pool = create_pool(load_settings())
     try:
         pool.open()
-        result = None
         with pool.connection() as conn:
             with conn.transaction():
-                result = create_accounts(conn, list(set(args.currency)), args.per_currency)
-        if type(result) is int:
-            return result
-        if result is not None and len(result) > 0:
-            print(result)
-            write_file(result, args.output)
-            return 0
+                accounts, report = create_accounts(conn, currencies, args.per_currency)
+        for line in report:
+            print(line)
+        write_file(accounts, args.output)
+        print(f"seeded {len(report)} funding accounts, ids written to {args.output}")
+        return 0
     except Exception as e:
         print(f"Seed failed with error: {e}", file=sys.stderr)
         return 1

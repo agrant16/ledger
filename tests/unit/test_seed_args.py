@@ -46,7 +46,7 @@ def test_a_currency_that_is_not_three_uppercase_letters_is_a_usage_error(
     assert exit_code(seed, argv) == 2
 
 
-@pytest.mark.parametrize("count", ["0", "-1", "1.5", "two", ""])
+@pytest.mark.parametrize("count", ["0", "-1", "1.5", "two", "", "5\n", "05", "+5"])
 def test_a_per_currency_count_below_one_or_not_an_integer_is_a_usage_error(
     seed, tmp_path, count: str
 ) -> None:

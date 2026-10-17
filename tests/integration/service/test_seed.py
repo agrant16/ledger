@@ -163,6 +163,15 @@ def test_naming_a_currency_replaces_the_defaults(
     assert set(read_file(output)["funding_accounts"]) == {"GBP"}
 
 
+def test_a_count_with_a_zero_digit_is_accepted(
+    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+) -> None:
+    """10 and 20 are ordinary counts; a check for digits 1 to 9 only would reject them."""
+    assert run(seed, output, "--currency", "USD", "--per-currency", "10") == 0
+
+    assert set(ids_by_name(owner_conn)) == set(expected_names("USD", 10))
+
+
 def test_the_same_currency_named_twice_makes_its_accounts_once(
     fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
 ) -> None:
