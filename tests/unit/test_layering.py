@@ -5,7 +5,7 @@
     repository          models, errors      (may use psycopg and psycopg.errors, never the pool)
     service             repository, models, errors   (never the pool, psycopg.errors or infra)
     api                 service, models, errors, infra   (never psycopg or the pool directly)
-    main, migrate       entry points: may import any layer, and nothing imports them
+    main, migrate, seed entry points: may import any layer, and nothing imports them
 
 A module may always import its own layer. The scan reads the source with the ast module, so it
 needs no database and imports nothing.
@@ -205,6 +205,12 @@ def test_the_api_package_holds_only_the_rest_package() -> None:
 @pytest.mark.parametrize("relative", REQUIRED_MODULES)
 def test_the_modules_this_step_creates_exist(relative: str) -> None:
     assert (SRC / relative).is_file()
+
+
+def test_seed_is_an_entry_point_so_it_may_import_any_layer() -> None:
+    """`python -m ledger.seed` (issue #62) is run directly and nothing imports it."""
+    assert layer_of("ledger.seed") == "entry"
+    assert "seed" in ROOT_MODULES
 
 
 def test_the_scan_sees_the_whole_tree() -> None:
