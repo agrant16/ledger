@@ -1,5 +1,5 @@
 """POST /transfers: failures after the key is claimed (docs/design.md, M3: "Failed transfers do not
-burn the key" and "Safety nets through POST /transfers"; Correctness rules 1, 4, 5 and 6; ADR 0011,
+burn the key" and "Safety nets through POST /transfers"; Correctness rules 1, 3, 4 and 5; ADR 0011,
 0012, 0013).
 
 The claim and the posting share one database transaction, so any failure rolls the claim back and

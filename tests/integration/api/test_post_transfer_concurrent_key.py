@@ -1,5 +1,5 @@
 """POST /transfers sent at the same time (docs/design.md, M3: "Concurrent same key"; Correctness
-rules 2 and 3; ADR 0012).
+rules 4 and 5; ADR 0012).
 
 The key claim is `INSERT ... ON CONFLICT DO NOTHING`. A second claim of a key whose first claim is
 still uncommitted waits on the first transaction, and then sees how it ended:
@@ -14,7 +14,7 @@ release two real requests together and check what must hold whichever one wins. 
 the interleaving: a pass does not show that the two requests really overlapped, which is what the
 deterministic tests are for.
 
-The last test is rule 3: two requests with different keys whose amounts together exceed the
+The last test is rule 4: two requests with different keys whose amounts together exceed the
 balance, so exactly one may succeed.
 
 There is no lock timeout until milestone 4, so every wait here has its own timeout: a hang must
@@ -286,7 +286,7 @@ def test_two_simultaneous_requests_with_different_bodies_give_one_success_and_on
 def test_two_simultaneous_requests_that_together_overdraw_give_one_201_and_one_422(
     client: TestClient, owner_conn: psycopg.Connection, accounts, attempt: int
 ) -> None:
-    """Rule 3: different keys, so neither request is a replay and both reach the balance lock. Only
+    """Rule 4: different keys, so neither request is a replay and both reach the balance lock. Only
     one of them fits in FUNDED, and the other must see the first one's committed balance."""
     _, alice, bob = accounts
     transfers = count(owner_conn, "transactions")
