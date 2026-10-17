@@ -29,25 +29,22 @@ def set_up_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def create_accounts(conn: psycopg.Connection, currencies: list[str], N: int) -> dict[str, dict[str, list[int]]]:
+def create_accounts(conn: psycopg.Connection, currencies: list[str], n: int) -> dict[str, dict[str, list[int]]]:
     accounts = {"funding_accounts": {currency: [] for currency in currencies}}
     for currency in currencies:
-        for i in range(1, N + 1):
-            account_name = f"funding:{currency}" if i == 1 else f"funding:{currency}:{i}"
-            existing_account = find_account_by_name(conn, account_name)
-            account_id = None
-            if existing_account is None:
-                account_id = create_account(conn, account_name, currency, allow_negative=True)
-            elif existing_account.currency != currency:
-                print(f"Account {account_name} already exists but currency does not match {existing_account.currency} != {currency}")
-                sys.exit(1)
-            elif not existing_account.allow_negative:
-                print(f"Account {account_name} already exists but is a protected account, allow_negative=False")
-            if account_id is not None:
-                accounts["funding_accounts"][currency].append(account_id)
+        for i in range(0, n):
+            account_name = f"funding:{currency}" if i == 0 else f"funding:{currency}:{i+1}"
+            account = find_account_by_name(conn, account_name)
+            if account is None:
+                account = create_account(conn, account_name, currency, allow_negative=True)
             else:
-                print(f"Error, no accounts were created")
-                sys.exit
+                if account.currency != currency:
+                    print(f"Account {account_name} already exists but currency does not match {account.currency} != {currency}")
+                    sys.exit(1)
+                elif not account.allow_negative:
+                    print(f"Account {account_name} already exists but is a protected account, allow_negative=False")
+                    sys.exit(1)
+            accounts["funding_accounts"][currency].append(account.id)
     return accounts
 
 def write_file(accounts: dict[str, dict[str, list[int]]], path: str) -> None:
@@ -67,7 +64,8 @@ def main() -> None:
         accounts = None
         with pool.connection() as conn:
             with conn.transaction():
-               accounts = create_accounts(conn, args.currency, args.per_currency)
+               accounts = create_accounts(conn, list(set(args.currency)), args.per_currency)
+        print(len(accounts))
         if accounts is not None and len(accounts) > 0:
             print(accounts)
             write_file(accounts, args.output)
