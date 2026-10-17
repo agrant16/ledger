@@ -139,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
         write_file(accounts, args.output)
         print(f"seeded {len(report)} funding accounts, ids written to {args.output}")
         return 0
-    except RuntimeError as e:
+    except Exception as e:
         print(f"Seed failed with error: {e}", file=sys.stderr)
         return 1
 
