@@ -60,7 +60,7 @@ FIND_ENTRIES_SQL = """
                        t.created_at 
                    FROM entries e JOIN transactions t ON t.id = e.transaction_id 
                    WHERE e.account_id = %s AND e.id < COALESCE(%s, %s)
-                   ORDER BY e.id 
+                   ORDER BY e.id DESC
                    LIMIT %s;
                    """
 
