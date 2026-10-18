@@ -14,6 +14,13 @@ from ledger.service.account_service import create_account, find_account_by_name
 
 
 class OverrideAppendAction(argparse._AppendAction):
+    """
+    Like argparse's `append`, but the first use replaces the default list.
+
+    Plain `append` adds to the default, so `--currency GBP` would give USD, EUR and GBP. Here,
+    naming any currency replaces the defaults, and only repeats of the option add to the list.
+    """
+
     def __call__(self, parser, namespace, values, option_string=None):
         # Check if the current value in the namespace is still the default list
         if getattr(namespace, self.dest) is self.default:
@@ -111,6 +118,7 @@ def _create_accounts(
     """The ids file content and one report line per account."""
     accounts = {"funding_accounts": {currency: [] for currency in currencies}}
     report: list[str] = []
+    currencies.sort()
     for currency in currencies:
         for i in range(0, n):
             account_name = f"funding:{currency}" if i == 0 else f"funding:{currency}:{i + 1}"
