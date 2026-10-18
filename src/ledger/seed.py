@@ -65,8 +65,7 @@ def _set_up_parser() -> argparse.ArgumentParser:
         "--per-currency",
         type=_per_currency_validator,
         default=1,
-        help="Number of records (N) to generate per currency. Must be a positive integer. "
-        "If greater than 500 it will be limited to 500.",
+        help="Number of records (N) to generate per currency. Must be 1 <= N <= 500",
     )
 
     # --output is 100% required
