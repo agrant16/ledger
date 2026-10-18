@@ -55,6 +55,20 @@ def test_a_per_currency_count_below_one_or_not_an_integer_is_a_usage_error(
     assert exit_code(seed, argv) == 2
 
 
+@pytest.mark.parametrize("count", ["501", "1000", "99999999999999999999999999"])
+def test_a_per_currency_count_above_500_is_a_usage_error_and_not_clamped(
+    seed, tmp_path, count: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The limit is 500 accounts per currency. A larger request is refused, not quietly cut down:
+    a script that reports success after creating fewer accounts than were asked for would hide the
+    difference. 500 itself is allowed (tests/integration/service/test_seed.py)."""
+    argv = ["--output", str(tmp_path / "ids.json"), "--per-currency", count]
+
+    assert exit_code(seed, argv) == 2
+    assert "500" in capsys.readouterr().err
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_an_unknown_option_is_a_usage_error(seed, tmp_path) -> None:
     argv = ["--output", str(tmp_path / "ids.json"), "--no-such-option"]
 

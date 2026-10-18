@@ -202,6 +202,30 @@ def test_a_count_with_a_zero_digit_is_accepted(
     assert set(ids_by_name(owner_conn)) == set(expected_names("USD", 10))
 
 
+def test_the_largest_allowed_count_creates_every_account(
+    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+) -> None:
+    """500 is the limit per currency and is accepted (501 is a usage error, in the unit tests)."""
+    assert run(seed, output, "--currency", "USD", "--per-currency", "500") == 0
+
+    assert set(ids_by_name(owner_conn)) == set(expected_names("USD", 500))
+    assert len(read_file(output)["funding_accounts"]["USD"]) == 500
+
+
+def test_an_output_directory_that_does_not_exist_is_a_reported_failure(
+    fresh_db: None, seed, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The ids file cannot be written, so the run says so on stderr and exits 1, with the real
+    reason, and not with a traceback from the error handling itself. The accounts are created
+    before the file is written, so they exist; a re-run is the way to get the file."""
+    missing = tmp_path / "no-such-directory" / "ids.json"
+
+    assert run(seed, missing) == 1
+
+    assert "Seed failed" in capsys.readouterr().err
+    assert not missing.exists()
+
+
 def test_the_same_currency_named_twice_makes_its_accounts_once(
     fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
 ) -> None:
