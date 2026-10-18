@@ -2,6 +2,7 @@ import psycopg
 
 from ledger.errors import LedgerInvariantError, UnknownAccountError
 from ledger.models.account_model import Account, Balance
+from ledger.models.entry_history_model import EntryPage
 from ledger.repository import account_repo
 from ledger.service.decorators import transactional_service_method
 
@@ -30,3 +31,17 @@ def get_balance(conn: psycopg.Connection, account_id: int) -> Balance:
 @transactional_service_method
 def find_account_by_name(conn: psycopg.Connection, account_name: str) -> Account | None:
     return account_repo.find_account_by_name(conn, account_name)
+
+
+@transactional_service_method
+def get_entry_history(conn: psycopg.Connection, account_id: int, before_id: int | None, limit: int) -> EntryPage:
+    if limit < 1 or limit > 200:
+        raise LedgerInvariantError(f"Critical error: page size {limit} not within range")
+    if not account_repo.account_exists(conn, account_id):
+        raise UnknownAccountError(f"Unknown account {account_id} encountered while getting entry history")
+    entries = account_repo.find_entries(conn, account_id, before_id, limit + 1)
+    has_more = False
+    if len(entries) > limit:
+        has_more = True
+        entries = entries[:limit]
+    return EntryPage(entries, has_more)

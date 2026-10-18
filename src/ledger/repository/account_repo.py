@@ -59,7 +59,7 @@ FIND_ENTRIES_SQL = """
                        e.currency, 
                        t.created_at 
                    FROM entries e JOIN transactions t ON t.id = e.transaction_id 
-                   WHERE e.account_id = %s AND e.id < COALESCE(%s, %s)
+                   WHERE e.account_id = %s AND e.id < COALESCE(%s, 9223372036854775807)
                    ORDER BY e.id DESC
                    LIMIT %s;
                    """
@@ -119,9 +119,9 @@ def account_exists(conn: psycopg.Connection, account_id: int) -> bool:
         return row[0]
 
 
-def find_entries(conn: psycopg.Connection, account_id: int, before_id: int, limit: int) -> list[HistoryEntry] | None:
+def find_entries(conn: psycopg.Connection, account_id: int, before_id: int | None, limit: int) -> tuple[HistoryEntry]:
     with conn.cursor() as cursor:
-        cursor.execute(FIND_ENTRIES_SQL, (account_id, before_id, limit, limit))
+        cursor.execute(FIND_ENTRIES_SQL, (account_id, before_id, limit))
         rows = cursor.fetchall()
         entries = [HistoryEntry(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
         return entries
