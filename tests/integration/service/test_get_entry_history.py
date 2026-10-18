@@ -28,29 +28,14 @@ import pytest
 
 from ledger.errors import LedgerError, LedgerInvariantError, UnknownAccountError
 from ledger.infra.config import Settings
+from ledger.models.entry_history_model import EntryPage, HistoryEntry
 from ledger.models.posting_model import Entry
-from ledger.service.account_service import create_account
+from ledger.service.account_service import create_account, get_entry_history
 from ledger.service.posting_service import claim_transaction, post_transaction
 from tests.db_helpers import hash_for
 
 # Every transfer needs its own idempotency key, even across calls of fund().
 _keys = itertools.count(1)
-
-
-@pytest.fixture
-def models():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.models import entry_history_model
-
-    return entry_history_model
-
-
-@pytest.fixture
-def get_entry_history():
-    """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.service.account_service import get_entry_history
-
-    return get_entry_history
 
 
 def fund(conn: psycopg.Connection, funding_id: int, account_id: int, count: int) -> list[int]:
@@ -86,21 +71,19 @@ def accounts(clean_db: None, app_conn: psycopg.Connection):
 
 
 def test_an_unknown_account_is_an_unknown_account_error(
-    clean_db: None, app_conn: psycopg.Connection, get_entry_history
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     with pytest.raises(UnknownAccountError):
         get_entry_history(app_conn, 999_999, None, 50)
 
 
-def test_an_unknown_account_is_a_ledger_error(
-    clean_db: None, app_conn: psycopg.Connection, get_entry_history
-) -> None:
+def test_an_unknown_account_is_a_ledger_error(clean_db: None, app_conn: psycopg.Connection) -> None:
     with pytest.raises(LedgerError):
         get_entry_history(app_conn, 999_999, None, 50)
 
 
 def test_an_unknown_account_is_unknown_even_when_other_accounts_have_entries(
-    accounts, app_conn: psycopg.Connection, get_entry_history
+    accounts, app_conn: psycopg.Connection
 ) -> None:
     funding, alice = accounts
     fund(app_conn, funding.id, alice.id, 2)
@@ -110,19 +93,19 @@ def test_an_unknown_account_is_unknown_even_when_other_accounts_have_entries(
 
 
 def test_a_real_account_with_no_entries_is_an_empty_page(
-    accounts, app_conn: psycopg.Connection, get_entry_history, models
+    accounts, app_conn: psycopg.Connection
 ) -> None:
     _, alice = accounts
 
     page = get_entry_history(app_conn, alice.id, None, 50)
 
-    assert isinstance(page, models.EntryPage)
+    assert isinstance(page, EntryPage)
     assert list(page.entries) == []
     assert page.has_more is False
 
 
 def test_an_empty_page_past_the_oldest_entry_is_not_an_error(
-    accounts, app_conn: psycopg.Connection, get_entry_history
+    accounts, app_conn: psycopg.Connection
 ) -> None:
     funding, alice = accounts
     entry_ids = fund(app_conn, funding.id, alice.id, 2)
@@ -136,15 +119,13 @@ def test_an_empty_page_past_the_oldest_entry_is_not_an_error(
 # --- the page ---------------------------------------------------------------------------------
 
 
-def test_it_returns_history_entries_newest_first(
-    accounts, app_conn: psycopg.Connection, get_entry_history, models
-) -> None:
+def test_it_returns_history_entries_newest_first(accounts, app_conn: psycopg.Connection) -> None:
     funding, alice = accounts
     entry_ids = fund(app_conn, funding.id, alice.id, 3)
 
     page = get_entry_history(app_conn, alice.id, None, 50)
 
-    assert all(isinstance(entry, models.HistoryEntry) for entry in page.entries)
+    assert all(isinstance(entry, HistoryEntry) for entry in page.entries)
     assert ids(page) == sorted(entry_ids, reverse=True)
     newest = page.entries[0]
     assert newest.account_id == alice.id
@@ -153,9 +134,7 @@ def test_it_returns_history_entries_newest_first(
     assert newest.created_at.tzinfo is not None
 
 
-def test_it_returns_only_the_accounts_own_entries(
-    accounts, app_conn: psycopg.Connection, get_entry_history
-) -> None:
+def test_it_returns_only_the_accounts_own_entries(accounts, app_conn: psycopg.Connection) -> None:
     funding, alice = accounts
     bob = create_account(app_conn, "customer:bob", "USD", False)
     alice_ids = fund(app_conn, funding.id, alice.id, 2)
@@ -169,9 +148,7 @@ def test_it_returns_only_the_accounts_own_entries(
 # --- limit + 1 and has_more -------------------------------------------------------------------
 
 
-def test_fewer_entries_than_the_limit_is_one_page(
-    accounts, app_conn: psycopg.Connection, get_entry_history
-) -> None:
+def test_fewer_entries_than_the_limit_is_one_page(accounts, app_conn: psycopg.Connection) -> None:
     funding, alice = accounts
     fund(app_conn, funding.id, alice.id, 2)
 
@@ -181,9 +158,7 @@ def test_fewer_entries_than_the_limit_is_one_page(
     assert page.has_more is False
 
 
-def test_exactly_limit_entries_has_no_more(
-    accounts, app_conn: psycopg.Connection, get_entry_history
-) -> None:
+def test_exactly_limit_entries_has_no_more(accounts, app_conn: psycopg.Connection) -> None:
     """The boundary of the limit + 1 fetch: a full page with nothing behind it."""
     funding, alice = accounts
     fund(app_conn, funding.id, alice.id, 3)
@@ -195,7 +170,7 @@ def test_exactly_limit_entries_has_no_more(
 
 
 def test_one_entry_more_than_the_limit_has_more_and_returns_only_limit(
-    accounts, app_conn: psycopg.Connection, get_entry_history
+    accounts, app_conn: psycopg.Connection
 ) -> None:
     """The extra row is only used to learn there is another page; it is never returned."""
     funding, alice = accounts
@@ -208,7 +183,7 @@ def test_one_entry_more_than_the_limit_has_more_and_returns_only_limit(
 
 
 def test_many_more_entries_than_the_limit_returns_the_newest_limit(
-    accounts, app_conn: psycopg.Connection, get_entry_history
+    accounts, app_conn: psycopg.Connection
 ) -> None:
     funding, alice = accounts
     entry_ids = fund(app_conn, funding.id, alice.id, 7)
@@ -219,9 +194,7 @@ def test_many_more_entries_than_the_limit_returns_the_newest_limit(
     assert page.has_more is True
 
 
-def test_a_limit_of_one_returns_the_newest_entry(
-    accounts, app_conn: psycopg.Connection, get_entry_history
-) -> None:
+def test_a_limit_of_one_returns_the_newest_entry(accounts, app_conn: psycopg.Connection) -> None:
     funding, alice = accounts
     entry_ids = fund(app_conn, funding.id, alice.id, 2)
 
@@ -235,7 +208,7 @@ def test_a_limit_of_one_returns_the_newest_entry(
 
 
 def test_before_id_continues_where_the_previous_page_ended(
-    accounts, app_conn: psycopg.Connection, get_entry_history
+    accounts, app_conn: psycopg.Connection
 ) -> None:
     funding, alice = accounts
     entry_ids = fund(app_conn, funding.id, alice.id, 5)
@@ -248,9 +221,7 @@ def test_before_id_continues_where_the_previous_page_ended(
     assert second.has_more is True
 
 
-def test_the_last_page_has_no_more(
-    accounts, app_conn: psycopg.Connection, get_entry_history
-) -> None:
+def test_the_last_page_has_no_more(accounts, app_conn: psycopg.Connection) -> None:
     funding, alice = accounts
     entry_ids = fund(app_conn, funding.id, alice.id, 5)
 
@@ -261,7 +232,7 @@ def test_the_last_page_has_no_more(
 
 
 def test_before_id_does_not_skip_entries_of_other_accounts_ids(
-    accounts, app_conn: psycopg.Connection, get_entry_history
+    accounts, app_conn: psycopg.Connection
 ) -> None:
     """Bob's entries sit between Alice's ids; the cursor compares ids and never counts rows."""
     funding, alice = accounts
@@ -284,7 +255,7 @@ def test_before_id_does_not_skip_entries_of_other_accounts_ids(
 
 @pytest.mark.parametrize("limit", [0, -1, -50])
 def test_a_limit_below_one_is_an_invariant_error(
-    accounts, app_conn: psycopg.Connection, get_entry_history, limit: int
+    accounts, app_conn: psycopg.Connection, limit: int
 ) -> None:
     _, alice = accounts
 
@@ -297,16 +268,14 @@ def test_a_limit_below_one_is_an_invariant_error(
 # --- the transaction --------------------------------------------------------------------------
 
 
-def test_it_refuses_an_autocommit_connection(
-    clean_db: None, settings: Settings, get_entry_history
-) -> None:
+def test_it_refuses_an_autocommit_connection(clean_db: None, settings: Settings) -> None:
     """Every service function that is given a connection assumes a transaction is in progress."""
     with psycopg.connect(settings.app_url, autocommit=True) as conn:
         with pytest.raises(LedgerInvariantError):
             get_entry_history(conn, 1, None, 50)
 
 
-def test_it_changes_nothing(accounts, app_conn: psycopg.Connection, get_entry_history) -> None:
+def test_it_changes_nothing(accounts, app_conn: psycopg.Connection) -> None:
     funding, alice = accounts
     fund(app_conn, funding.id, alice.id, 3)
     tables = ("transactions", "entries", "balances", "accounts")
