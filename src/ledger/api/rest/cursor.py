@@ -16,14 +16,14 @@ def _validate_encoded_str(encoded_str: str) -> None:
 
 
 def _validate_id_is_in_bounds(entry_id: int) -> None:
-    """Entry ids must be between 1 and 922337203685477580"""
+    """Entry ids must be between 1 and 9223372036854775807"""
     if entry_id < 1 or entry_id > POSTGRES_BIG_INT:
         raise InvalidRequestError(
             "Invalid cursor value: decoded value must be between 1 and 9223372036854775807"
         )
 
 
-def _validate_decoded_value(decoded_str: str, encoded_str: str) -> None:
+def _validate_decoded_value(decoded_str: str) -> None:
     """
     Validates that the decoded string is a base 10 integer value. Calls _validate_id_is_in_bounds
     to validate the integer is in the required range.
@@ -59,5 +59,5 @@ def decode_cursor(encoded_str: str) -> int:
                 "Invalid cursor value: passed value does not decode and encode back to itself"
             )
         return num
-    except ValueError as e:
-        raise InvalidRequestError(f"Invalid decode operation: {str(e)}") from None
+    except ValueError:
+        raise InvalidRequestError("Invalid cursor decode operation") from None
