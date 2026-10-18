@@ -255,6 +255,16 @@ def test_the_file_lists_each_currencys_ids_in_index_order_and_matches_the_databa
     assert read_file(output) == {"funding_accounts": expected}
 
 
+def test_the_file_lists_the_currencies_in_the_order_they_were_given(
+    fresh_db: None, output: Path
+) -> None:
+    """The order of the keys is part of the documented file. Creating accounts in a different order
+    internally (see the opposite-order race below) must not change it."""
+    run(output, "--currency", "USD", "--currency", "EUR", "--currency", "GBP")
+
+    assert list(read_file(output)["funding_accounts"]) == ["USD", "EUR", "GBP"]
+
+
 def test_the_file_is_written_whole_and_leaves_no_temporary_file_behind(
     fresh_db: None, output: Path
 ) -> None:
@@ -542,6 +552,33 @@ def test_losing_a_race_to_a_different_kind_of_account_fails_the_run(
 
     assert accounts(owner_conn) == [(winner.id, "funding:USD", "USD", False)]
     assert not output.exists()
+
+
+def test_a_run_that_names_the_currencies_in_the_opposite_order_does_not_deadlock(
+    fresh_db: None,
+    output: Path,
+    app_conn: psycopg.Connection,
+    owner_conn: psycopg.Connection,
+) -> None:
+    """Another run, which named EUR first, has created `funding:EUR` but not committed it. This run
+    names USD first. If it created accounts in the order given it would insert `funding:USD`, then
+    wait on the other run's EUR, and the other run's insert of USD would wait on this one: a
+    deadlock, after which Postgres aborts one of them. The script must create the currencies in a
+    fixed (sorted) order, so it waits on EUR before it holds USD and the other run can finish. Both
+    runs then succeed, and the file still lists the currencies in the order given."""
+    other_eur = create_account(app_conn, "funding:EUR", "EUR", True)  # not committed yet
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(run, output, "--currency", "USD", "--currency", "EUR")
+        try:
+            wait_for_a_blocked_backend(owner_conn)
+            other_usd = create_account(app_conn, "funding:USD", "USD", True)
+            app_conn.commit()
+        finally:
+            app_conn.rollback()  # a no-op after the commit; frees the script if the test failed
+        assert future.result(timeout=WAIT_SECONDS) == 0
+
+    assert read_file(output) == {"funding_accounts": {"USD": [other_usd.id], "EUR": [other_eur.id]}}
+    assert sorted(ids_by_name(owner_conn)) == ["funding:EUR", "funding:USD"]
 
 
 def test_two_runs_released_together_both_succeed_with_the_same_ids(
