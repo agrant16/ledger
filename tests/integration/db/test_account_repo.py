@@ -3,6 +3,7 @@
     insert_account(conn, account_name, currency, allow_negative) -> Account
     insert_balance(conn, account_id, allow_negative) -> None
     find_balance(conn, account_id) -> a Balance-shaped row, or None
+    find_account_by_name(conn, account_name) -> Account | None
 
 Plain functions that run one statement on the connection they are given and return what the
 database says. They never judge it: "there is no such account" is `None`, and "the account has no
@@ -325,3 +326,46 @@ def test_a_balance_with_no_allow_negative_is_a_bug(
         repo.insert_balance(app_conn, account.id, None)
 
     assert isinstance(failure.value.__cause__, psycopg.errors.NotNullViolation)
+
+
+# --- find_account_by_name (issue #62) ---------------------------------------------------------
+
+
+def test_find_account_by_name_returns_the_account(
+    clean_db: None, app_conn: psycopg.Connection, repo
+) -> None:
+    created = repo.insert_account(app_conn, "funding:USD", "USD", True)
+
+    found = repo.find_account_by_name(app_conn, "funding:USD")
+
+    assert isinstance(found, Account)
+    assert found == created
+
+
+def test_find_account_by_name_returns_none_for_an_unknown_name(
+    clean_db: None, app_conn: psycopg.Connection, repo
+) -> None:
+    repo.insert_account(app_conn, "funding:USD", "USD", True)
+
+    assert repo.find_account_by_name(app_conn, "funding:EUR") is None
+
+
+def test_find_account_by_name_matches_exactly(
+    clean_db: None, app_conn: psycopg.Connection, repo
+) -> None:
+    repo.insert_account(app_conn, "funding:USD", "USD", True)
+
+    assert repo.find_account_by_name(app_conn, "FUNDING:USD") is None
+    assert repo.find_account_by_name(app_conn, "funding:USD%") is None  # not a LIKE pattern
+
+
+def test_find_account_by_name_changes_nothing(
+    clean_db: None, app_conn: psycopg.Connection, repo
+) -> None:
+    repo.insert_account(app_conn, "funding:USD", "USD", True)
+    before = (count(app_conn, "accounts"), count(app_conn, "balances"))
+
+    repo.find_account_by_name(app_conn, "funding:USD")
+    repo.find_account_by_name(app_conn, "funding:EUR")
+
+    assert (count(app_conn, "accounts"), count(app_conn, "balances")) == before
