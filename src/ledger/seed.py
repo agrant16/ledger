@@ -39,8 +39,7 @@ def _currency_validator(value: str) -> str:
 
 def _per_currency_validator(value: str) -> int:
     """
-    Validates the value for --per-currency argument is a valid positive integer less than 500.
-    Anything over 500 just makes N 500.
+    Validates the value for --per-currency argument is 1 <= N <= 500.
     """
     if not re.fullmatch(r"[1-9][0-9]*", value):
         raise argparse.ArgumentTypeError("--per-currency must be positive integer.")
@@ -129,7 +128,6 @@ def _write_file(accounts: dict[str, dict[str, list[int]]], target_path: str) -> 
             json.dump(accounts, tmp_file)
         os.replace(tmp_file.name, target_path)
     except OSError as e:
-        # 5. Clean up the temp file if anything fails before the replace happens
         if os.path.exists(tmp_file.name):
             os.unlink(tmp_file.name)
         raise e
