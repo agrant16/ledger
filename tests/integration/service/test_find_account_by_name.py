@@ -15,19 +15,11 @@ import pytest
 from ledger.errors import LedgerInvariantError
 from ledger.infra.config import Settings
 from ledger.models.account_model import Account
-from ledger.service.account_service import create_account
-
-
-@pytest.fixture
-def find_account_by_name():
-    """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.service.account_service import find_account_by_name as function
-
-    return function
+from ledger.service.account_service import create_account, find_account_by_name
 
 
 def test_returns_the_account_with_all_its_fields(
-    clean_db: None, app_conn: psycopg.Connection, find_account_by_name
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     created = create_account(app_conn, "funding:USD", "USD", True)
 
@@ -37,17 +29,13 @@ def test_returns_the_account_with_all_its_fields(
     assert found == created
 
 
-def test_returns_none_for_an_unknown_name(
-    clean_db: None, app_conn: psycopg.Connection, find_account_by_name
-) -> None:
+def test_returns_none_for_an_unknown_name(clean_db: None, app_conn: psycopg.Connection) -> None:
     create_account(app_conn, "funding:USD", "USD", True)
 
     assert find_account_by_name(app_conn, "funding:EUR") is None
 
 
-def test_names_are_matched_exactly(
-    clean_db: None, app_conn: psycopg.Connection, find_account_by_name
-) -> None:
+def test_names_are_matched_exactly(clean_db: None, app_conn: psycopg.Connection) -> None:
     """Names are unique, exact and case-sensitive (docs/design.md, Account request)."""
     create_account(app_conn, "funding:USD", "USD", True)
 
@@ -55,9 +43,7 @@ def test_names_are_matched_exactly(
     assert find_account_by_name(app_conn, "funding:USD ") is None
 
 
-def test_it_refuses_an_autocommit_connection(
-    clean_db: None, settings: Settings, find_account_by_name
-) -> None:
+def test_it_refuses_an_autocommit_connection(clean_db: None, settings: Settings) -> None:
     with psycopg.connect(settings.app_url, autocommit=True) as conn:
         with pytest.raises(LedgerInvariantError):
             find_account_by_name(conn, "funding:USD")

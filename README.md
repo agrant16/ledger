@@ -34,6 +34,34 @@ To start over with an empty local database, run `PYTHONPATH=src uv run python sc
 
 To fill the local database with accounts for manual API testing, run `PYTHONPATH=src uv run python scripts/seed_dev.py`. It creates a funding account (`allow_negative`) and five protected customer accounts for each of USD and EUR through `create_account`, all with a balance of 0, and skips any name that already exists, so it is safe to run on a database that holds data you created through the API. `reset_db.py --seed` does both in one command, and the ids are then always the same (funding accounts 1 and 2, USD customers 3 to 7, EUR customers 8 to 12).
 
+### Funding accounts (the seed script)
+
+There is no deposit endpoint: money enters the ledger through transfers out of a funding account, an account that is allowed to go negative. The API cannot create one, so `ledger.seed` does, as the app role and through the service's `create_account`:
+
+```bash
+PYTHONPATH=src uv run python -m ledger.seed --output seed_ids.json
+```
+
+```text
+created funding:USD (id 1)
+created funding:EUR (id 2)
+seeded 2 funding accounts, ids written to seed_ids.json
+```
+
+| Option | Meaning |
+| --- | --- |
+| `--output PATH` (`-o`) | Required. Where the ids file is written, atomically after the accounts are committed. The file is not ignored by git, so keep it out of commits. |
+| `--currency CODE` | Three uppercase letters; repeat it for more. Naming any currency replaces the defaults, which are `USD` and `EUR`. A repeated currency is used once. |
+| `--per-currency N` | Funding accounts per currency, 1 to 500 (default 1). A larger value is refused, not cut down. |
+
+The first account of a currency is named `funding:<CURRENCY>` and further ones `funding:<CURRENCY>:2`, `:3` and so on. The ids file has this shape, each currency mapping to its account ids in that order:
+
+```json
+{ "funding_accounts": { "USD": [1], "EUR": [2] } }
+```
+
+The script is safe to run again, and two runs at once are safe too: an account that already exists is reused and its id reported (`exists funding:USD (id 1)`). An existing account with the same name but a different currency, or one that cannot go negative, fails the run instead: the script exits 1, names the account, writes no file and rolls back everything that run created. Exit codes: 0 success, 1 failure, 2 usage error. It reads `DATABASE_APP_URL` like the service and never uses the owner role, so each funding account goes negative by exactly what it has issued and the balances of a currency still sum to zero.
+
 ## Running tests
 
 Tests run against a real PostgreSQL, never mocks. Start the database, then run pytest:

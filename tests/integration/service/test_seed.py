@@ -35,6 +35,7 @@ from pathlib import Path
 import psycopg
 import pytest
 
+from ledger import seed
 from ledger.service.account_service import create_account
 from tests.db_helpers import reset_database
 
@@ -42,14 +43,6 @@ SRC = Path(__file__).resolve().parents[3] / "src"
 WAIT_SECONDS = 10
 # Credentials the owner role can never have. A script that touched the owner role would fail.
 UNUSABLE_OWNER_URL = "postgresql://ledger_owner:wrong@127.0.0.1:1/nowhere?connect_timeout=1"
-
-
-@pytest.fixture
-def seed():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger import seed as module
-
-    return module
 
 
 @pytest.fixture
@@ -65,7 +58,7 @@ def output(tmp_path: Path) -> Path:
     return tmp_path / "ids.json"
 
 
-def run(seed, output: Path, *args: str) -> int:
+def run(output: Path, *args: str) -> int:
     return seed.main(["--output", str(output), *args])
 
 
@@ -120,19 +113,19 @@ def wait_for_a_blocked_backend(conn: psycopg.Connection) -> None:
 
 
 def test_a_default_run_creates_a_funding_account_for_usd_and_for_eur(
-    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+    fresh_db: None, output: Path, owner_conn: psycopg.Connection
 ) -> None:
-    assert run(seed, output) == 0
+    assert run(output) == 0
 
     rows = {row[1]: row[2:] for row in accounts(owner_conn)}
     assert rows == {"funding:USD": ("USD", True), "funding:EUR": ("EUR", True)}
 
 
 def test_every_funding_account_starts_with_a_zero_balance_and_no_entries(
-    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+    fresh_db: None, output: Path, owner_conn: psycopg.Connection
 ) -> None:
     """The script moves no money: it only creates the accounts the transfers will draw on."""
-    run(seed, output)
+    run(output)
 
     balances = owner_conn.execute(
         "SELECT b.account_id, b.allow_negative, b.balance_minor FROM balances b ORDER BY 1"
@@ -143,11 +136,11 @@ def test_every_funding_account_starts_with_a_zero_balance_and_no_entries(
 
 
 def test_per_currency_creates_numbered_accounts_for_each_currency(
-    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+    fresh_db: None, output: Path, owner_conn: psycopg.Connection
 ) -> None:
     args = ("--currency", "USD", "--currency", "GBP", "--per-currency", "3")
 
-    assert run(seed, output, *args) == 0
+    assert run(output, *args) == 0
 
     names = set(ids_by_name(owner_conn))
     assert names == set(expected_names("USD", 3) + expected_names("GBP", 3))
@@ -155,9 +148,9 @@ def test_per_currency_creates_numbered_accounts_for_each_currency(
 
 
 def test_naming_a_currency_replaces_the_defaults(
-    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+    fresh_db: None, output: Path, owner_conn: psycopg.Connection
 ) -> None:
-    assert run(seed, output, "--currency", "GBP") == 0
+    assert run(output, "--currency", "GBP") == 0
 
     assert set(ids_by_name(owner_conn)) == {"funding:GBP"}
     assert set(read_file(output)["funding_accounts"]) == {"GBP"}
@@ -176,7 +169,6 @@ def test_naming_a_currency_replaces_the_defaults(
 )
 def test_every_named_currency_is_seeded_however_many_are_given(
     fresh_db: None,
-    seed,
     output: Path,
     owner_conn: psycopg.Connection,
     currencies: list[str],
@@ -187,50 +179,50 @@ def test_every_named_currency_is_seeded_however_many_are_given(
     args = [arg for currency in currencies for arg in ("--currency", currency)]
     wanted = list(dict.fromkeys(currencies))
 
-    assert run(seed, output, *args) == 0
+    assert run(output, *args) == 0
 
     assert set(ids_by_name(owner_conn)) == {f"funding:{currency}" for currency in wanted}
     assert list(read_file(output)["funding_accounts"]) == wanted
 
 
 def test_a_count_with_a_zero_digit_is_accepted(
-    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+    fresh_db: None, output: Path, owner_conn: psycopg.Connection
 ) -> None:
     """10 and 20 are ordinary counts; a check for digits 1 to 9 only would reject them."""
-    assert run(seed, output, "--currency", "USD", "--per-currency", "10") == 0
+    assert run(output, "--currency", "USD", "--per-currency", "10") == 0
 
     assert set(ids_by_name(owner_conn)) == set(expected_names("USD", 10))
 
 
 def test_the_largest_allowed_count_creates_every_account(
-    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+    fresh_db: None, output: Path, owner_conn: psycopg.Connection
 ) -> None:
     """500 is the limit per currency and is accepted (501 is a usage error, in the unit tests)."""
-    assert run(seed, output, "--currency", "USD", "--per-currency", "500") == 0
+    assert run(output, "--currency", "USD", "--per-currency", "500") == 0
 
     assert set(ids_by_name(owner_conn)) == set(expected_names("USD", 500))
     assert len(read_file(output)["funding_accounts"]["USD"]) == 500
 
 
 def test_an_output_directory_that_does_not_exist_is_a_reported_failure(
-    fresh_db: None, seed, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    fresh_db: None, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """The ids file cannot be written, so the run says so on stderr and exits 1, with the real
     reason, and not with a traceback from the error handling itself. The accounts are created
     before the file is written, so they exist; a re-run is the way to get the file."""
     missing = tmp_path / "no-such-directory" / "ids.json"
 
-    assert run(seed, missing) == 1
+    assert run(missing) == 1
 
     assert "Seed failed" in capsys.readouterr().err
     assert not missing.exists()
 
 
 def test_the_same_currency_named_twice_makes_its_accounts_once(
-    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+    fresh_db: None, output: Path, owner_conn: psycopg.Connection
 ) -> None:
     """A repeated --currency is deduplicated, not an error and not a second set of accounts."""
-    assert run(seed, output, "--currency", "USD", "--currency", "USD") == 0
+    assert run(output, "--currency", "USD", "--currency", "USD") == 0
 
     assert set(ids_by_name(owner_conn)) == {"funding:USD"}
     assert len(read_file(output)["funding_accounts"]["USD"]) == 1
@@ -239,8 +231,8 @@ def test_the_same_currency_named_twice_makes_its_accounts_once(
 # --- the ids file -----------------------------------------------------------------------------
 
 
-def test_the_file_has_the_documented_shape(fresh_db: None, seed, output: Path) -> None:
-    run(seed, output, "--per-currency", "2")
+def test_the_file_has_the_documented_shape(fresh_db: None, output: Path) -> None:
+    run(output, "--per-currency", "2")
 
     content = read_file(output)
     assert set(content) == {"funding_accounts"}
@@ -251,9 +243,9 @@ def test_the_file_has_the_documented_shape(fresh_db: None, seed, output: Path) -
 
 
 def test_the_file_lists_each_currencys_ids_in_index_order_and_matches_the_database(
-    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+    fresh_db: None, output: Path, owner_conn: psycopg.Connection
 ) -> None:
-    run(seed, output, "--currency", "USD", "--currency", "EUR", "--per-currency", "3")
+    run(output, "--currency", "USD", "--currency", "EUR", "--per-currency", "3")
 
     by_name = ids_by_name(owner_conn)
     expected = {
@@ -264,9 +256,9 @@ def test_the_file_lists_each_currencys_ids_in_index_order_and_matches_the_databa
 
 
 def test_the_file_is_written_whole_and_leaves_no_temporary_file_behind(
-    fresh_db: None, seed, output: Path
+    fresh_db: None, output: Path
 ) -> None:
-    run(seed, output)
+    run(output)
 
     assert [path.name for path in output.parent.iterdir()] == [output.name]
 
@@ -275,12 +267,12 @@ def test_the_file_is_written_whole_and_leaves_no_temporary_file_behind(
 
 
 def test_a_second_run_creates_nothing_and_writes_the_same_file(
-    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+    fresh_db: None, output: Path, owner_conn: psycopg.Connection
 ) -> None:
-    run(seed, output)
+    run(output)
     first_accounts, first_file = accounts(owner_conn), output.read_bytes()
 
-    assert run(seed, output) == 0
+    assert run(output) == 0
 
     assert accounts(owner_conn) == first_accounts
     assert output.read_bytes() == first_file
@@ -288,13 +280,13 @@ def test_a_second_run_creates_nothing_and_writes_the_same_file(
 
 
 def test_a_second_run_does_not_use_up_identity_values(
-    fresh_db: None, seed, output: Path, app_conn: psycopg.Connection
+    fresh_db: None, output: Path, app_conn: psycopg.Connection
 ) -> None:
     """The names are looked up before they are created. Trying to insert a name that exists fails
     but still advances the id counter, so ids would drift on every re-run (and the ids a developer
     sees after `reset_db.py --seed` would no longer be predictable)."""
-    run(seed, output)
-    run(seed, output)
+    run(output)
+    run(output)
 
     next_account = create_account(app_conn, "customer:next", "USD", False)
 
@@ -302,20 +294,19 @@ def test_a_second_run_does_not_use_up_identity_values(
 
 
 def test_a_run_reports_the_ids_of_accounts_that_already_exist(
-    fresh_db: None, seed, tmp_path: Path
+    fresh_db: None, tmp_path: Path
 ) -> None:
     """A different output file on the second run still lists the ids from the first."""
     first, second = tmp_path / "first.json", tmp_path / "second.json"
-    run(seed, first)
+    run(first)
 
-    run(seed, second)
+    run(second)
 
     assert read_file(second) == read_file(first)
 
 
 def test_only_the_missing_accounts_are_created(
     fresh_db: None,
-    seed,
     output: Path,
     app_conn: psycopg.Connection,
     owner_conn: psycopg.Connection,
@@ -323,7 +314,7 @@ def test_only_the_missing_accounts_are_created(
     existing = create_account(app_conn, "funding:USD", "USD", True)
     app_conn.commit()
 
-    assert run(seed, output) == 0
+    assert run(output) == 0
 
     assert read_file(output)["funding_accounts"]["USD"] == [existing.id]
     assert set(ids_by_name(owner_conn)) == {"funding:USD", "funding:EUR"}
@@ -331,12 +322,12 @@ def test_only_the_missing_accounts_are_created(
 
 
 def test_a_larger_count_adds_accounts_and_keeps_the_ones_it_has(
-    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+    fresh_db: None, output: Path, owner_conn: psycopg.Connection
 ) -> None:
-    run(seed, output)
+    run(output)
     before = ids_by_name(owner_conn)
 
-    assert run(seed, output, "--per-currency", "2") == 0
+    assert run(output, "--per-currency", "2") == 0
 
     after = ids_by_name(owner_conn)
     assert set(after) == set(expected_names("USD", 2) + expected_names("EUR", 2))
@@ -349,7 +340,6 @@ def test_a_larger_count_adds_accounts_and_keeps_the_ones_it_has(
 
 def test_a_matching_account_in_the_middle_is_skipped_and_the_gaps_are_filled(
     fresh_db: None,
-    seed,
     output: Path,
     app_conn: psycopg.Connection,
     owner_conn: psycopg.Connection,
@@ -359,7 +349,7 @@ def test_a_matching_account_in_the_middle_is_skipped_and_the_gaps_are_filled(
     existing = create_account(app_conn, "funding:USD:3", "USD", True)
     app_conn.commit()
 
-    assert run(seed, output, "--currency", "USD", "--per-currency", "5") == 0
+    assert run(output, "--currency", "USD", "--per-currency", "5") == 0
 
     by_name = ids_by_name(owner_conn)
     assert set(by_name) == set(expected_names("USD", 5))
@@ -370,14 +360,14 @@ def test_a_matching_account_in_the_middle_is_skipped_and_the_gaps_are_filled(
 
 
 def test_when_every_requested_account_exists_their_ids_are_reported_and_nothing_is_created(
-    fresh_db: None, seed, tmp_path: Path, owner_conn: psycopg.Connection
+    fresh_db: None, tmp_path: Path, owner_conn: psycopg.Connection
 ) -> None:
     first, second = tmp_path / "first.json", tmp_path / "second.json"
     args = ("--currency", "USD", "--per-currency", "5")
-    run(seed, first, *args)
+    run(first, *args)
     created = accounts(owner_conn)
 
-    assert run(seed, second, *args) == 0
+    assert run(second, *args) == 0
 
     assert accounts(owner_conn) == created
     assert read_file(second) == read_file(first)
@@ -385,13 +375,13 @@ def test_when_every_requested_account_exists_their_ids_are_reported_and_nothing_
 
 
 def test_a_smaller_count_than_exists_reports_only_the_requested_accounts(
-    fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
+    fresh_db: None, output: Path, owner_conn: psycopg.Connection
 ) -> None:
     """Asking for fewer than exist neither deletes nor lists the extra ones."""
-    run(seed, output, "--currency", "USD", "--per-currency", "5")
+    run(output, "--currency", "USD", "--per-currency", "5")
     before = ids_by_name(owner_conn)
 
-    assert run(seed, output, "--currency", "USD", "--per-currency", "2") == 0
+    assert run(output, "--currency", "USD", "--per-currency", "2") == 0
 
     assert ids_by_name(owner_conn) == before
     assert read_file(output)["funding_accounts"]["USD"] == [
@@ -410,7 +400,6 @@ def test_a_smaller_count_than_exists_reports_only_the_requested_accounts(
 )
 def test_an_existing_account_of_the_wrong_kind_fails_the_run_and_changes_nothing(
     fresh_db: None,
-    seed,
     output: Path,
     app_conn: psycopg.Connection,
     owner_conn: psycopg.Connection,
@@ -423,31 +412,31 @@ def test_an_existing_account_of_the_wrong_kind_fails_the_run_and_changes_nothing
     squatter = create_account(app_conn, "funding:EUR", currency, allow_negative)
     app_conn.commit()
 
-    assert run(seed, output) == 1
+    assert run(output) == 1
 
     assert accounts(owner_conn) == [(squatter.id, "funding:EUR", currency, allow_negative)]
     assert not output.exists()
 
 
 def test_a_failed_run_leaves_an_existing_output_file_alone(
-    fresh_db: None, seed, output: Path, app_conn: psycopg.Connection
+    fresh_db: None, output: Path, app_conn: psycopg.Connection
 ) -> None:
     create_account(app_conn, "funding:USD", "USD", False)
     app_conn.commit()
     output.write_text('{"keep": "me"}', encoding="utf-8")
 
-    assert run(seed, output) == 1
+    assert run(output) == 1
 
     assert output.read_text(encoding="utf-8") == '{"keep": "me"}'
 
 
 def test_a_failed_run_leaves_no_temporary_file_behind(
-    fresh_db: None, seed, output: Path, app_conn: psycopg.Connection
+    fresh_db: None, output: Path, app_conn: psycopg.Connection
 ) -> None:
     create_account(app_conn, "funding:USD", "USD", False)
     app_conn.commit()
 
-    run(seed, output)
+    run(output)
 
     assert list(output.parent.iterdir()) == []
 
@@ -456,12 +445,12 @@ def test_a_failed_run_leaves_no_temporary_file_behind(
 
 
 def test_it_connects_as_the_app_role_and_never_as_the_owner(
-    fresh_db: None, seed, output: Path, monkeypatch: pytest.MonkeyPatch
+    fresh_db: None, output: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """With an owner URL that cannot connect, a script that touched the owner role would fail."""
     monkeypatch.setenv("DATABASE_OWNER_URL", UNUSABLE_OWNER_URL)
 
-    assert run(seed, output) == 0
+    assert run(output) == 0
 
 
 # --- as a separate process --------------------------------------------------------------------
@@ -510,7 +499,6 @@ def test_run_as_a_module_a_usage_error_exits_2(fresh_db: None, tmp_path: Path) -
 
 def test_losing_a_race_to_an_identical_account_counts_as_already_there(
     fresh_db: None,
-    seed,
     output: Path,
     app_conn: psycopg.Connection,
     owner_conn: psycopg.Connection,
@@ -521,7 +509,7 @@ def test_losing_a_race_to_an_identical_account_counts_as_already_there(
     up again, and it is the account the script wanted, so the run succeeds."""
     winner = create_account(app_conn, "funding:USD", "USD", True)  # not committed yet
     with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(run, seed, output)
+        future = executor.submit(run, output)
         try:
             wait_for_a_blocked_backend(owner_conn)
             app_conn.commit()
@@ -536,7 +524,6 @@ def test_losing_a_race_to_an_identical_account_counts_as_already_there(
 
 def test_losing_a_race_to_a_different_kind_of_account_fails_the_run(
     fresh_db: None,
-    seed,
     output: Path,
     app_conn: psycopg.Connection,
     owner_conn: psycopg.Connection,
@@ -545,7 +532,7 @@ def test_losing_a_race_to_a_different_kind_of_account_fails_the_run(
     lookup shows it is not a funding account, so the run fails and creates nothing."""
     winner = create_account(app_conn, "funding:USD", "USD", False)
     with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(run, seed, output)
+        future = executor.submit(run, output)
         try:
             wait_for_a_blocked_backend(owner_conn)
             app_conn.commit()
@@ -558,7 +545,7 @@ def test_losing_a_race_to_a_different_kind_of_account_fails_the_run(
 
 
 def test_two_runs_released_together_both_succeed_with_the_same_ids(
-    fresh_db: None, seed, tmp_path: Path, owner_conn: psycopg.Connection
+    fresh_db: None, tmp_path: Path, owner_conn: psycopg.Connection
 ) -> None:
     """A sample of the interleaving, not proof that the runs overlapped: the two tests above are
     the deterministic ones. Whatever the order, both succeed and the accounts exist once."""
@@ -567,7 +554,7 @@ def test_two_runs_released_together_both_succeed_with_the_same_ids(
 
     def release_and_run(path: Path) -> int:
         barrier.wait()
-        return run(seed, path)
+        return run(path)
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = [executor.submit(release_and_run, path) for path in outputs]
