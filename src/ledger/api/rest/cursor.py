@@ -52,7 +52,7 @@ def decode_cursor(encoded_str: str) -> int:
     try:
         _validate_encoded_str(encoded_str)
         decoded_str = base64.urlsafe_b64decode(encoded_str + "===").decode("utf-8")
-        _validate_decoded_value(decoded_str, encoded_str)
+        _validate_decoded_value(decoded_str)
         num = int(decoded_str, base=10)
         if encode_cursor(num) != encoded_str:
             raise InvalidRequestError(
