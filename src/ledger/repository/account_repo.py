@@ -4,7 +4,6 @@ from psycopg import errors
 from ledger.errors import DuplicateAccountNameError, LedgerInvariantError
 from ledger.models.account_model import Account, Balance
 from ledger.models.entry_history_model import HistoryEntry
-from ledger.models.transfer_model import TransferEntry
 
 INSERT_ACCOUNTS_SQL = """ 
                       INSERT INTO 
@@ -64,6 +63,7 @@ FIND_ENTRIES_SQL = """
                    LIMIT %s;
                    """
 
+
 def insert_account(
     conn: psycopg.Connection, account_name: str, currency: str, allow_negative: bool
 ) -> Account:
@@ -119,9 +119,10 @@ def account_exists(conn: psycopg.Connection, account_id: int) -> bool:
         return row[0]
 
 
-def find_entries(conn: psycopg.Connection, account_id: int, before_id: int | None, limit: int) -> tuple[HistoryEntry, ...]:
+def find_entries(
+    conn: psycopg.Connection, account_id: int, before_id: int | None, limit: int
+) -> list[HistoryEntry]:
     with conn.cursor() as cursor:
         cursor.execute(FIND_ENTRIES_SQL, (account_id, before_id, limit))
         rows = cursor.fetchall()
-        entries = tuple([HistoryEntry(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows])
-        return entries
+        return [HistoryEntry(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]

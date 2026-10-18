@@ -34,14 +34,18 @@ def find_account_by_name(conn: psycopg.Connection, account_name: str) -> Account
 
 
 @transactional_service_method
-def get_entry_history(conn: psycopg.Connection, account_id: int, before_id: int | None, limit: int) -> EntryPage:
+def get_entry_history(
+    conn: psycopg.Connection, account_id: int, before_id: int | None, limit: int
+) -> EntryPage:
     if limit < 1 or limit > 200:
         raise LedgerInvariantError(f"Critical error: page size {limit} not within range")
     if not account_repo.account_exists(conn, account_id):
-        raise UnknownAccountError(f"Unknown account {account_id} encountered while getting entry history")
+        raise UnknownAccountError(
+            f"Unknown account {account_id} encountered while getting entry history"
+        )
     entries = account_repo.find_entries(conn, account_id, before_id, limit + 1)
     has_more = False
     if len(entries) > limit:
         has_more = True
         entries = entries[:limit]
-    return EntryPage(entries, has_more)
+    return EntryPage(tuple(entries), has_more)

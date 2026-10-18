@@ -11,6 +11,7 @@ class HistoryEntry:
     currency: str
     created_at: datetime
 
+
 @dataclass(frozen=True)
 class EntryPage:
     entries: tuple[HistoryEntry, ...]
