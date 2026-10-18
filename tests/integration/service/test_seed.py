@@ -163,6 +163,36 @@ def test_naming_a_currency_replaces_the_defaults(
     assert set(read_file(output)["funding_accounts"]) == {"GBP"}
 
 
+@pytest.mark.parametrize(
+    "currencies",
+    [
+        ["USD", "EUR", "GBP"],
+        ["EUR", "USD", "GBP"],
+        ["GBP", "USD", "EUR"],
+        ["USD", "EUR", "GBP", "JPY"],
+        ["USD", "EUR", "USD", "EUR", "GBP"],
+    ],
+    ids=lambda currencies: " ".join(currencies),
+)
+def test_every_named_currency_is_seeded_however_many_are_given(
+    fresh_db: None,
+    seed,
+    output: Path,
+    owner_conn: psycopg.Connection,
+    currencies: list[str],
+) -> None:
+    """Naming the two defaults first, in their default order, must not make the later currencies
+    replace them: the list a repeated option builds is not the default list, even when it is equal
+    to it. Repeats are dropped and the first-seen order is kept."""
+    args = [arg for currency in currencies for arg in ("--currency", currency)]
+    wanted = list(dict.fromkeys(currencies))
+
+    assert run(seed, output, *args) == 0
+
+    assert set(ids_by_name(owner_conn)) == {f"funding:{currency}" for currency in wanted}
+    assert list(read_file(output)["funding_accounts"]) == wanted
+
+
 def test_a_count_with_a_zero_digit_is_accepted(
     fresh_db: None, seed, output: Path, owner_conn: psycopg.Connection
 ) -> None:
