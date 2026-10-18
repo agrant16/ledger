@@ -162,6 +162,16 @@ def test_an_id_outside_the_bounds_is_rejected(cursor, payload: str) -> None:
         cursor.decode_cursor(b64(payload))
 
 
+@pytest.mark.parametrize("digits", [4_300, 4_301, 5_000, 100_000])
+def test_a_cursor_of_thousands_of_digits_is_rejected_and_not_a_value_error(
+    cursor, digits: int
+) -> None:
+    """Python refuses int() on a string of more than 4,300 digits with a ValueError, which would
+    reach the API as a 500. The length has to be checked before the number is parsed."""
+    with pytest.raises(InvalidRequestError):
+        cursor.decode_cursor(b64("1" * digits))
+
+
 def test_the_largest_id_is_accepted(cursor) -> None:
     assert cursor.decode_cursor(b64(str(BIGINT_MAX))) == BIGINT_MAX
 
