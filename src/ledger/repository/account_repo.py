@@ -119,9 +119,9 @@ def account_exists(conn: psycopg.Connection, account_id: int) -> bool:
         return row[0]
 
 
-def find_entries(conn: psycopg.Connection, account_id: int, before_id: int | None, limit: int) -> tuple[HistoryEntry]:
+def find_entries(conn: psycopg.Connection, account_id: int, before_id: int | None, limit: int) -> tuple[HistoryEntry, ...]:
     with conn.cursor() as cursor:
         cursor.execute(FIND_ENTRIES_SQL, (account_id, before_id, limit))
         rows = cursor.fetchall()
-        entries = [HistoryEntry(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+        entries = tuple([HistoryEntry(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows])
         return entries

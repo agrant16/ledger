@@ -44,7 +44,7 @@ PART_RULES = {
     "schemas": {"models"},
     "problems": {"errors"},
     "idempotency": set(),
-    "cursor": {"errors"},
+    "cursor": {"errors", "schemas"},
     "dependencies": {"schemas"},
     "middleware": {"infra"},
     "error_handlers": {"problems", "middleware", "infra", "errors"},
