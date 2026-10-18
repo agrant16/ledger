@@ -29,7 +29,7 @@ class SeedException(Exception):
 
 
 def _currency_validator(value: str) -> str:
-    # fullmatch, not match with ^...$: `$` also matches before a trailing newline.
+    """Validates that the value for --currency is an uppercase string of three letters."""
     if not re.fullmatch(r"[A-Z]{3}", value):
         raise argparse.ArgumentTypeError(
             f"'{value}' is not a valid format. Must be 3 uppercase letters, e.g. 'USD' or 'EUR'."
@@ -44,7 +44,10 @@ def _per_currency_validator(value: str) -> int:
     """
     if not re.fullmatch(r"[1-9][0-9]*", value):
         raise argparse.ArgumentTypeError("--per-currency must be positive integer.")
-    return int(value) if int(value) < 500 else 500
+    integer = int(value)
+    if integer > 500:
+        raise argparse.ArgumentTypeError("--per-currency must be <= 500.")
+    return integer
 
 
 def _set_up_parser() -> argparse.ArgumentParser:
@@ -62,7 +65,8 @@ def _set_up_parser() -> argparse.ArgumentParser:
         "--per-currency",
         type=_per_currency_validator,
         default=1,
-        help="Number of records (N) to generate per currency.",
+        help="Number of records (N) to generate per currency. Must be a positive integer. "
+        "If greater than 500 it will be limited to 500.",
     )
 
     # --output is 100% required
@@ -120,10 +124,9 @@ def _create_accounts(
 
 def _write_file(accounts: dict[str, dict[str, list[int]]], target_path: str) -> None:
     target_dir = os.path.dirname(os.path.abspath(target_path))
+    tmp_file = tempfile.NamedTemporaryFile(dir=target_dir, delete=False, mode="w", encoding="utf-8")
     try:
-        with tempfile.TemporaryFile(
-            dir=target_dir, delete=False, mode="w", encoding="utf-8"
-        ) as tmp_file:
+        with tmp_file:
             json.dump(accounts, tmp_file)
         os.replace(tmp_file.name, target_path)
     except OSError as e:
