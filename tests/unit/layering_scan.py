@@ -10,7 +10,7 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "ledger"
 
-ENTRY_POINTS = {"main", "migrate"}
+ENTRY_POINTS = {"main", "migrate", "seed"}
 LAYER_PACKAGES = {"models", "repository", "service", "infra", "api"}
 
 
