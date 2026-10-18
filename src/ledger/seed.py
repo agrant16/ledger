@@ -46,7 +46,7 @@ def _per_currency_validator(value: str) -> int:
         raise argparse.ArgumentTypeError("--per-currency must be positive integer.")
     integer = int(value)
     if integer > 500:
-        raise argparse.ArgumentTypeError("--per-currency must be <= 500.")
+        raise argparse.ArgumentTypeError("--per-currency must be a positive integer <= 500.")
     return integer
 
 
