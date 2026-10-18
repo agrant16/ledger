@@ -3,6 +3,8 @@ from psycopg import errors
 
 from ledger.errors import DuplicateAccountNameError, LedgerInvariantError
 from ledger.models.account_model import Account, Balance
+from ledger.models.entry_history_model import HistoryEntry
+from ledger.models.transfer_model import TransferEntry
 
 INSERT_ACCOUNTS_SQL = """ 
                       INSERT INTO 
@@ -38,6 +40,29 @@ GET_ACCOUNT_BY_NAME_SQL = """
                           WHERE account_name = %s;
                           """
 
+
+ACCOUNT_EXISTS_SQL = """
+                     SELECT EXISTS (
+                         SELECT 
+                             1 
+                         FROM accounts 
+                         WHERE id = %s
+                     );
+                     """
+
+FIND_ENTRIES_SQL = """
+                   SELECT 
+                       e.id, 
+                       e.transaction_id, 
+                       e.account_id, 
+                       e.amount_minor, 
+                       e.currency, 
+                       t.created_at 
+                   FROM entries e JOIN transactions t ON t.id = e.transaction_id 
+                   WHERE e.account_id = %s AND e.id < COALESCE(%s, %s)
+                   ORDER BY e.id 
+                   LIMIT %s;
+                   """
 
 def insert_account(
     conn: psycopg.Connection, account_name: str, currency: str, allow_negative: bool
@@ -85,3 +110,18 @@ def find_account_by_name(conn: psycopg.Connection, account_name: str) -> Account
         if row is None:
             return None
         return Account(id=row[0], account_name=row[1], currency=row[2], allow_negative=row[3])
+
+
+def account_exists(conn: psycopg.Connection, account_id: int) -> bool:
+    with conn.cursor() as cursor:
+        cursor.execute(ACCOUNT_EXISTS_SQL, (account_id,))
+        row = cursor.fetchone()
+        return row[0]
+
+
+def find_entries(conn: psycopg.Connection, account_id: int, before_id: int, limit: int) -> list[HistoryEntry] | None:
+    with conn.cursor() as cursor:
+        cursor.execute(FIND_ENTRIES_SQL, (account_id, before_id, limit, limit))
+        rows = cursor.fetchall()
+        entries = [HistoryEntry(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+        return entries

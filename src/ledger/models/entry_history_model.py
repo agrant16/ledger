@@ -5,8 +5,12 @@ from ledger.models.transfer_model import TransferEntry
 
 
 @dataclass(frozen=True)
-class HistoryEntry(TransferEntry):
+class HistoryEntry:
+    id: int
     transaction_id: int
+    account_id: int
+    amount_minor: int
+    currency: str
     created_at: datetime
 
 @dataclass(frozen=True)
