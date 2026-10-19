@@ -78,6 +78,7 @@ Group findings under these headings, each with a file and line reference where p
 - **Blocking:** breaks a correctness rule, a convention, or the ownership split.
 - **Should fix:** a real gap in tests, docs, or edge cases.
 - **Nits:** style and naming.
+- **Pythonic Score:** A 1 to 10 score of how Pythonic the code I have written is. The baseline is 7, any function or other part that falls below 7 should be pointed out for review. 
 - **Questions for me:** anything ambiguous that I need to decide.
 - **Could not verify:** what you could not check and why.
 
