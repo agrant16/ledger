@@ -7,9 +7,10 @@ Contract these tests expect:
   by that name from ledger.infra.db so a test can replace it. It runs no SQL itself.
 - 200 with {"status": "ok"} when the check returns, with the request id header like every other
   response. It is left out of the OpenAPI document: it is for the platform, not for clients.
-- When the check raises, the failure is not hidden: the response is the generic 500 problem and the
-  exception is logged once. This includes a pool timeout: `check_database` is deliberately not
-  mapped to a 503 (only `run_in_transaction` is), so /health reports it as a failure.
+- It is a readiness check. When the check raises a ServiceBusyError (a pool wait timeout), the
+  response is the same 503 `service-busy` problem with Retry-After as on any other route, logged at
+  WARNING. When it raises anything else, the failure is not hidden: the response is the generic 500
+  problem and the exception is logged once.
 
 The real app answering on /health is tested in test_real_app_error_handling.py and the compose
 smoke job.
@@ -22,6 +23,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
+
+from ledger.api.rest.error_handlers import RETRY_AFTER_SECONDS
+from ledger.errors import ServiceBusyError
 
 
 @pytest.fixture
@@ -83,6 +87,25 @@ def test_a_failing_check_is_a_logged_500_and_not_a_healthy_answer(
     assert "refused" not in response.text
     errors = [r for r in caplog.records if r.levelno >= logging.ERROR and r.exc_info]
     assert [r.exc_info[1] for r in errors] == [failure]
+
+
+def test_a_busy_pool_is_a_503_with_retry_after_and_not_an_error(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    def busy(pool):
+        raise ServiceBusyError("Connection timeout")
+
+    monkeypatch.setattr("ledger.api.rest.routers.health.check_database", busy)
+    caplog.set_level(logging.DEBUG)
+
+    response = client.get("/health")
+
+    assert response.status_code == 503
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.headers["Retry-After"] == str(RETRY_AFTER_SECONDS)
+    assert response.json()["type"] == "urn:ledger:error:service-busy"
+    assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 1
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
 
 def test_health_is_not_in_the_openapi_document(client: TestClient) -> None:

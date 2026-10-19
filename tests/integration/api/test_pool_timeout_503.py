@@ -24,6 +24,7 @@ from ledger.main import app
 pytestmark = pytest.mark.usefixtures("migrated_database")
 
 READ = ("GET", "/accounts/1/balance", None)
+HEALTH = ("GET", "/health", None)
 WRITE_BODY = {"account_name": "customer:busy", "currency": "USD"}
 WRITE = ("POST", "/accounts", WRITE_BODY)
 
@@ -36,9 +37,15 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
         yield client
 
 
-@pytest.mark.parametrize("method, path, body", [READ, WRITE], ids=["read", "write"])
+@pytest.mark.parametrize(
+    "method, path, body", [READ, WRITE, HEALTH], ids=["read", "write", "health"]
+)
 def test_an_exhausted_pool_gives_a_503_with_retry_after(
-    client: TestClient, caplog: pytest.LogCaptureFixture, method: str, path: str, body
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+    method: str,
+    path: str,
+    body: dict | None,
 ) -> None:
     caplog.set_level(logging.DEBUG)
 
@@ -55,7 +62,9 @@ def test_an_exhausted_pool_gives_a_503_with_retry_after(
         503,
     )
     assert problem["instance"] == f"urn:uuid:{response.headers['X-Request-ID']}"
-    assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 1
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "get a connection" in warnings[0].getMessage()  # the pool's own timeout message
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
 

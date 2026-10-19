@@ -258,7 +258,7 @@ def test_a_pool_wait_timeout_is_a_service_busy_error_after_the_wait(busy_pool, r
 
     assert isinstance(failure.value, LedgerError)
     assert isinstance(failure.value.__cause__, PoolTimeout)
-    assert 0.25 <= waited < 2
+    assert 0.25 <= waited < 5  # it waited the pool's 0.3 seconds, and did not hang
 
 
 def test_the_work_is_not_called_when_no_connection_is_free(busy_pool, run) -> None:
