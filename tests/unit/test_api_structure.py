@@ -8,9 +8,10 @@ down and read the source with the ast module, so they need no database:
    the domain models, so they may import models but never services, infrastructure, routers or
    handlers. The problem table (`problems.py`) has no web framework in it. Middleware depends on
    infrastructure only. The error handlers use the table, the middleware and infrastructure.
-   Routers use schemas, the request hash, services, models and infrastructure, and never each
-   other. The aggregate router (`router.py`) knows the routers and nothing else. A module under
-   `rest/` that is not in `PART_RULES` fails the test: a new module has to say where it belongs.
+   Routers use schemas, the request hash, the cursor codec, services, models and infrastructure,
+   and never each other. The aggregate router (`router.py`) knows the routers and nothing else. A
+   module under `rest/` that is not in `PART_RULES` fails the test: a new module has to say where it
+   belongs.
 
 2. File names say what a file is: `_model.py` in models, `_repo.py` in repository, `_service.py` in
    service, `_schema.py` in schemas. The suffixes keep names unique across layers.
@@ -43,12 +44,14 @@ PART_RULES = {
     "schemas": {"models"},
     "problems": {"errors"},
     "idempotency": set(),
+    "cursor": {"errors", "schemas"},
     "dependencies": {"schemas"},
     "middleware": {"infra"},
     "error_handlers": {"problems", "middleware", "infra", "errors"},
     "routers": {
         "schemas",
         "idempotency",
+        "cursor",
         "dependencies",
         "service",
         "models",
@@ -63,6 +66,7 @@ PART_FORBIDDEN = {
     "schemas": ("fastapi", "starlette"),
     "problems": ("fastapi", "starlette", "pydantic"),
     "idempotency": ("fastapi", "starlette"),
+    "cursor": ("fastapi", "starlette"),
     "middleware": ("fastapi",),
 }
 
