@@ -1,9 +1,10 @@
 from collections.abc import Callable
+from contextlib import ExitStack
 
 import psycopg
-from psycopg_pool import ConnectionPool
+from psycopg_pool import ConnectionPool, PoolTimeout
 
-from ledger.errors import LedgerInvariantError
+from ledger.errors import LedgerInvariantError, ServiceBusyError
 from ledger.infra.config import Settings
 
 
@@ -30,7 +31,11 @@ def run_in_transaction[T](
     read_only: bool = False,
 ) -> T:
     try:
-        with pool.connection() as conn:
+        with ExitStack() as stack:
+            try:
+                conn = stack.enter_context(pool.connection())
+            except PoolTimeout as err:
+                raise ServiceBusyError("Connection timeout") from err
             if read_only:
                 conn.execute("SET TRANSACTION READ ONLY")
             return work(conn)
