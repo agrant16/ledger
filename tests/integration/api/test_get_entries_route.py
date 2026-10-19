@@ -36,6 +36,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
 
+from ledger.api.rest.error_handlers import install_error_handling
+from ledger.api.rest.router import router
+from ledger.models.entry_history_model import MAX_PAGE_SIZE
 from tests.db_helpers import commit_accounts, commit_transfer, commit_transfers, reset_database
 
 CREATED_AT = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$")
@@ -49,19 +52,8 @@ def cursor_for(text: str) -> str:
 
 
 @pytest.fixture
-def max_page_size() -> int:
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.models.entry_history_model import MAX_PAGE_SIZE
-
-    return MAX_PAGE_SIZE
-
-
-@pytest.fixture
 def app(app_pool: ConnectionPool, owner_conn: psycopg.Connection) -> FastAPI:
     """A throwaway app with the real router, the error handling and the shared test pool."""
-    from ledger.api.rest.error_handlers import install_error_handling
-    from ledger.api.rest.router import router
-
     reset_database(owner_conn)
     application = FastAPI()
     install_error_handling(application)
@@ -427,17 +419,15 @@ def test_the_endpoint_is_documented(client: TestClient) -> None:
     assert "next_cursor" in text
 
 
-def test_the_limit_parameter_documents_its_range_and_default(
-    client: TestClient, max_page_size: int
-) -> None:
+def test_the_limit_parameter_documents_its_range_and_default(client: TestClient) -> None:
     schema = parameter(operation(client), "limit")["schema"]
 
     # With a pre-validator on the type, FastAPI may write the bounds as `ge` and `le`, not
     # OpenAPI's `minimum` and `maximum`; either spelling documents the range.
     assert schema["default"] == 50
     assert schema.get("minimum", schema.get("ge")) == 1
-    assert schema.get("maximum", schema.get("le")) == max_page_size
+    assert schema.get("maximum", schema.get("le")) == MAX_PAGE_SIZE
 
 
-def test_the_shared_maximum_page_size_is_200(max_page_size: int) -> None:
-    assert max_page_size == 200
+def test_the_shared_maximum_page_size_is_200() -> None:
+    assert MAX_PAGE_SIZE == 200

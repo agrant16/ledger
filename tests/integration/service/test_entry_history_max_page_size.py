@@ -13,15 +13,8 @@ import psycopg
 import pytest
 
 from ledger.errors import LedgerInvariantError
+from ledger.models.entry_history_model import MAX_PAGE_SIZE
 from ledger.service.account_service import create_account, get_entry_history
-
-
-@pytest.fixture
-def max_page_size() -> int:
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.models.entry_history_model import MAX_PAGE_SIZE
-
-    return MAX_PAGE_SIZE
 
 
 @pytest.fixture
@@ -30,19 +23,19 @@ def alice_id(clean_db: None, app_conn: psycopg.Connection) -> int:
 
 
 def test_a_limit_of_exactly_the_maximum_is_accepted(
-    app_conn: psycopg.Connection, alice_id: int, max_page_size: int
+    app_conn: psycopg.Connection, alice_id: int
 ) -> None:
-    page = get_entry_history(app_conn, alice_id, None, max_page_size)
+    page = get_entry_history(app_conn, alice_id, None, MAX_PAGE_SIZE)
 
     assert page.entries == ()
     assert page.has_more is False
 
 
 def test_a_limit_one_above_the_maximum_is_a_bug(
-    app_conn: psycopg.Connection, alice_id: int, max_page_size: int
+    app_conn: psycopg.Connection, alice_id: int
 ) -> None:
     with pytest.raises(LedgerInvariantError):
-        get_entry_history(app_conn, alice_id, None, max_page_size + 1)
+        get_entry_history(app_conn, alice_id, None, MAX_PAGE_SIZE + 1)
 
 
 def test_the_service_follows_the_constant_not_a_hardcoded_200(
