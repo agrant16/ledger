@@ -8,8 +8,8 @@ Contract these tests expect:
 - 200 with {"status": "ok"} when the check returns, with the request id header like every other
   response. It is left out of the OpenAPI document: it is for the platform, not for clients.
 - When the check raises, the failure is not hidden: the response is the generic 500 problem and the
-  exception is logged once. (When the pool-wiring work maps a pool timeout to a 503, this test
-  changes with it.)
+  exception is logged once. This includes a pool timeout: `check_database` is deliberately not
+  mapped to a 503 (only `run_in_transaction` is), so /health reports it as a failure.
 
 The real app answering on /health is tested in test_real_app_error_handling.py and the compose
 smoke job.

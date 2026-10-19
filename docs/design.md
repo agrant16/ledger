@@ -247,8 +247,8 @@ A ticked item means that piece of work is done and tested, not that the user-fac
 - [x] Entries cursor: the base64url of the last returned entry id (the id written in decimal, without `=` padding), opaque and unsigned; undecodable text and an id outside the id bounds are both 400; unit-tested without a database
 - [x] `GET /accounts/{id}/entries` route per the API table: `limit` (default 50, 1 to 200, anything else a 400 and never clamped) and an optional `cursor`; the response is `{ "entries": [...], "next_cursor": "..." }` with `next_cursor` null on the last page and no total count; OpenAPI description written
 - [x] Walking every page of an account returns each entry exactly once, including an exact multiple of the limit, a single page, and an account with no entries
-- [ ] A pool wait timeout becomes `ServiceBusyError` and a 503 with a Retry-After header, tested with an exhausted pool (the values are tuned in milestone 4)
-- [ ] Handler thread limit set to 20 at startup, read from an environment variable
+- [x] A pool wait timeout becomes `ServiceBusyError` and a 503 with a Retry-After header, tested with an exhausted pool (the values are tuned in milestone 4)
+- [x] Handler thread limit set to 20 at startup, read from an environment variable
 - [ ] Overall concurrency cap: an ASGI middleware, inside the request-id middleware, returns a 503 with Retry-After above the cap, read from an environment variable; tested by holding requests with a barrier
 - [ ] One INFO line at startup records the effective pool, thread limit and concurrency cap settings
 - [ ] OpenAPI: each route has a summary and description, and its error responses (`application/problem+json`) are documented; `/openapi.json` lists the five endpoints
