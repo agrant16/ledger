@@ -4,7 +4,7 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict
 
 from ledger.api.rest.cursor import encode_cursor
-from ledger.api.rest.schemas.types import AccountName, Currency
+from ledger.api.rest.schemas.types import AccountName, Currency, timestamp_converter
 from ledger.models.account_model import Account, Balance
 from ledger.models.entry_history_model import EntryPage
 
@@ -69,7 +69,7 @@ class EntryPageResponse(BaseModel):
                     account_id=entry.account_id,
                     amount_minor=entry.amount_minor,
                     currency=entry.currency,
-                    created_at=entry.created_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+                    created_at=timestamp_converter(entry.created_at),
                 )
                 for entry in entry_page.entries
             ],

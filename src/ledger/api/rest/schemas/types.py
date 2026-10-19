@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, UTC
 from typing import Annotated
 
 from pydantic import AfterValidator, BeforeValidator, Field
@@ -43,6 +44,11 @@ def _limit_param(value: object) -> int:
     if isinstance(value, int):  # the default, which FastAPI validates too
         return value
     return _canonical_digits_to_int(value)
+
+
+def timestamp_converter(value: datetime):
+    """Converts a datetime object to an ISO 8601 in UTC with a trailing `Z` like 2026-10-13T10:11:12.123456Z"""
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 AccountId = Annotated[

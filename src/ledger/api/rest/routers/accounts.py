@@ -12,6 +12,7 @@ from ledger.api.rest.schemas.account_schema import (
 )
 from ledger.api.rest.schemas.types import AccountIdInPath, CursorInQuery, LimitInQuery
 from ledger.infra.db import run_in_transaction
+from ledger.models.entry_history_model import DEFAULT_PAGE_SIZE
 from ledger.service.account_service import create_account, get_balance, get_entry_history
 
 router = APIRouter()
@@ -83,7 +84,7 @@ def read_account_entries(
     account_id: AccountIdInPath,
     request: Request,
     pool=Depends(get_pool),  # noqa: B008
-    limit: LimitInQuery = 50,
+    limit: LimitInQuery = DEFAULT_PAGE_SIZE,
     cursor: CursorInQuery | None = None,
 ):
     entries = run_in_transaction(
