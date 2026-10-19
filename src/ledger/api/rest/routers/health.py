@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends
 
 from ledger.api.rest.dependencies import get_pool
-from ledger.errors import ServiceBusyError
 from ledger.infra.db import check_database
 
 router = APIRouter()

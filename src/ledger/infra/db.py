@@ -23,13 +23,14 @@ def create_pool(settings: Settings) -> ConnectionPool:
         open=False,
     )
 
+
 def _acquire(pool: ConnectionPool, stack: ExitStack) -> psycopg.Connection:
-    """Acquire a connection to the ledger db and protect against PoolTimeout.
-    """
+    """Acquire a connection to the ledger db and protect against PoolTimeout."""
     try:
         return stack.enter_context(pool.connection())
     except PoolTimeout as err:
         raise ServiceBusyError("Connection timeout") from err
+
 
 def run_in_transaction[T](
     pool: ConnectionPool,
