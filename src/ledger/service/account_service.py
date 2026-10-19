@@ -2,7 +2,7 @@ import psycopg
 
 from ledger.errors import LedgerInvariantError, UnknownAccountError
 from ledger.models.account_model import Account, Balance
-from ledger.models.entry_history_model import EntryPage, MAX_PAGE_SIZE
+from ledger.models.entry_history_model import MAX_PAGE_SIZE, EntryPage
 from ledger.repository import account_repo
 from ledger.service.decorators import transactional_service_method
 

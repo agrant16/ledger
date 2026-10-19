@@ -1,7 +1,6 @@
 import re
 from typing import Annotated
 
-from fastapi import Query
 from pydantic import AfterValidator, BeforeValidator, Field
 
 from ledger.api.rest.cursor import decode_cursor
@@ -33,8 +32,19 @@ def _canonical_digits_to_int(value: object) -> int:
     return int(value)
 
 
-def _decode_cursor(value: str | None) -> int | None:
-    return decode_cursor(value) if value is not None else None
+def _decode_cursor_param(value: object) -> int:
+    if not isinstance(value, str):
+        raise ValueError("must be a string")
+    try:
+        return decode_cursor(value)
+    except InvalidRequestError as exc:
+        raise ValueError(str(exc)) from None
+
+
+def _limit_param(value: object) -> int:
+    if isinstance(value, int):  # the default, which FastAPI validates too
+        return value
+    return _canonical_digits_to_int(value)
 
 
 AccountId = Annotated[
@@ -100,21 +110,6 @@ TransferIdInPath = Annotated[
     Field(ge=1, le=POSTGRES_BIG_INT, description=f"A strict integer from 1 to {POSTGRES_BIG_INT}"),
 ]
 
-
-def _decode_cursor_param(value: object) -> int:
-    if not isinstance(value, str):
-        raise ValueError("must be a string")
-    try:
-        return decode_cursor(value)
-    except InvalidRequestError as exc:
-        raise ValueError(str(exc)) from None
-
-
-def _limit_param(value: object) -> int:
-    if isinstance(value, int):  # the default, which FastAPI validates too
-        return value
-    return _canonical_digits_to_int(value)
-
-
 CursorInQuery = Annotated[int, BeforeValidator(_decode_cursor_param)]
+
 LimitInQuery = Annotated[int, BeforeValidator(_limit_param), Field(ge=1, le=MAX_PAGE_SIZE)]

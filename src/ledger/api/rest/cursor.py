@@ -7,6 +7,7 @@ _BASE64URL_REGEX = re.compile(r"^[A-Za-z0-9_-]+={0,2}$")
 
 POSTGRES_BIG_INT = 9223372036854775807
 
+
 def _validate_encoded_str(encoded_str: str) -> None:
     """Validates that the passed string is a base64 encoded string."""
     if len(encoded_str) % 4 == 1 or not bool(_BASE64URL_REGEX.fullmatch(encoded_str)):

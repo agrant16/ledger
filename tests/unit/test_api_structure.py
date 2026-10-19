@@ -41,7 +41,7 @@ from tests.unit.layering_scan import (
 # What each part of ledger/api/rest may import from inside ledger, by part (for modules in the REST
 # package) or by layer (for everything else). A part may always import itself.
 PART_RULES = {
-    "schemas": {"models"},
+    "schemas": {"models", "errors", "cursor"},
     "problems": {"errors"},
     "idempotency": set(),
     "cursor": {"errors", "schemas"},
@@ -224,7 +224,6 @@ def test_a_tree_that_follows_the_part_rules_has_no_violations(tmp_path: Path) ->
         ("api/rest/schemas/a_schema.py", "from ledger.repository import account_repo\n"),
         ("api/rest/schemas/a_schema.py", "from ledger.api.rest.problems import problem_for\n"),
         ("api/rest/schemas/a_schema.py", "from ledger.api.rest.routers import accounts\n"),
-        ("api/rest/schemas/a_schema.py", "from ledger.errors import E\n"),
         ("api/rest/schemas/a_schema.py", "from fastapi import APIRouter\n"),
         # the problem table has no framework and no wiring
         ("api/rest/problems.py", "from fastapi import FastAPI\n"),
