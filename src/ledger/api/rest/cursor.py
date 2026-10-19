@@ -4,24 +4,22 @@ import re
 from ledger.api.rest.schemas.types import POSTGRES_BIG_INT
 from ledger.errors import InvalidRequestError, LedgerInvariantError
 
-BASE64URL_REGEX = re.compile(r"^[A-Za-z0-9_-]+={0,2}$")
+_BASE64URL_REGEX = re.compile(r"^[A-Za-z0-9_-]+={0,2}$")
 
 
 def _validate_encoded_str(encoded_str: str) -> None:
     """Validates that the passed string is a base64 encoded string."""
-    if len(encoded_str) % 4 == 1 or not bool(BASE64URL_REGEX.fullmatch(encoded_str)):
+    if len(encoded_str) % 4 == 1 or not bool(_BASE64URL_REGEX.fullmatch(encoded_str)):
         raise InvalidRequestError(
             "Invalid cursor value: passed value is not a base64url encoded string"
         )
 
 
-def _validate_decoded_id(entry_id: int) -> int:
+def _in_bounds(entry_id: int) -> bool:
     """Entry ids must be integers between 1 and 9223372036854775807"""
-    if entry_id < 1 or entry_id > POSTGRES_BIG_INT:
-        raise InvalidRequestError(
-            "Invalid cursor value: decoded value must be between 1 and 9223372036854775807"
-        )
-    return entry_id
+    if not 0 < entry_id <= POSTGRES_BIG_INT:
+        return False
+    return True
 
 
 def encode_cursor(entry_id: int) -> str:
@@ -32,9 +30,9 @@ def encode_cursor(entry_id: int) -> str:
     called within the application to encode an entry id from the entries database. if the
     value is outside the allowed range it is a bug and not a bad request.
     """
-    if entry_id < 1 or entry_id > POSTGRES_BIG_INT:
-        raise LedgerInvariantError("Critical Error: entry_id is out of range")
-    return base64.urlsafe_b64encode(str(entry_id).encode("utf-8")).decode("utf-8").rstrip("=")
+    if not _in_bounds(entry_id):
+        raise LedgerInvariantError("Critical error: entry_id is out of range")
+    return base64.urlsafe_b64encode(str(entry_id).encode()).decode("ascii").rstrip("=")
 
 
 def decode_cursor(encoded_str: str) -> int:
@@ -46,14 +44,22 @@ def decode_cursor(encoded_str: str) -> int:
     It catches the other possible errors (binascii.Error, UnicodeDecodeError, and int() failures)
     and converts to an InvalidRequestError.
     """
+    _validate_encoded_str(encoded_str)
+
     try:
-        _validate_encoded_str(encoded_str)
-        decoded_str = base64.urlsafe_b64decode(encoded_str + "===").decode("utf-8")
-        entry_id = _validate_decoded_id(int(decoded_str, base=10))
-        if encode_cursor(entry_id) != encoded_str:
-            raise InvalidRequestError(
-                "Invalid cursor value: passed value does not decode and encode back to itself"
-            )
-        return entry_id
+        decoded_str = base64.urlsafe_b64decode(encoded_str + "===").decode("ascii")
+        entry_id = int(decoded_str, base=10)
     except ValueError:
         raise InvalidRequestError("Invalid cursor decode operation") from None
+
+    if not _in_bounds(entry_id):
+        raise InvalidRequestError(
+            "Invalid cursor value: must be an integer between 1 and 9223372036854775807"
+        )
+
+    if encode_cursor(entry_id) != encoded_str:
+        raise InvalidRequestError(
+            "Invalid cursor value: passed value does not decode and encode back to itself"
+        )
+
+    return entry_id
