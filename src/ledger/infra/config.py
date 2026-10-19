@@ -18,6 +18,7 @@ class Settings:
     # Fixed pool size and how long a request waits for a connection before a 503.
     pool_size: int
     pool_timeout_seconds: float
+    handler_thread_limit: int
 
 
 def load_settings() -> Settings:
@@ -27,4 +28,5 @@ def load_settings() -> Settings:
         migrations_dir=Path(os.environ.get("MIGRATIONS_DIR", DEFAULT_MIGRATIONS_DIR)),
         pool_size=int(os.environ.get("POOL_SIZE", "10")),
         pool_timeout_seconds=float(os.environ.get("POOL_TIMEOUT_SECONDS", "2")),
+        handler_thread_limit=int(os.environ.get("HANDLER_THREAD_LIMIT", "20")),
     )
