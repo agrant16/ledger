@@ -37,18 +37,15 @@ def find_account_by_name(conn: psycopg.Connection, account_name: str) -> Account
 def get_entry_history(
     conn: psycopg.Connection, account_id: int, before_id: int | None, limit: int
 ) -> EntryPage:
+    if limit < 1 or limit > 200:
+        raise LedgerInvariantError(f"Critical error: page size {limit} not within range")
     # The account check is a separate statement from the entries query.
     # That is race-free because accounts are never deleted, so an account
     # that exists now still exists when the entries are read.
-    if limit < 1 or limit > 200:
-        raise LedgerInvariantError(f"Critical error: page size {limit} not within range")
     if not account_repo.account_exists(conn, account_id):
         raise UnknownAccountError(
             f"Unknown account {account_id} encountered while getting entry history"
         )
     entries = account_repo.find_entries(conn, account_id, before_id, limit + 1)
-    has_more = False
-    if len(entries) > limit:
-        has_more = True
-        entries = entries[:limit]
-    return EntryPage(tuple(entries), has_more)
+    has_more = len(entries) > limit
+    return EntryPage(tuple(entries[:limit]), has_more)
