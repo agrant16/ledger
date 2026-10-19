@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 MAX_PAGE_SIZE = 200
-
+DEFAULT_PAGE_SIZE = 50
 
 @dataclass(frozen=True)
 class HistoryEntry:
