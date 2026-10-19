@@ -1,4 +1,3 @@
-from datetime import UTC
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict

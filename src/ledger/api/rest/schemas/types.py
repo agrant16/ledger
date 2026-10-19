@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import Annotated
 
 from pydantic import AfterValidator, BeforeValidator, Field
@@ -47,7 +47,10 @@ def _limit_param(value: object) -> int:
 
 
 def timestamp_converter(value: datetime):
-    """Converts a datetime object to an ISO 8601 in UTC with a trailing `Z` like 2026-10-13T10:11:12.123456Z"""
+    """
+    Converts a datetime object to an ISO 8601 time string in UTC with a
+    trailing `Z` like 2026-10-13T10:11:12.123456Z
+    """
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
