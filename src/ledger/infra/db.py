@@ -23,7 +23,7 @@ def create_pool(settings: Settings) -> ConnectionPool:
         open=False,
     )
 
-def acquire_connection(pool: ConnectionPool, stack: ExitStack) -> psycopg.Connection:
+def _acquire(pool: ConnectionPool, stack: ExitStack) -> psycopg.Connection:
     """Acquire a connection to the ledger db and protect against PoolTimeout.
     """
     try:
@@ -39,7 +39,7 @@ def run_in_transaction[T](
 ) -> T:
     try:
         with ExitStack() as stack:
-            conn = acquire_connection(pool, stack)
+            conn = _acquire(pool, stack)
             if read_only:
                 conn.execute("SET TRANSACTION READ ONLY")
             return work(conn)
@@ -52,5 +52,5 @@ def run_in_transaction[T](
 def check_database(pool: ConnectionPool) -> None:
     """Raise if the database cannot answer; used by GET /health."""
     with ExitStack() as stack:
-        conn = acquire_connection(pool, stack)
+        conn = _acquire(pool, stack)
         conn.execute("SELECT 1")
