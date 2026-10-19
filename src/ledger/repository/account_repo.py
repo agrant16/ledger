@@ -1,3 +1,5 @@
+from datetime import UTC
+
 import psycopg
 from psycopg import errors
 
@@ -125,4 +127,14 @@ def find_entries(
     with conn.cursor() as cursor:
         cursor.execute(FIND_ENTRIES_SQL, (account_id, before_id, limit))
         rows = cursor.fetchall()
-        return [HistoryEntry(row[0], row[1], row[2], row[3], row[4], row[5]) for row in rows]
+        return [
+            HistoryEntry(
+                id=row[0],
+                transaction_id=row[1],
+                account_id=row[2],
+                amount_minor=row[3],
+                currency=row[4],
+                created_at=row[5].astimezone(UTC),
+            )
+            for row in rows
+        ]
