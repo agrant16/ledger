@@ -2,44 +2,38 @@ import base64
 import re
 
 from ledger.api.rest.schemas.types import POSTGRES_BIG_INT
-from ledger.errors import InvalidRequestError
+from ledger.errors import InvalidRequestError, LedgerInvariantError
 
 BASE64URL_REGEX = re.compile(r"^[A-Za-z0-9_-]+={0,2}$")
 
 
 def _validate_encoded_str(encoded_str: str) -> None:
     """Validates that the passed string is a base64 encoded string."""
-    if len(encoded_str) % 4 == 1 or not bool(BASE64URL_REGEX.match(encoded_str)):
+    if len(encoded_str) % 4 == 1 or not bool(BASE64URL_REGEX.fullmatch(encoded_str)):
         raise InvalidRequestError(
             "Invalid cursor value: passed value is not a base64url encoded string"
         )
 
 
-def _validate_id_is_in_bounds(entry_id: int) -> None:
-    """Entry ids must be between 1 and 9223372036854775807"""
+def _validate_decoded_id(entry_id: int) -> int:
+    """Entry ids must be integers between 1 and 9223372036854775807"""
     if entry_id < 1 or entry_id > POSTGRES_BIG_INT:
         raise InvalidRequestError(
             "Invalid cursor value: decoded value must be between 1 and 9223372036854775807"
         )
-
-
-def _validate_decoded_value(decoded_str: str) -> None:
-    """
-    Validates that the decoded string is a base 10 integer value. Calls _validate_id_is_in_bounds
-    to validate the integer is in the required range.
-    """
-    try:
-        int(decoded_str, base=10)
-    except ValueError:
-        raise InvalidRequestError(
-            "Invalid cursor value: value does not decode to an integer"
-        ) from None
-    _validate_id_is_in_bounds(int(decoded_str, base=10))
+    return entry_id
 
 
 def encode_cursor(entry_id: int) -> str:
-    """Encodes an integer as a base64 encoded string and strips padding."""
-    _validate_id_is_in_bounds(entry_id)
+    """
+    Encodes an integer as a base64 encoded string and strips padding.
+
+    Raises a LedgerInvariantError instead of InvalidRequestError. encode_cursor is directly
+    called within the application to encode an entry id from the entries database. if the
+    value is outside the allowed range it is a bug and not a bad request.
+    """
+    if entry_id < 1 or entry_id > POSTGRES_BIG_INT:
+        raise LedgerInvariantError("Critical Error: entry_id is out of range")
     return base64.urlsafe_b64encode(str(entry_id).encode("utf-8")).decode("utf-8").rstrip("=")
 
 
@@ -47,17 +41,19 @@ def decode_cursor(encoded_str: str) -> int:
     """
     Decodes a base64 encoded string back to an integer value.
 
-    Raises an InvalidRequestError
+    Raises an InvalidRequestError on any error. ValueError is caught as
+    it allows the specific InvalidRequestErrors to be raised and passthrough.
+    It catches the other possible errors (binascii.Error, UnicodeDecodeError, and int() failures)
+    and converts to an InvalidRequestError.
     """
     try:
         _validate_encoded_str(encoded_str)
         decoded_str = base64.urlsafe_b64decode(encoded_str + "===").decode("utf-8")
-        _validate_decoded_value(decoded_str)
-        num = int(decoded_str, base=10)
-        if encode_cursor(num) != encoded_str:
+        entry_id = _validate_decoded_id(int(decoded_str, base=10))
+        if encode_cursor(entry_id) != encoded_str:
             raise InvalidRequestError(
                 "Invalid cursor value: passed value does not decode and encode back to itself"
             )
-        return num
+        return entry_id
     except ValueError:
         raise InvalidRequestError("Invalid cursor decode operation") from None
