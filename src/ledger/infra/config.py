@@ -18,7 +18,7 @@ class Settings:
     # Fixed pool size and how long a request waits for a connection before a 503.
     pool_size: int
     pool_timeout_seconds: float
-    # Max concurrent handler threads (anyio’s default is 40)”
+    # Max concurrent handler threads (anyio’s default is 40)
     handler_thread_limit: int
 
 
