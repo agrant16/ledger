@@ -40,7 +40,7 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 from starlette.requests import Request
 
-from ledger.errors import LedgerInvariantError, UnbalancedEntriesError
+from ledger.errors import LedgerInvariantError, ServiceBusyError, UnbalancedEntriesError
 from tests.unit.api.api_cases import EXAMPLES, EXPECTED, EXTENSIONS, STANDARD_MEMBERS
 
 LEDGER_ERRORS = {error.__name__: error for error in EXPECTED}
@@ -87,6 +87,10 @@ def client() -> TestClient:
     @app.get("/raise-ledger/{name}")
     def raise_ledger(name: str) -> None:
         raise EXAMPLES[LEDGER_ERRORS[name]]()
+
+    @app.get("/raise-busy-with-cause")
+    def raise_busy_with_cause() -> None:
+        raise ServiceBusyError("Connection timeout") from TimeoutError("the pool gave up after 2s")
 
     @app.get("/raise-bug/{name}")
     def raise_bug(name: str) -> None:
@@ -176,6 +180,18 @@ def test_service_busy_says_when_to_retry_and_is_logged_as_a_warning(client, capl
     assert len(warnings) == 1
     assert warnings[0].request_id == request_id(response)
     assert not at_least(caplog, logging.ERROR)
+
+
+def test_the_warning_for_a_503_carries_its_cause(client, caplog) -> None:
+    caplog.set_level(logging.DEBUG)
+
+    response = client.get("/raise-busy-with-cause")
+
+    assert response.status_code == 503
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "the pool gave up after 2s" in warnings[0].getMessage()
+    assert "the pool gave up" not in response.text  # the cause is for the log, not the client
 
 
 # --- bugs -> a generic 500 -----------------------------------------------------------------------

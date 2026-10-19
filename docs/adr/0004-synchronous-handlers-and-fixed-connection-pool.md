@@ -15,6 +15,8 @@ Every write is one database transaction on one connection. Under load, the servi
 - **One connection per request.** A request uses one connection for its whole transaction and never takes a second while holding the first.
 - **Settings come from environment variables**, and the values in force are recorded with every benchmark.
 
+*Note (2026-10-19): `GET /health` is a readiness check, so a pool wait timeout there is the same 503 `service-busy` with `Retry-After` as on any other route, not a 500 (PR #92, #91). A liveness check, `/livez`, is a deferred decision (#94).*
+
 ## Consequences
 * **Positive:**
   - Overload turns into a bounded 503 with a retry hint, not a hang.

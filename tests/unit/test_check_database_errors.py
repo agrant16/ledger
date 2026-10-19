@@ -2,14 +2,18 @@
 
 The real-pool behavior is in tests/integration/db/test_check_database.py. Here a stand-in pool
 shows what the function does with a failure it cannot cause for real: it asks for one connection,
-runs one trivial statement, and lets any error through exactly as it was raised (no translation
-and no swallowing), because /health reports a failure by failing.
+runs one trivial statement, and lets any error through exactly as it was raised (no swallowing),
+because /health reports a failure by failing. The one translation is a pool wait timeout, which is
+a ServiceBusyError chained to the PoolTimeout (a 503, not a bug).
 """
 
 from contextlib import contextmanager
 
 import psycopg
 import pytest
+from psycopg_pool import PoolTimeout
+
+from ledger.errors import ServiceBusyError
 
 
 class StatementRecorder:
@@ -78,6 +82,29 @@ def test_a_failure_to_get_a_connection_comes_out_as_it_was(check_database) -> No
     pool = StandInPool(StatementRecorder(), failure_on_checkout=failure)
 
     with pytest.raises(psycopg.OperationalError) as caught:
+        check_database(pool)
+
+    assert caught.value is failure
+
+
+def test_a_pool_timeout_at_checkout_is_a_service_busy_error_chained_to_it(check_database) -> None:
+    timeout = PoolTimeout("no connection after 2.00 sec")
+    recorder = StatementRecorder()
+    pool = StandInPool(recorder, failure_on_checkout=timeout)
+
+    with pytest.raises(ServiceBusyError) as caught:
+        check_database(pool)
+
+    assert caught.value.__cause__ is timeout
+    assert recorder.statements == []
+
+
+def test_a_pool_timeout_while_the_statement_runs_is_not_rewritten(check_database) -> None:
+    """Only the wait for the connection is a busy service; the same rule as run_in_transaction."""
+    failure = PoolTimeout("raised after the connection was held")
+    pool = StandInPool(StatementRecorder(failure))
+
+    with pytest.raises(PoolTimeout) as caught:
         check_database(pool)
 
     assert caught.value is failure

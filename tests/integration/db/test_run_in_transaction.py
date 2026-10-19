@@ -16,16 +16,27 @@ milestone 4's deadlock retry run the whole body again without touching any route
   a LedgerError, chained to the original psycopg error. The same translation covers an integrity
   error raised inside `work` that nothing below translated. A LedgerError raised by `work` is an
   expected outcome and passes through untouched, and so does any other database error.
+- A pool that cannot give a connection within its wait is a ServiceBusyError (an expected outcome
+  that the API layer maps to a 503), chained to the pool's PoolTimeout. Only the wait for the
+  connection counts: `work` is not called, and a PoolTimeout raised from inside `work` is not
+  rewritten. The pool is fine again once a connection is free.
 - Either way the connection goes back to the pool in a usable state.
 - With read_only=True the transaction is read only (SET TRANSACTION READ ONLY, issued first), and
   that setting does not leak onto the next user of the pooled connection.
 """
 
+import time
+
 import psycopg
 import pytest
-from psycopg_pool import ConnectionPool
+from psycopg_pool import ConnectionPool, PoolTimeout
 
-from ledger.errors import DuplicateAccountNameError, LedgerError, LedgerInvariantError
+from ledger.errors import (
+    DuplicateAccountNameError,
+    LedgerError,
+    LedgerInvariantError,
+    ServiceBusyError,
+)
 from ledger.service.account_service import create_account
 from tests.db_helpers import VALID_HASH
 
@@ -48,6 +59,13 @@ def run():
 def single_pool(settings):
     """A pool of one connection: any second connection would have to wait for the first."""
     with ConnectionPool(settings.app_url, min_size=1, max_size=1, timeout=2, open=True) as pool:
+        yield pool
+
+
+@pytest.fixture
+def busy_pool(settings):
+    """A pool of one connection that gives up after 0.3 seconds, so a test can exhaust it."""
+    with ConnectionPool(settings.app_url, min_size=1, max_size=1, timeout=0.3, open=True) as pool:
         yield pool
 
 
@@ -229,3 +247,44 @@ def test_a_database_error_that_is_not_an_integrity_error_is_not_translated(
     and keeps its own type."""
     with pytest.raises(psycopg.errors.SyntaxError):
         run(single_pool, lambda conn: conn.execute("SELEKT 1"))
+
+
+def test_a_pool_wait_timeout_is_a_service_busy_error_after_the_wait(busy_pool, run) -> None:
+    with busy_pool.connection():  # the only connection is in use
+        started = time.monotonic()
+        with pytest.raises(ServiceBusyError) as failure:
+            run(busy_pool, lambda conn: conn.execute("SELECT 1"))
+        waited = time.monotonic() - started
+
+    assert isinstance(failure.value, LedgerError)
+    assert isinstance(failure.value.__cause__, PoolTimeout)
+    assert 0.25 <= waited < 5  # it waited the pool's 0.3 seconds, and did not hang
+
+
+def test_the_work_is_not_called_when_no_connection_is_free(busy_pool, run) -> None:
+    called = []
+
+    with busy_pool.connection():
+        with pytest.raises(ServiceBusyError):
+            run(busy_pool, lambda conn: called.append(True))
+
+    assert called == []
+
+
+def test_a_pool_timeout_raised_inside_the_work_is_not_rewritten(busy_pool, run) -> None:
+    """Only the wait for the connection is a busy service. The work already holds its connection,
+    so a PoolTimeout coming out of it would be a bug (the one-connection rule) and must stay one."""
+
+    def work(conn):
+        raise PoolTimeout("a second connection was requested")
+
+    with pytest.raises(PoolTimeout):
+        run(busy_pool, work)
+
+
+def test_the_pool_works_again_once_a_connection_is_free(busy_pool, run) -> None:
+    with busy_pool.connection():
+        with pytest.raises(ServiceBusyError):
+            run(busy_pool, lambda conn: conn.execute("SELECT 1"))
+
+    assert run(busy_pool, lambda conn: conn.execute("SELECT 42").fetchone()) == (42,)

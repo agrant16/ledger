@@ -4,10 +4,11 @@
 
 Proves the service can reach the database: it takes one connection from the pool, runs a trivial
 statement on it, and gives the connection back. It returns nothing when all is well and lets any
-failure through as it is (a pool that cannot give a connection in time raises PoolTimeout, a
-database that cannot be reached raises psycopg's OperationalError). It is infrastructure: it runs
-its own statement, so no service or repository is involved, and /health calls it from the API layer
-without touching SQL.
+failure through as it is, with one exception: a pool that cannot give a connection in time is a
+ServiceBusyError chained to the pool's PoolTimeout, so /health answers 503 like every other route
+(a database that cannot be reached still raises psycopg's OperationalError). It is infrastructure:
+it runs its own statement, so no service or repository is involved, and /health calls it from the
+API layer without touching SQL.
 
 The failure paths that need a broken database are tested with a stand-in pool in
 tests/unit/test_check_database_errors.py.
@@ -19,6 +20,8 @@ import psycopg
 import pytest
 from psycopg.pq import TransactionStatus
 from psycopg_pool import ConnectionPool, PoolTimeout
+
+from ledger.errors import ServiceBusyError
 
 
 @pytest.fixture
@@ -61,17 +64,19 @@ def test_it_takes_exactly_one_connection(single_pool: ConnectionPool, check_data
     assert check_database(single_pool) is None
 
 
-def test_a_pool_with_no_free_connection_raises_the_pools_own_timeout(
+def test_a_pool_with_no_free_connection_is_a_service_busy_error_chained_to_the_timeout(
     single_pool: ConnectionPool, check_database
 ) -> None:
     with single_pool.connection():  # the only connection is in use
-        with pytest.raises(PoolTimeout):
+        with pytest.raises(ServiceBusyError) as failure:
             check_database(single_pool)
+
+    assert isinstance(failure.value.__cause__, PoolTimeout)
 
 
 def test_the_timeout_does_not_damage_the_pool(single_pool: ConnectionPool, check_database) -> None:
     with single_pool.connection():
-        with pytest.raises(PoolTimeout):
+        with pytest.raises(ServiceBusyError):
             check_database(single_pool)
 
     assert check_database(single_pool) is None

@@ -1,9 +1,10 @@
 from collections.abc import Callable
+from contextlib import ExitStack
 
 import psycopg
-from psycopg_pool import ConnectionPool
+from psycopg_pool import ConnectionPool, PoolTimeout
 
-from ledger.errors import LedgerInvariantError
+from ledger.errors import LedgerInvariantError, ServiceBusyError
 from ledger.infra.config import Settings
 
 
@@ -23,6 +24,14 @@ def create_pool(settings: Settings) -> ConnectionPool:
     )
 
 
+def _acquire(pool: ConnectionPool, stack: ExitStack) -> psycopg.Connection:
+    """Acquire a connection to the ledger db and protect against PoolTimeout."""
+    try:
+        return stack.enter_context(pool.connection())
+    except PoolTimeout as err:
+        raise ServiceBusyError("Connection timeout") from err
+
+
 def run_in_transaction[T](
     pool: ConnectionPool,
     work: Callable[[psycopg.Connection], T],
@@ -30,7 +39,8 @@ def run_in_transaction[T](
     read_only: bool = False,
 ) -> T:
     try:
-        with pool.connection() as conn:
+        with ExitStack() as stack:
+            conn = _acquire(pool, stack)
             if read_only:
                 conn.execute("SET TRANSACTION READ ONLY")
             return work(conn)
@@ -42,5 +52,6 @@ def run_in_transaction[T](
 
 def check_database(pool: ConnectionPool) -> None:
     """Raise if the database cannot answer; used by GET /health."""
-    with pool.connection() as conn:
+    with ExitStack() as stack:
+        conn = _acquire(pool, stack)
         conn.execute("SELECT 1")

@@ -28,3 +28,15 @@ def test_the_migrations_directory_can_be_set_by_the_environment(monkeypatch, tmp
     monkeypatch.setenv("MIGRATIONS_DIR", str(tmp_path))
 
     assert load_settings().migrations_dir == tmp_path
+
+
+def test_the_handler_thread_limit_defaults_to_20(monkeypatch) -> None:
+    monkeypatch.delenv("HANDLER_THREAD_LIMIT", raising=False)
+
+    assert load_settings().handler_thread_limit == 20
+
+
+def test_the_handler_thread_limit_can_be_set_by_the_environment(monkeypatch) -> None:
+    monkeypatch.setenv("HANDLER_THREAD_LIMIT", "7")
+
+    assert load_settings().handler_thread_limit == 7
