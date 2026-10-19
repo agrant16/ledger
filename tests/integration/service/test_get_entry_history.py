@@ -15,8 +15,8 @@ tests/integration/db/test_entry_history_repo.py):
   only `limit` of them, so has_more is True exactly when an older entry exists;
 - `before_id` is a plain entry id (the service knows nothing about cursors): only entries with a
   smaller id are returned;
-- a `limit` below 1 is a bug, not a client error (the API guarantees 1 to 200), so it is a
-  LedgerInvariantError and never a LedgerError.
+- a `limit` below 1 or above 200 is a bug, not a client error (the API guarantees 1 to 200), so it
+  is a LedgerInvariantError and never a LedgerError.
 
 It changes nothing, and the caller owns the transaction.
 """
@@ -263,6 +263,30 @@ def test_a_limit_below_one_is_an_invariant_error(
         get_entry_history(app_conn, alice.id, None, limit)
 
     assert not isinstance(failure.value, LedgerError)
+
+
+# --- a limit above 200 is a bug too -----------------------------------------------------------
+
+
+@pytest.mark.parametrize("limit", [201, 1000])
+def test_a_limit_above_two_hundred_is_an_invariant_error(
+    accounts, app_conn: psycopg.Connection, limit: int
+) -> None:
+    _, alice = accounts
+
+    with pytest.raises(LedgerInvariantError) as failure:
+        get_entry_history(app_conn, alice.id, None, limit)
+
+    assert not isinstance(failure.value, LedgerError)
+
+
+def test_a_limit_of_exactly_two_hundred_is_allowed(accounts, app_conn: psycopg.Connection) -> None:
+    """The bound is inclusive: 200 is the largest page the API accepts."""
+    _, alice = accounts
+
+    page = get_entry_history(app_conn, alice.id, None, 200)
+
+    assert page == EntryPage(entries=(), has_more=False)
 
 
 # --- the transaction --------------------------------------------------------------------------

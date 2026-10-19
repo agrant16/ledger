@@ -26,7 +26,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from ledger.api.rest import cursor
-from ledger.errors import InvalidRequestError, LedgerError
+from ledger.errors import InvalidRequestError, LedgerError, LedgerInvariantError
 
 BIGINT_MAX = 9_223_372_036_854_775_807
 
@@ -50,6 +50,17 @@ def b64(text: str) -> str:
 def test_the_cursor_format_is_pinned(entry_id: int, expected: str) -> None:
     """Clients hold cursors between requests, so the format cannot change by accident."""
     assert cursor.encode_cursor(entry_id) == expected
+
+
+@pytest.mark.parametrize("entry_id", [0, -1, -BIGINT_MAX, BIGINT_MAX + 1, 10**30])
+def test_encoding_an_id_outside_the_bounds_is_a_bug_and_not_a_bad_request(entry_id: int) -> None:
+    """encode_cursor is only given ids read from the database, so an id outside 1 to the bigint
+    maximum is a bug in our code: a LedgerInvariantError (a logged 500), never an
+    InvalidRequestError (a 400, which would blame the client)."""
+    with pytest.raises(LedgerInvariantError) as failure:
+        cursor.encode_cursor(entry_id)
+
+    assert not isinstance(failure.value, LedgerError)
 
 
 @given(entry_id=st.integers(min_value=1, max_value=BIGINT_MAX))
