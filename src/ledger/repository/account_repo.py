@@ -116,9 +116,7 @@ def find_account_by_name(conn: psycopg.Connection, account_name: str) -> Account
 
 def account_exists(conn: psycopg.Connection, account_id: int) -> bool:
     with conn.cursor() as cursor:
-        cursor.execute(ACCOUNT_EXISTS_SQL, (account_id,))
-        row = cursor.fetchone()
-        return row[0]
+        return cursor.execute(ACCOUNT_EXISTS_SQL, (account_id,)).fetchone()[0]
 
 
 def find_entries(
