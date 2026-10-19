@@ -17,7 +17,8 @@ Short records of the larger decisions behind the ledger service, in the format o
 | [0011](0011-request-transaction-handling.md) | One request, one transaction, through a single callable helper | 2026-10-12 | Accepted |
 | [0012](0012-idempotency-claim-and-request-hash.md) | The idempotency claim resolves a repeated key in one place, with a canonical request hash | 2026-10-12 | Accepted |
 | [0013](0013-layered-architecture.md) | A layered source tree: API, services, repositories, models and infrastructure | 2026-10-13 | Accepted |
+| [0014](0014-entries-cursor-pagination.md) | Entry history pages by an opaque cursor on the entry id | 2026-10-19 | Draft |
 
 A new ADR is listed as `Draft` until the pull request that merges it marks it `Accepted`.
 
-Decisions still to come: ADR 0014 on why row locks at READ COMMITTED and not SERIALIZABLE (milestone 4); the deadlock retry and lock timeout decisions (milestone 4); the pool, thread limit and concurrency cap sizing from the load test (milestone 7, if the choice is large).
+Decisions still to come: ADR 0015 on why row locks at READ COMMITTED and not SERIALIZABLE (milestone 4); the deadlock retry and lock timeout decisions (milestone 4); the pool, thread limit and concurrency cap sizing from the load test (milestone 7, if the choice is large).

@@ -2,7 +2,7 @@
 
 A small double-entry ledger service that keeps money correct under retries, concurrency, and failures. It records money movements between accounts and guarantees they balance; it does not move real money.
 
-> **Status:** early development. Milestones 1 (foundation: schema for accounts, transactions and entries, role setup, CI) and 2 (the double-entry core) are complete and milestone 3 (the API and idempotency) is in progress: account creation, the balance endpoint, `GET /transfers/{id}` and idempotent `POST /transfers` are done, while the entries history and the overload handling (pool timeout, thread limit, concurrency cap) are still to come. The rest of what's described below is still planned. See [docs/design.md](docs/design.md) for the full scope, API contract, and milestone plan.
+> **Status:** early development. Milestones 1 (foundation: schema for accounts, transactions and entries, role setup, CI) and 2 (the double-entry core) are complete and milestone 3 (the API and idempotency) is in progress: account creation, the balance endpoint, `GET /transfers/{id}`, idempotent `POST /transfers` and the entries history are done, while the overload handling (pool timeout, thread limit, concurrency cap) are still to come. The rest of what's described below is still planned. See [docs/design.md](docs/design.md) for the full scope, API contract, and milestone plan.
 
 ## What it does
 
@@ -96,7 +96,7 @@ docker compose exec -T db psql -U postgres -d ledger -v ON_ERROR_STOP=1 -v testd
 | `GET /accounts/{id}/balance` | Cached balance; reflects committed transfers and never shows part of one | Done |
 | `POST /transfers` | Move money between two accounts (requires `Idempotency-Key`) | Done |
 | `GET /transfers/{id}` | Fetch one transfer with its entries | Done |
-| `GET /accounts/{id}/entries` | Entry history, newest first, with cursor pagination | Planned in milestone 3 |
+| `GET /accounts/{id}/entries` | Entry history, newest first, with cursor pagination | Done |
 | `POST /transfers/{id}/reverse` | Undo a transfer with a compensating transaction (requires `Idempotency-Key`) | Planned in milestone 5 |
 
 Request and response shapes, error codes, and idempotency rules are specified in [docs/design.md](docs/design.md).
