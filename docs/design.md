@@ -140,6 +140,7 @@ The `from` account gets an entry of `-amount_minor` and the `to` account gets `+
 - Reversal of an unknown transfer: 404. Reversal of a transfer that is already reversed, or of a reversal: 409.
 - Reversal that would overdraw a protected account because the money has moved on: 422, and no entries are written. A reversal follows the same rules as any transfer.
 - Lock timeout, deadlock retries exhausted, or a wait for a database connection that times out: 503 with a Retry-After header. The transaction rolled back, so retrying with the same key is safe. The same holds if the connection drops during commit: the client cannot know whether the transfer happened, and retrying with the same key is safe either way. A request rejected by the overall concurrency cap also gets a 503 with Retry-After; no transaction has started, so retrying is safe.
+- `GET /health` is the readiness check, not a liveness check: it takes one pooled connection and runs `SELECT 1`, so it answers 200 `{"status": "ok"}` only when the service can reach the database. A wait for a connection that times out is the same 503 `service-busy` problem with `Retry-After` as for any other route (it shares the acquisition helper in `ledger/infra/db.py`), logged at WARNING with the pool's timeout as the cause; any other database failure is still a logged 500. The route is left out of OpenAPI. A separate `/livez` liveness check, with no database access, is a deferred decision (#94).
 - A violation of a database safety net, which signals a bug rather than a normal outcome: the balances CHECK (a normal overdraft is a 422), or the zero-sum or no-entries constraint trigger (a normal transfer is balanced by construction). The response is a 500, the transaction rolled back, and the error logged. The triggers fire at commit, so the key row rolls back with the transfer and the key stays free to reuse. These errors are not retried.
 
 **Error model**
@@ -157,7 +158,7 @@ Expected failures are `LedgerError` subclasses in `ledger/errors.py`. The API la
 | `AlreadyReversedError` | 409 | `already-reversed` | Transfer already reversed | The claim, from the unique link on `reverses_transaction_id` |
 | `ReversalOfReversalError` | 409 | `reversal-of-reversal` | A reversal cannot be reversed | The service layer, because the target has a non-null `reverses_transaction_id`; the schema allows such a row, so this is not a database rule |
 | `DuplicateAccountNameError` | 409 | `duplicate-account-name` | Duplicate account name | `create_account`, from the unique name |
-| `ServiceBusyError` | 503 | `service-busy` | Service busy | `run_in_transaction`: a pool wait timeout (milestone 3), then a lock timeout, exhausted deadlock retries and a connection lost during commit (milestone 4) |
+| `ServiceBusyError` | 503 | `service-busy` | Service busy | `run_in_transaction` and `check_database` (`/health`): a pool wait timeout (milestone 3); `run_in_transaction` alone, a lock timeout, exhausted deadlock retries and a connection lost during commit (milestone 4) |
 
 The overall concurrency cap also returns a 503 with Retry-After, but the middleware answers it directly before any transaction starts, so it is not a `LedgerError`.
 
