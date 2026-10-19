@@ -15,10 +15,10 @@ from ledger.infra.logging_config import configure_logging
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
     settings = load_settings()
+    to_thread.current_default_thread_limiter().total_tokens = settings.handler_thread_limit
     pool = create_pool(settings)
     pool.open(wait=True)
     app.state.pool = pool
-    to_thread.current_default_thread_limiter().total_tokens = settings.handler_thread_limit
     try:
         yield
     finally:
