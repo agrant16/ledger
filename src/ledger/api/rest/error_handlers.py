@@ -101,7 +101,7 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
     extensions = {name: getattr(exc, name) for name in problem_spec.extensions}
     if problem_spec.status == 503:
         headers = {"Retry-After": str(RETRY_AFTER_SECONDS)}
-        logger.warning("Service was busy: %s", exc)
+        logger.warning("Service was busy: %s", exc.__cause__)
     return problem_response(
         request,
         problem_spec.status,
