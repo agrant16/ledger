@@ -17,7 +17,7 @@ Short records of the larger decisions behind the ledger service, in the format o
 | [0011](0011-request-transaction-handling.md) | One request, one transaction, through a single callable helper | 2026-10-12 | Accepted |
 | [0012](0012-idempotency-claim-and-request-hash.md) | The idempotency claim resolves a repeated key in one place, with a canonical request hash | 2026-10-12 | Accepted |
 | [0013](0013-layered-architecture.md) | A layered source tree: API, services, repositories, models and infrastructure | 2026-10-13 | Accepted |
-| [0014](0014-entries-cursor-pagination.md) | Entry history pages by an opaque cursor on the entry id | 2026-10-19 | Draft |
+| [0014](0014-entries-cursor-pagination.md) | Entry history pages by an opaque cursor on the entry id | 2026-10-19 | Accepted |
 
 A new ADR is listed as `Draft` until the pull request that merges it marks it `Accepted`.
 

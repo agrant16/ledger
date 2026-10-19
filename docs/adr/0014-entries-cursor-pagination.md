@@ -1,6 +1,6 @@
 # ADR 0014: Entry history pages by an opaque cursor on the entry id
 
-* **Status:** Draft
+* **Status:** Accepted
 * **Date:** 2026-10-19 (decided during milestone 3 planning, issue #88)
 * **Deciders:** Alan (human architect) & Claude (AI collaborator)
 
