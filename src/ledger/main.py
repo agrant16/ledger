@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import anyio
 from fastapi import FastAPI
 
 from ledger.api.rest.error_handlers import install_error_handling
@@ -16,6 +17,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     pool = create_pool(load_settings())
     pool.open(wait=True)
     app.state.pool = pool
+    anyio.to_thread.current_default_thread_limiter().total_tokens = load_settings().handler_thread_limit
     try:
         yield
     finally:
