@@ -3,13 +3,11 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BeforeValidator, Field
 
-from ledger.api.rest.cursor import decode_cursor
+from ledger.api.rest.cursor import POSTGRES_BIG_INT, decode_cursor
 from ledger.errors import InvalidRequestError
 from ledger.models.entry_history_model import MAX_PAGE_SIZE
 
 ASCII_WHITESPACE = " \t\n\v\f\r"
-
-POSTGRES_BIG_INT = 9223372036854775807
 
 _CANONICAL_ID = re.compile(r"[1-9][0-9]*")
 
