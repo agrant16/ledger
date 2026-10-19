@@ -61,7 +61,6 @@ class EntryPageResponse(BaseModel):
     @classmethod
     def from_model(cls, entry_page: EntryPage) -> Self:
         cursor = encode_cursor(entry_page.entries[-1].id) if entry_page.has_more else None
-        entries = entry_page.entries if entry_page.has_more else entry_page.entries
         return cls(
             entries=[
                 EntryResponse(
@@ -72,7 +71,7 @@ class EntryPageResponse(BaseModel):
                     currency=entry.currency,
                     created_at=entry.created_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
                 )
-                for entry in entries
+                for entry in entry_page.entries
             ],
             next_cursor=cursor,
         )
