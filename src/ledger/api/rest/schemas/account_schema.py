@@ -2,8 +2,10 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict
 
-from ledger.api.rest.schemas.types import AccountName, Currency
+from ledger.api.rest.cursor import encode_cursor
+from ledger.api.rest.schemas.types import AccountName, Currency, timestamp_converter
 from ledger.models.account_model import Account, Balance
+from ledger.models.entry_history_model import EntryPage
 
 
 class AccountResponse(BaseModel):
@@ -40,3 +42,35 @@ class CreateAccountRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     account_name: AccountName
     currency: Currency
+
+
+class EntryResponse(BaseModel):
+    id: int
+    transaction_id: int
+    account_id: int
+    amount_minor: int
+    currency: str
+    created_at: str
+
+
+class EntryPageResponse(BaseModel):
+    entries: list[EntryResponse]
+    next_cursor: str | None
+
+    @classmethod
+    def from_model(cls, entry_page: EntryPage) -> Self:
+        cursor = encode_cursor(entry_page.entries[-1].id) if entry_page.has_more else None
+        return cls(
+            entries=[
+                EntryResponse(
+                    id=entry.id,
+                    transaction_id=entry.transaction_id,
+                    account_id=entry.account_id,
+                    amount_minor=entry.amount_minor,
+                    currency=entry.currency,
+                    created_at=timestamp_converter(entry.created_at),
+                )
+                for entry in entry_page.entries
+            ],
+            next_cursor=cursor,
+        )

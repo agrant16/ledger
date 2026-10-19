@@ -1,9 +1,8 @@
-from datetime import UTC
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from ledger.api.rest.schemas.types import AccountId, AmountMinor, Currency
+from ledger.api.rest.schemas.types import AccountId, AmountMinor, Currency, timestamp_converter
 from ledger.models.transfer_model import Transfer
 
 
@@ -39,7 +38,7 @@ class TransferResponse(BaseModel):
         return cls(
             id=transfer.id,
             reverses_transaction_id=transfer.reverses_transaction_id,
-            created_at=transfer.created_at.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+            created_at=timestamp_converter(transfer.created_at),
             entries=[
                 TransferEntryResponse(
                     id=entry.id,

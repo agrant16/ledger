@@ -10,5 +10,4 @@ router.include_router(accounts_router, prefix="/accounts", tags=["accounts"])
 
 router.include_router(health_router, tags=["health"])
 
-
 router.include_router(transfers_router, prefix="/transfers", tags=["transfers"])

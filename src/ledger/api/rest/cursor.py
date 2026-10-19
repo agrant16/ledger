@@ -1,10 +1,11 @@
 import base64
 import re
 
-from ledger.api.rest.schemas.types import POSTGRES_BIG_INT
 from ledger.errors import InvalidRequestError, LedgerInvariantError
 
 _BASE64URL_REGEX = re.compile(r"^[A-Za-z0-9_-]+={0,2}$")
+
+POSTGRES_BIG_INT = 9223372036854775807
 
 
 def _validate_encoded_str(encoded_str: str) -> None:

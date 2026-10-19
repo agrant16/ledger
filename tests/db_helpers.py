@@ -106,6 +106,33 @@ def commit_accounts(pool: ConnectionPool) -> tuple[Account, Account, Account]:
     return funding, alice, bob
 
 
+def commit_transfers(
+    pool: ConnectionPool,
+    key_prefix: str,
+    from_account_id: int,
+    to_account_id: int,
+    count: int,
+    amount_minor: int = 10,
+) -> list[int]:
+    """Post `count` separate two-entry transfers (keys `<key_prefix>:1`, `:2`, ...) in one
+    committed database transaction. Returns the transaction ids, oldest first."""
+    ids = []
+    with pool.connection() as conn:
+        for i in range(1, count + 1):
+            key = f"{key_prefix}:{i}"
+            claim = claim_transaction(conn, key, hash_for(key))
+            post_transaction(
+                conn,
+                claim.transaction_id,
+                [
+                    Entry(from_account_id, -amount_minor, "USD"),
+                    Entry(to_account_id, amount_minor, "USD"),
+                ],
+            )
+            ids.append(claim.transaction_id)
+    return ids
+
+
 def commit_transfer(
     pool: ConnectionPool,
     key: str,

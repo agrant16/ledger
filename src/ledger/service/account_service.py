@@ -2,7 +2,7 @@ import psycopg
 
 from ledger.errors import LedgerInvariantError, UnknownAccountError
 from ledger.models.account_model import Account, Balance
-from ledger.models.entry_history_model import EntryPage
+from ledger.models.entry_history_model import MAX_PAGE_SIZE, EntryPage
 from ledger.repository import account_repo
 from ledger.service.decorators import transactional_service_method
 
@@ -37,7 +37,7 @@ def find_account_by_name(conn: psycopg.Connection, account_name: str) -> Account
 def get_entry_history(
     conn: psycopg.Connection, account_id: int, before_id: int | None, limit: int
 ) -> EntryPage:
-    if limit < 1 or limit > 200:
+    if not 1 <= limit <= MAX_PAGE_SIZE:
         raise LedgerInvariantError(f"Critical error: page size {limit} not within range")
     # The account check is a separate statement from the entries query.
     # That is race-free because accounts are never deleted, so an account
