@@ -17,14 +17,7 @@ import inspect
 import pytest
 
 from ledger.errors import LedgerError, LedgerInvariantError
-
-
-@pytest.fixture
-def decorate():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.service.decorators import transactional_service_method
-
-    return transactional_service_method
+from ledger.service.decorators import transactional_service_method as decorate
 
 
 class FakeConnection:
@@ -36,7 +29,7 @@ IN_TRANSACTION = FakeConnection(autocommit=False)
 AUTOCOMMIT = FakeConnection(autocommit=True)
 
 
-def test_the_function_runs_when_a_transaction_is_in_progress(decorate) -> None:
+def test_the_function_runs_when_a_transaction_is_in_progress() -> None:
     @decorate
     def work(conn, value):
         return ("ran", conn, value)
@@ -44,7 +37,7 @@ def test_the_function_runs_when_a_transaction_is_in_progress(decorate) -> None:
     assert work(IN_TRANSACTION, 7) == ("ran", IN_TRANSACTION, 7)
 
 
-def test_arguments_and_keywords_are_passed_through(decorate) -> None:
+def test_arguments_and_keywords_are_passed_through() -> None:
     @decorate
     def work(conn, first, second=2, *, flag=False):
         return (first, second, flag)
@@ -52,7 +45,7 @@ def test_arguments_and_keywords_are_passed_through(decorate) -> None:
     assert work(IN_TRANSACTION, 1, second=5, flag=True) == (1, 5, True)
 
 
-def test_the_connection_can_be_passed_by_keyword(decorate) -> None:
+def test_the_connection_can_be_passed_by_keyword() -> None:
     @decorate
     def work(conn, value):
         return value
@@ -60,7 +53,7 @@ def test_the_connection_can_be_passed_by_keyword(decorate) -> None:
     assert work(conn=IN_TRANSACTION, value=3) == 3
 
 
-def test_an_autocommit_connection_is_refused_before_the_function_runs(decorate) -> None:
+def test_an_autocommit_connection_is_refused_before_the_function_runs() -> None:
     calls = []
 
     @decorate
@@ -73,7 +66,7 @@ def test_an_autocommit_connection_is_refused_before_the_function_runs(decorate) 
     assert calls == []
 
 
-def test_an_autocommit_connection_passed_by_keyword_is_refused_too(decorate) -> None:
+def test_an_autocommit_connection_passed_by_keyword_is_refused_too() -> None:
     @decorate
     def work(conn):
         return "ran"
@@ -82,7 +75,7 @@ def test_an_autocommit_connection_passed_by_keyword_is_refused_too(decorate) -> 
         work(conn=AUTOCOMMIT)
 
 
-def test_the_error_is_a_bug_and_names_the_function(decorate) -> None:
+def test_the_error_is_a_bug_and_names_the_function() -> None:
     @decorate
     def create_something(conn):
         return "ran"
@@ -94,7 +87,7 @@ def test_the_error_is_a_bug_and_names_the_function(decorate) -> None:
     assert "create_something" in str(failure.value)
 
 
-def test_the_function_keeps_its_name_documentation_and_signature(decorate) -> None:
+def test_the_function_keeps_its_name_documentation_and_signature() -> None:
     def documented(conn, amount: int, *, note: str = "") -> int:
         """Does something documented."""
         return amount
@@ -106,7 +99,7 @@ def test_the_function_keeps_its_name_documentation_and_signature(decorate) -> No
     assert inspect.signature(wrapped) == inspect.signature(documented)
 
 
-def test_an_error_raised_by_the_function_is_not_changed(decorate) -> None:
+def test_an_error_raised_by_the_function_is_not_changed() -> None:
     class Boom(Exception):
         pass
 
@@ -118,7 +111,7 @@ def test_an_error_raised_by_the_function_is_not_changed(decorate) -> None:
         work(IN_TRANSACTION)
 
 
-def test_each_call_is_checked_again(decorate) -> None:
+def test_each_call_is_checked_again() -> None:
     """The connection is checked on every call, not once when the function is defined."""
 
     @decorate
@@ -134,7 +127,7 @@ def test_each_call_is_checked_again(decorate) -> None:
 # --- no usable connection: the check fails closed ---------------------------------------------
 
 
-def test_a_call_with_no_connection_at_all_is_refused(decorate) -> None:
+def test_a_call_with_no_connection_at_all_is_refused() -> None:
     calls = []
 
     @decorate
@@ -149,7 +142,7 @@ def test_a_call_with_no_connection_at_all_is_refused(decorate) -> None:
     assert calls == []
 
 
-def test_a_none_connection_is_refused(decorate) -> None:
+def test_a_none_connection_is_refused() -> None:
     calls = []
 
     @decorate
@@ -164,9 +157,7 @@ def test_a_none_connection_is_refused(decorate) -> None:
     assert calls == []
 
 
-def test_something_that_is_not_a_connection_is_refused_and_the_function_does_not_run(
-    decorate,
-) -> None:
+def test_something_that_is_not_a_connection_is_refused_and_the_function_does_not_run() -> None:
     """A pool, a cursor or a plain value has no `autocommit` attribute. Passing one by mistake must
     never be treated as 'no autocommit, so fine'."""
     calls = []
