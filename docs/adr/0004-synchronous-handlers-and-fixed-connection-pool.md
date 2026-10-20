@@ -19,6 +19,8 @@ Every write is one database transaction on one connection. Under load, the servi
 
 *Note (2026-10-20): the concurrency cap is a small ASGI middleware, not uvicorn's `--limit-concurrency` (issue #98, PR #99). It is read from `CONCURRENCY_CAP` (default 40, twice the thread limit, so some waiting is allowed before requests are rejected) and counts every in-flight HTTP request, `/health` included. It sits inside the request-id middleware, so its 503 carries a request id, and it answers with the same `service-busy` problem and a `Retry-After` header before any transaction starts. The rejection is logged at WARNING. One INFO line at startup records the pool size, pool timeout, thread limit and cap.*
 
+*Note (2026-10-20): settings are loaded once, by the app factory `create_app(settings=None)` in `ledger/main.py`, and stored on `app.state.settings` (issue #100, PR #113). The concurrency cap middleware, the thread limit, the pool and the startup INFO line all read that one object, so the cap that is logged is the cap that is enforced. `app = create_app()` stays at module level for `uvicorn ledger.main:app`, and tests build their own apps with `create_app(Settings(...))`. A bad value stops the app when it is built, with an error naming the variable. `Settings` is a `BaseSettings`, so a field that is not passed is still read from the environment; a test that must not depend on the environment passes every field it cares about. The decision itself is unchanged; the design doc (Stack decisions, Settings) holds the detail.*
+
 ## Consequences
 * **Positive:**
   - Overload turns into a bounded 503 with a retry hint, not a hang.
