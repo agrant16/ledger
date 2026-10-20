@@ -27,15 +27,8 @@ from ledger.infra.config import Settings
 from ledger.models import transfer_model
 from ledger.models.posting_model import Entry
 from ledger.service.posting_service import claim_transaction, post_transaction
+from ledger.service.transfer_service import get_transfer
 from tests.db_helpers import hash_for, make_account
-
-
-@pytest.fixture
-def get_transfer():
-    """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.service.transfer_service import get_transfer
-
-    return get_transfer
 
 
 def post(
@@ -54,7 +47,7 @@ def entry_ids(conn: psycopg.Connection, transaction_id: int) -> list[int]:
 
 
 def test_it_returns_the_transfer_with_its_entries(
-    clean_db: None, app_conn: psycopg.Connection, get_transfer
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     funding = make_account(app_conn, "funding:usd", allow_negative=True)
     alice = make_account(app_conn, "customer:alice")
@@ -73,7 +66,7 @@ def test_it_returns_the_transfer_with_its_entries(
 
 
 def test_the_entries_are_in_the_order_they_were_written(
-    clean_db: None, app_conn: psycopg.Connection, get_transfer
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """Ordered by entry id: not by account id (the first entry written is for the account with
     the higher id), and not debit before credit (the credit is written first)."""
@@ -89,7 +82,7 @@ def test_the_entries_are_in_the_order_they_were_written(
 
 
 def test_a_transfer_with_several_entries_and_currencies_is_complete(
-    clean_db: None, app_conn: psycopg.Connection, get_transfer
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     usd = make_account(app_conn, "funding:usd", "USD", allow_negative=True)
     eur = make_account(app_conn, "funding:eur", "EUR", allow_negative=True)
@@ -117,7 +110,7 @@ def test_a_transfer_with_several_entries_and_currencies_is_complete(
 
 
 def test_each_transfer_gets_only_its_own_entries(
-    clean_db: None, app_conn: psycopg.Connection, get_transfer
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     funding = make_account(app_conn, "funding:usd", allow_negative=True)
     alice = make_account(app_conn, "customer:alice")
@@ -130,7 +123,7 @@ def test_each_transfer_gets_only_its_own_entries(
 
 
 def test_a_reversal_shows_the_transfer_it_reverses(
-    clean_db: None, app_conn: psycopg.Connection, get_transfer
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     funding = make_account(app_conn, "funding:usd", allow_negative=True)
     alice = make_account(app_conn, "customer:alice")
@@ -150,7 +143,7 @@ def test_a_reversal_shows_the_transfer_it_reverses(
 
 
 def test_created_at_is_the_stored_time_as_an_aware_utc_datetime(
-    clean_db: None, app_conn: psycopg.Connection, get_transfer
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     funding = make_account(app_conn, "funding:usd", allow_negative=True)
     alice = make_account(app_conn, "customer:alice")
@@ -167,7 +160,7 @@ def test_created_at_is_the_stored_time_as_an_aware_utc_datetime(
 
 
 def test_created_at_is_utc_whatever_time_zone_the_session_uses(
-    clean_db: None, app_conn: psycopg.Connection, get_transfer
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     funding = make_account(app_conn, "funding:usd", allow_negative=True)
     alice = make_account(app_conn, "customer:alice")
@@ -189,7 +182,7 @@ def test_created_at_is_utc_whatever_time_zone_the_session_uses(
 
 
 def test_an_unknown_transfer_raises_unknown_transfer_error(
-    clean_db: None, app_conn: psycopg.Connection, get_transfer
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     with pytest.raises(UnknownTransferError) as failure:
         get_transfer(app_conn, 999_999)
@@ -199,7 +192,7 @@ def test_an_unknown_transfer_raises_unknown_transfer_error(
 
 
 def test_a_transaction_with_no_entries_is_a_bug_and_not_an_empty_transfer(
-    clean_db: None, app_conn: psycopg.Connection, get_transfer
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """The no-entries trigger stops this from ever committing, so seeing one means something is
     badly wrong. It must not come back as a transfer with an empty list, and it is not a 404."""
@@ -211,16 +204,14 @@ def test_a_transaction_with_no_entries_is_a_bug_and_not_an_empty_transfer(
     assert not isinstance(failure.value, LedgerError)
 
 
-def test_it_refuses_an_autocommit_connection(
-    clean_db: None, settings: Settings, get_transfer
-) -> None:
+def test_it_refuses_an_autocommit_connection(clean_db: None, settings: Settings) -> None:
     """Every service function that is given a connection assumes a transaction is in progress."""
     with psycopg.connect(settings.app_url, autocommit=True) as conn:
         with pytest.raises(LedgerInvariantError):
             get_transfer(conn, 1)
 
 
-def test_it_changes_nothing(clean_db: None, app_conn: psycopg.Connection, get_transfer) -> None:
+def test_it_changes_nothing(clean_db: None, app_conn: psycopg.Connection) -> None:
     funding = make_account(app_conn, "funding:usd", allow_negative=True)
     alice = make_account(app_conn, "customer:alice")
     tx = post(app_conn, "k1", [Entry(funding.id, -5, "USD"), Entry(alice.id, 5, "USD")])
@@ -243,9 +234,7 @@ def test_it_changes_nothing(clean_db: None, app_conn: psycopg.Connection, get_tr
     )
 
 
-def test_a_transfer_is_a_frozen_value(
-    clean_db: None, app_conn: psycopg.Connection, get_transfer
-) -> None:
+def test_a_transfer_is_a_frozen_value(clean_db: None, app_conn: psycopg.Connection) -> None:
     funding = make_account(app_conn, "funding:usd", allow_negative=True)
     alice = make_account(app_conn, "customer:alice")
     tx = post(app_conn, "k1", [Entry(funding.id, -5, "USD"), Entry(alice.id, 5, "USD")])
