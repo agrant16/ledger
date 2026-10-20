@@ -59,12 +59,7 @@ def pytest_unconfigure(config: pytest.Config) -> None:
 
 
 @pytest.fixture(scope="session")
-def use_the_test_database() -> None:
-    """Kept as a dependency of `settings`: the environment already names the test database."""
-
-
-@pytest.fixture(scope="session")
-def settings(use_the_test_database: None) -> Settings:
+def settings() -> Settings:
     """The settings with a short connect timeout, so a stopped database fails in seconds."""
     configured = load_settings()
     return configured.model_copy(
