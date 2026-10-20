@@ -16,6 +16,7 @@ class ConcurrencyCapMiddleware:
         # http requests increase the request_count
         if scope["type"] == "http":
             if self.request_count >= self.cap:
+                # if the concurrency cap is reached log a warning and return a 503
                 logger.warning(
                     f"Concurrency cap reached ({self.request_count}/{self.cap}). Rejecting request."
                 )
