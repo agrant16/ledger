@@ -10,7 +10,8 @@ DEFAULT_MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(extra="ignore", frozen=True)
+    model_config = SettingsConfigDict(extra="ignore", frozen=True, case_sensitive=True)
+
     # The owner role runs migrations (and test fixtures). The service never connects as it.
     owner_url: str = Field(default=DEFAULT_OWNER_URL, alias="DATABASE_OWNER_URL")
     # The role the service connects as: owns no tables, explicit per-table grants only.
