@@ -17,6 +17,8 @@ Every write is one database transaction on one connection. Under load, the servi
 
 *Note (2026-10-19): `GET /health` is a readiness check, so a pool wait timeout there is the same 503 `service-busy` with `Retry-After` as on any other route, not a 500 (PR #92, #91). A liveness check, `/livez`, is a deferred decision (#94).*
 
+*Note (2026-10-20): the concurrency cap is a small ASGI middleware, not uvicorn's `--limit-concurrency` (issue #98, PR #99). It is read from `CONCURRENCY_CAP` (default 40, twice the thread limit, so some waiting is allowed before requests are rejected) and counts every in-flight HTTP request, `/health` included. It sits inside the request-id middleware, so its 503 carries a request id, and it answers with the same `service-busy` problem and a `Retry-After` header before any transaction starts. The rejection is logged at WARNING. One INFO line at startup records the pool size, pool timeout, thread limit and cap.*
+
 ## Consequences
 * **Positive:**
   - Overload turns into a bounded 503 with a retry hint, not a hang.
