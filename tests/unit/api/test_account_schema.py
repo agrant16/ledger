@@ -14,28 +14,22 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from ledger.api.rest.schemas.account_schema import CreateAccountRequest as model
+
 VALID = {"account_name": "customer:alice", "currency": "USD"}
-
-
-@pytest.fixture
-def model():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.api.rest.schemas.account_schema import CreateAccountRequest
-
-    return CreateAccountRequest
 
 
 def error_types(failure: ValidationError) -> set[tuple[tuple, str]]:
     return {(error["loc"], error["type"]) for error in failure.value.errors()}
 
 
-def test_a_valid_request(model) -> None:
+def test_a_valid_request() -> None:
     request = model.model_validate(VALID)
     assert (request.account_name, request.currency) == ("customer:alice", "USD")
 
 
 @pytest.mark.parametrize("missing", ["account_name", "currency"])
-def test_each_field_is_required(model, missing) -> None:
+def test_each_field_is_required(missing) -> None:
     body = {k: v for k, v in VALID.items() if k != missing}
     with pytest.raises(ValidationError) as failure:
         model.model_validate(body)
@@ -45,7 +39,7 @@ def test_each_field_is_required(model, missing) -> None:
 @pytest.mark.parametrize(
     "extra", [{"allow_negative": True}, {"allow_negative": False}, {"nmae": "x"}]
 )
-def test_unknown_fields_are_rejected(model, extra) -> None:
+def test_unknown_fields_are_rejected(extra) -> None:
     """allow_negative is rejected like any typo: the API cannot create an account that may go
     negative."""
     with pytest.raises(ValidationError) as failure:
@@ -55,7 +49,7 @@ def test_unknown_fields_are_rejected(model, extra) -> None:
 
 
 @pytest.mark.parametrize("body", [None, [], "alice", 5])
-def test_a_body_that_is_not_an_object_is_rejected(model, body) -> None:
+def test_a_body_that_is_not_an_object_is_rejected(body) -> None:
     with pytest.raises(ValidationError):
         model.model_validate(body)
 
@@ -70,20 +64,20 @@ def test_a_body_that_is_not_an_object_is_rejected(model, body) -> None:
         ("currency", None),
     ],
 )
-def test_the_fields_use_the_shared_rules(model, field, value) -> None:
+def test_the_fields_use_the_shared_rules(field, value) -> None:
     with pytest.raises(ValidationError) as failure:
         model.model_validate({**VALID, field: value})
     assert any(loc == (field,) for loc, _ in error_types(failure))
 
 
-def test_every_problem_is_reported_together(model) -> None:
+def test_every_problem_is_reported_together() -> None:
     with pytest.raises(ValidationError) as failure:
         model.model_validate({"account_name": " bad", "currency": "usd", "allow_negative": True})
     locations = {loc for loc, _ in error_types(failure)}
     assert locations == {("account_name",), ("currency",), ("allow_negative",)}
 
 
-def test_through_a_route_a_bad_request_is_a_400_with_pointers(model) -> None:
+def test_through_a_route_a_bad_request_is_a_400_with_pointers() -> None:
     from ledger.api.rest.error_handlers import install_error_handling
 
     app = FastAPI()

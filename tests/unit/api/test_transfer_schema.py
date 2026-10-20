@@ -15,16 +15,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from ledger.api.rest.schemas.transfer_schema import TransferRequest as model
+
 VALID = {"from_account_id": 12, "to_account_id": 34, "amount_minor": 2500, "currency": "USD"}
 INTEGER_FIELDS = ["from_account_id", "to_account_id", "amount_minor"]
-
-
-@pytest.fixture
-def model():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.api.rest.schemas.transfer_schema import TransferRequest
-
-    return TransferRequest
 
 
 def error_types(failure) -> set[tuple[tuple, str]]:
@@ -40,12 +34,12 @@ def value_errors(failure, field: str) -> set[str]:
     }
 
 
-def test_the_model_has_exactly_the_documented_fields(model) -> None:
+def test_the_model_has_exactly_the_documented_fields() -> None:
     """The API's field names, from the design doc's example body."""
     assert set(model.model_fields) == set(VALID)
 
 
-def test_a_valid_request(model) -> None:
+def test_a_valid_request() -> None:
     request = model.model_validate(VALID)
     assert (
         request.from_account_id,
@@ -56,7 +50,7 @@ def test_a_valid_request(model) -> None:
 
 
 @pytest.mark.parametrize("missing", list(VALID))
-def test_each_field_is_required(model, missing) -> None:
+def test_each_field_is_required(missing) -> None:
     body = {k: v for k, v in VALID.items() if k != missing}
     with pytest.raises(ValidationError) as failure:
         model.model_validate(body)
@@ -65,7 +59,7 @@ def test_each_field_is_required(model, missing) -> None:
 
 @pytest.mark.parametrize("field", INTEGER_FIELDS)
 @pytest.mark.parametrize("value", ["5", 5.0, 1.5, True, False, None, [5]])
-def test_integers_are_never_converted_from_other_kinds(model, field, value) -> None:
+def test_integers_are_never_converted_from_other_kinds(field, value) -> None:
     """Strings, floats (even whole ones), booleans and null are rejected, not coerced."""
     with pytest.raises(ValidationError) as failure:
         model.model_validate({**VALID, field: value})
@@ -88,7 +82,7 @@ def test_integers_are_never_converted_from_other_kinds(model, field, value) -> N
         ("currency", 5),
     ],
 )
-def test_the_fields_use_the_shared_rules(model, field, value) -> None:
+def test_the_fields_use_the_shared_rules(field, value) -> None:
     with pytest.raises(ValidationError) as failure:
         model.model_validate({**VALID, field: value})
     assert value_errors(failure, field)
@@ -102,11 +96,11 @@ def test_the_fields_use_the_shared_rules(model, field, value) -> None:
         {"amount_minor": 99_900_000_000},
     ],
 )
-def test_the_boundaries_are_accepted(model, values) -> None:
+def test_the_boundaries_are_accepted(values) -> None:
     model.model_validate({**VALID, **values})
 
 
-def test_a_typo_in_a_field_name_is_an_error_and_not_ignored(model) -> None:
+def test_a_typo_in_a_field_name_is_an_error_and_not_ignored() -> None:
     body = {k: v for k, v in VALID.items() if k != "amount_minor"} | {"ammount_minor": 2500}
     with pytest.raises(ValidationError) as failure:
         model.model_validate(body)
@@ -115,19 +109,19 @@ def test_a_typo_in_a_field_name_is_an_error_and_not_ignored(model) -> None:
     assert (("amount_minor",), "missing") in kinds
 
 
-def test_an_extra_field_is_rejected(model) -> None:
+def test_an_extra_field_is_rejected() -> None:
     with pytest.raises(ValidationError) as failure:
         model.model_validate({**VALID, "idempotency_key": "k"})
     assert (("idempotency_key",), "extra_forbidden") in error_types(failure)
 
 
 @pytest.mark.parametrize("body", [None, [], "transfer", 5])
-def test_a_body_that_is_not_an_object_is_rejected(model, body) -> None:
+def test_a_body_that_is_not_an_object_is_rejected(body) -> None:
     with pytest.raises(ValidationError):
         model.model_validate(body)
 
 
-def test_moving_money_to_the_same_account_is_rejected(model) -> None:
+def test_moving_money_to_the_same_account_is_rejected() -> None:
     """The error is about the whole body, so its location is empty, and it is not about any one
     field (which would mean a field name or value was wrong instead)."""
     with pytest.raises(ValidationError) as failure:
@@ -135,7 +129,7 @@ def test_moving_money_to_the_same_account_is_rejected(model) -> None:
     assert error_types(failure) == {((), "value_error")}
 
 
-def test_every_problem_is_reported_together(model) -> None:
+def test_every_problem_is_reported_together() -> None:
     body = {**VALID, "from_account_id": 0, "amount_minor": 0, "currency": "usd"}
     with pytest.raises(ValidationError) as failure:
         model.model_validate(body)
@@ -143,7 +137,7 @@ def test_every_problem_is_reported_together(model) -> None:
     assert locations == {("from_account_id",), ("amount_minor",), ("currency",)}
 
 
-def test_through_a_route_the_json_kinds_are_strict(model) -> None:
+def test_through_a_route_the_json_kinds_are_strict() -> None:
     """A whole-number float, a string, a boolean and null all arrive as JSON, so check them as JSON
     text and see the 400 with a pointer at the field."""
     from ledger.api.rest.error_handlers import install_error_handling

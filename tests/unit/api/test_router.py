@@ -24,6 +24,8 @@ from fastapi import APIRouter
 from fastapi.routing import APIRoute
 from starlette.routing import Match, Route
 
+from ledger.api.rest.router import router as aggregate
+
 # (path, methods) of every endpoint the service offers. Update it together with the design doc's
 # API table when an endpoint is added or removed.
 ENDPOINTS = {
@@ -77,15 +79,7 @@ def router_modules() -> list[str]:
     ]
 
 
-@pytest.fixture
-def aggregate() -> APIRouter:
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.api.rest.router import router
-
-    return router
-
-
-def test_the_aggregate_is_an_api_router(aggregate) -> None:
+def test_the_aggregate_is_an_api_router() -> None:
     assert isinstance(aggregate, APIRouter)
 
 
@@ -111,13 +105,13 @@ def test_each_router_module_exposes_a_router_of_ordinary_routes_that_belong_to_a
         ), f"{module}: {methods} {path!r} matches no listed endpoint"
 
 
-def test_the_aggregate_serves_every_endpoint(aggregate) -> None:
+def test_the_aggregate_serves_every_endpoint() -> None:
     for path, methods in ENDPOINTS:
         for method in methods:
             assert serves(aggregate, path, method), f"the aggregate does not serve {method} {path}"
 
 
-def test_the_aggregate_has_no_routes_of_its_own(aggregate) -> None:
+def test_the_aggregate_has_no_routes_of_its_own() -> None:
     assert [route for route in aggregate.routes if isinstance(route, APIRoute)] == []
 
 

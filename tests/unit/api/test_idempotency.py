@@ -19,16 +19,10 @@ import re
 import pytest
 from pydantic import BaseModel
 
+from ledger.api.rest.idempotency import request_hash
+
 TRANSFER = {"from_account_id": 12, "to_account_id": 34, "amount_minor": 2500, "currency": "USD"}
 TRANSFER_JSON = json.dumps(TRANSFER)
-
-
-@pytest.fixture
-def request_hash():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.api.rest.idempotency import request_hash
-
-    return request_hash
 
 
 @pytest.fixture
@@ -50,20 +44,20 @@ def account_model():
     return CreateAccountRequest
 
 
-def test_it_is_64_lowercase_hex_digits(request_hash, transfer) -> None:
+def test_it_is_64_lowercase_hex_digits(transfer) -> None:
     result = request_hash("POST", "/transfers", transfer)
 
     assert re.fullmatch(r"[0-9a-f]{64}", result)
 
 
-def test_the_same_request_always_gives_the_same_hash(request_hash, transfer_model) -> None:
+def test_the_same_request_always_gives_the_same_hash(transfer_model) -> None:
     first = request_hash("POST", "/transfers", transfer_model.model_validate(TRANSFER))
     second = request_hash("POST", "/transfers", transfer_model.model_validate(TRANSFER))
 
     assert first == second
 
 
-def test_the_form_is_pinned_to_the_sha256_of_the_canonical_json(request_hash, transfer) -> None:
+def test_the_form_is_pinned_to_the_sha256_of_the_canonical_json(transfer) -> None:
     """Sorted keys, no spaces, and the method, path and body as one list."""
     canonical = (
         '["POST","/transfers",{"amount_minor":2500,"currency":"USD",'
@@ -75,7 +69,7 @@ def test_the_form_is_pinned_to_the_sha256_of_the_canonical_json(request_hash, tr
     assert result == hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def test_a_request_with_no_body_hashes_a_json_null(request_hash) -> None:
+def test_a_request_with_no_body_hashes_a_json_null() -> None:
     canonical = '["POST","/transfers/5/reverse",null]'
 
     result = request_hash("POST", "/transfers/5/reverse", None)
@@ -96,22 +90,20 @@ def test_a_request_with_no_body_hashes_a_json_null(request_hash) -> None:
     ],
     ids=["reordered keys", "reordered keys and whitespace", "padding around the body"],
 )
-def test_key_order_and_whitespace_in_the_body_do_not_matter(
-    request_hash, transfer_model, raw: str
-) -> None:
+def test_key_order_and_whitespace_in_the_body_do_not_matter(transfer_model, raw: str) -> None:
     """The body is parsed first, so only its meaning is hashed."""
     expected = request_hash("POST", "/transfers", transfer_model.model_validate_json(TRANSFER_JSON))
 
     assert request_hash("POST", "/transfers", transfer_model.model_validate_json(raw)) == expected
 
 
-def test_the_method_is_hashed_in_uppercase(request_hash, transfer) -> None:
+def test_the_method_is_hashed_in_uppercase(transfer) -> None:
     assert request_hash("post", "/transfers", transfer) == request_hash(
         "POST", "/transfers", transfer
     )
 
 
-def test_a_default_written_out_hashes_the_same_as_leaving_it_out(request_hash) -> None:
+def test_a_default_written_out_hashes_the_same_as_leaving_it_out() -> None:
     """No request model has an optional field yet, so a throwaway one stands in for the rule:
     the hash covers the validated model, defaults included."""
 
@@ -140,7 +132,7 @@ def test_a_default_written_out_hashes_the_same_as_leaving_it_out(request_hash) -
     ],
 )
 def test_changing_any_body_field_changes_the_hash(
-    request_hash, transfer_model, transfer, field: str, value
+    transfer_model, transfer, field: str, value
 ) -> None:
     changed = transfer_model.model_validate({**TRANSFER, field: value})
 
@@ -149,7 +141,7 @@ def test_changing_any_body_field_changes_the_hash(
     )
 
 
-def test_swapping_the_two_accounts_changes_the_hash(request_hash, transfer_model, transfer) -> None:
+def test_swapping_the_two_accounts_changes_the_hash(transfer_model, transfer) -> None:
     """The same values under different keys: a transfer the other way round is another request."""
     swapped = transfer_model.model_validate(
         {**TRANSFER, "from_account_id": 34, "to_account_id": 12}
@@ -160,33 +152,33 @@ def test_swapping_the_two_accounts_changes_the_hash(request_hash, transfer_model
     )
 
 
-def test_a_different_method_changes_the_hash(request_hash, transfer) -> None:
+def test_a_different_method_changes_the_hash(transfer) -> None:
     assert request_hash("POST", "/transfers", transfer) != request_hash(
         "PUT", "/transfers", transfer
     )
 
 
-def test_a_different_path_changes_the_hash(request_hash, transfer) -> None:
+def test_a_different_path_changes_the_hash(transfer) -> None:
     assert request_hash("POST", "/transfers", transfer) != request_hash(
         "POST", "/accounts", transfer
     )
 
 
-def test_a_reversal_of_a_different_transfer_changes_the_hash(request_hash) -> None:
+def test_a_reversal_of_a_different_transfer_changes_the_hash() -> None:
     """The target is in the path, so reversing transfer 5 and transfer 6 are different requests."""
     assert request_hash("POST", "/transfers/5/reverse", None) != request_hash(
         "POST", "/transfers/6/reverse", None
     )
 
 
-def test_a_body_is_different_from_no_body(request_hash, transfer) -> None:
+def test_a_body_is_different_from_no_body(transfer) -> None:
     assert request_hash("POST", "/transfers", transfer) != request_hash("POST", "/transfers", None)
 
 
 # --- text ---------------------------------------------------------------------------------------
 
 
-def test_non_ascii_text_hashes_the_same_every_time(request_hash, account_model) -> None:
+def test_non_ascii_text_hashes_the_same_every_time(account_model) -> None:
     body = {
         "account_name": "customer:\N{LATIN SMALL LETTER E WITH ACUTE}\U0001f600",
         "currency": "USD",
@@ -199,7 +191,7 @@ def test_non_ascii_text_hashes_the_same_every_time(request_hash, account_model) 
     assert re.fullmatch(r"[0-9a-f]{64}", first)
 
 
-def test_text_is_not_normalized(request_hash, account_model) -> None:
+def test_text_is_not_normalized(account_model) -> None:
     """A precomposed e-acute and an e followed by a combining accent are different strings, and
     the database stores them as different names, so they are different requests."""
     precomposed = {"account_name": "caf\N{LATIN SMALL LETTER E WITH ACUTE}", "currency": "USD"}
