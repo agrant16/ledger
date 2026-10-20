@@ -48,7 +48,7 @@ The service and its tools read these environment variables (`Settings` in `src/l
 | `HANDLER_THREAD_LIMIT` | `20` | the service | Maximum number of handler threads running at once (a positive integer). |
 | `CONCURRENCY_CAP` | `40` | the service | Maximum number of requests in flight before a 503 with `Retry-After` (a positive integer). |
 
-A value that does not validate stops the service at startup with an error that names the variable. The pool size, pool wait, thread limit and concurrency cap are logged in one INFO line when the service starts, so the effective values are on record; the database URLs are not.
+The settings are loaded once, when the app is built (`create_app` in `src/ledger/main.py`), and that one object feeds the pool, the thread limit, the concurrency cap and the startup line, so the logged values are the enforced ones. A value that does not validate stops the service at startup with an error that names the variable. The pool size, pool wait, thread limit and concurrency cap are logged in one INFO line when the service starts, so the effective values are on record; the database URLs are not.
 
 Docker Compose builds the two URLs for its containers from three more variables that only Compose reads, and no Python code does: `POSTGRES_PASSWORD` (the superuser, used by the database container), `LEDGER_OWNER_PASSWORD` (default `owner-dev-only`) and `LEDGER_APP_PASSWORD` (default `app-dev-only`). These defaults are for development only.
 

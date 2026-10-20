@@ -20,7 +20,6 @@ import inspect
 import logging
 import re
 import threading
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -31,6 +30,7 @@ from fastapi.testclient import TestClient
 from ledger.api.rest.error_handlers import install_error_handling
 from ledger.api.rest.routers import accounts as accounts_router
 from ledger.infra.config import Settings
+from ledger.main import create_app
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
 
@@ -53,15 +53,6 @@ CHANGED_AFTERWARDS = {
 }
 
 
-@pytest.fixture
-def create_app() -> Callable[..., FastAPI]:
-    """The factory under test. Imported lazily so these tests fail one by one while the function
-    does not exist yet."""
-    from ledger.main import create_app
-
-    return create_app
-
-
 def set_env(monkeypatch: pytest.MonkeyPatch, env: dict[str, str]) -> None:
     for name, value in env.items():
         monkeypatch.setenv(name, value)
@@ -77,7 +68,6 @@ def logged_pairs(caplog: pytest.LogCaptureFixture) -> dict[str, str]:
 
 
 def test_the_settings_are_read_when_the_app_is_built_and_not_again_at_startup(
-    create_app: Callable[..., FastAPI],
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -100,7 +90,6 @@ def test_the_settings_are_read_when_the_app_is_built_and_not_again_at_startup(
 
 
 def test_the_cap_that_is_enforced_is_the_cap_that_is_logged(
-    create_app: Callable[..., FastAPI],
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -137,7 +126,6 @@ def test_the_cap_that_is_enforced_is_the_cap_that_is_logged(
 
 
 def test_given_settings_are_used_and_the_environment_is_not_read(
-    create_app: Callable[..., FastAPI],
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -163,7 +151,6 @@ def test_given_settings_are_used_and_the_environment_is_not_read(
 
 
 def test_two_apps_from_the_factory_keep_their_own_settings(
-    create_app: Callable[..., FastAPI],
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     caplog.set_level(logging.INFO)
