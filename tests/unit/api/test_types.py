@@ -27,16 +27,10 @@ from fastapi import FastAPI, Header
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter, ValidationError
 
+from ledger.api.rest.schemas import types
+
 BIGINT_MAX = 9_223_372_036_854_775_807
 MAX_AMOUNT = 99_900_000_000
-
-
-@pytest.fixture
-def types():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.api.rest.schemas import types
-
-    return types
 
 
 def accepts(adapter: TypeAdapter, value: object) -> bool:
@@ -51,14 +45,14 @@ def accepts(adapter: TypeAdapter, value: object) -> bool:
 
 
 @pytest.mark.parametrize("value", [1, 12, BIGINT_MAX])
-def test_an_account_id_in_a_body_accepts_integers_in_range(types, value) -> None:
+def test_an_account_id_in_a_body_accepts_integers_in_range(value) -> None:
     assert TypeAdapter(types.AccountId).validate_python(value) == value
 
 
 @pytest.mark.parametrize(
     "value", [0, -1, BIGINT_MAX + 1, 12.0, 1.5, "12", True, False, None, [1], {"id": 1}]
 )
-def test_an_account_id_in_a_body_rejects_everything_else(types, value) -> None:
+def test_an_account_id_in_a_body_rejects_everything_else(value) -> None:
     assert not accepts(TypeAdapter(types.AccountId), value)
 
 
@@ -66,7 +60,7 @@ def test_an_account_id_in_a_body_rejects_everything_else(types, value) -> None:
 
 
 @pytest.fixture
-def path_client(types) -> TestClient:
+def path_client() -> TestClient:
     from ledger.api.rest.error_handlers import install_error_handling
 
     app = FastAPI()
@@ -115,7 +109,7 @@ def test_an_account_id_in_a_path_rejects_anything_but_canonical_digits(path_clie
 
 
 @pytest.fixture
-def transfer_path_client(types) -> TestClient:
+def transfer_path_client() -> TestClient:
     from ledger.api.rest.error_handlers import install_error_handling
 
     app = FastAPI()
@@ -152,12 +146,12 @@ def test_a_transfer_id_in_a_path_rejects_anything_but_canonical_digits(
 
 
 @pytest.mark.parametrize("value", [1, 2500, MAX_AMOUNT])
-def test_an_amount_accepts_integers_from_one_to_the_cap(types, value) -> None:
+def test_an_amount_accepts_integers_from_one_to_the_cap(value) -> None:
     assert TypeAdapter(types.AmountMinor).validate_python(value) == value
 
 
 @pytest.mark.parametrize("value", [0, -1, MAX_AMOUNT + 1, BIGINT_MAX, 5.0, 0.5, "5", True, None])
-def test_an_amount_rejects_everything_else(types, value) -> None:
+def test_an_amount_rejects_everything_else(value) -> None:
     assert not accepts(TypeAdapter(types.AmountMinor), value)
 
 
@@ -165,7 +159,7 @@ def test_an_amount_rejects_everything_else(types, value) -> None:
 
 
 @pytest.mark.parametrize("value", ["USD", "EUR", "ABC"])
-def test_a_currency_accepts_three_uppercase_letters(types, value) -> None:
+def test_a_currency_accepts_three_uppercase_letters(value) -> None:
     assert TypeAdapter(types.Currency).validate_python(value) == value
 
 
@@ -194,7 +188,7 @@ def test_a_currency_accepts_three_uppercase_letters(types, value) -> None:
         b"USD",  # bytes are not converted to text
     ],
 )
-def test_a_currency_rejects_everything_else(types, value) -> None:
+def test_a_currency_rejects_everything_else(value) -> None:
     assert not accepts(TypeAdapter(types.Currency), value)
 
 
@@ -216,7 +210,7 @@ def test_a_currency_rejects_everything_else(types, value) -> None:
         "a\N{EM SPACE}",  # an em space
     ],
 )
-def test_an_account_name_accepts_valid_names(types, value) -> None:
+def test_an_account_name_accepts_valid_names(value) -> None:
     assert TypeAdapter(types.AccountName).validate_python(value) == value
 
 
@@ -249,7 +243,7 @@ def test_an_account_name_accepts_valid_names(types, value) -> None:
         b"a",
     ],
 )
-def test_an_account_name_rejects_everything_else(types, value) -> None:
+def test_an_account_name_rejects_everything_else(value) -> None:
     assert not accepts(TypeAdapter(types.AccountName), value)
 
 
@@ -257,17 +251,17 @@ def test_an_account_name_rejects_everything_else(types, value) -> None:
 
 
 @pytest.mark.parametrize("value", ["k", "key-1", "a key with spaces", "x" * 255, "é"])
-def test_an_idempotency_key_accepts_valid_keys(types, value) -> None:
+def test_an_idempotency_key_accepts_valid_keys(value) -> None:
     assert TypeAdapter(types.IdempotencyKey).validate_python(value) == value
 
 
 @pytest.mark.parametrize("value", ["", "x" * 256, "a\x00b", "a\ud800b", 5, None, b"k"])
-def test_an_idempotency_key_rejects_everything_else(types, value) -> None:
+def test_an_idempotency_key_rejects_everything_else(value) -> None:
     assert not accepts(TypeAdapter(types.IdempotencyKey), value)
 
 
 @pytest.fixture
-def header_client(types) -> TestClient:
+def header_client() -> TestClient:
     from ledger.api.rest.error_handlers import install_error_handling
 
     app = FastAPI()
