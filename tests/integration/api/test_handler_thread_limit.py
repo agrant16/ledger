@@ -10,7 +10,7 @@ import pytest
 from anyio import to_thread
 from fastapi.testclient import TestClient
 
-from ledger.main import app
+import ledger.main
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
 
@@ -20,7 +20,7 @@ async def current_thread_limit() -> float:
 
 
 def thread_limit_after_startup() -> float:
-    with TestClient(app) as client:
+    with TestClient(ledger.main.create_app()) as client:
         return client.portal.call(current_thread_limit)
 
 

@@ -30,20 +30,37 @@ from tests.db_helpers import (
 pytest_plugins = ["pytester"]
 
 
-@pytest.fixture(scope="session", autouse=True)
-def use_the_test_database() -> Iterator[None]:
-    """Point every `load_settings()` call in the test run at the test database.
+def _point_settings_at_the_test_database() -> pytest.MonkeyPatch:
+    """Set the database URLs in the environment to the test database; return the patch to undo.
 
     Tests empty the tables they use, so they must never run against the database the service is
     using. The same server, roles and passwords are used; only the database name changes. Setting
     the environment, instead of building settings only in the `settings` fixture, also covers code
     that reads its own settings: the real app's startup and the property test.
+
+    This runs when this file is imported, not in a fixture. `ledger.main.app` is built when
+    `ledger.main` is first imported, and test modules (and the conftest files below this one) import
+    it while pytest collects them, before any fixture runs. A fixture would be too late, and those
+    tests would then use the service's own `ledger` database (#100). A parent conftest is always
+    imported before the ones below it.
     """
     configured = load_settings()
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setenv("DATABASE_OWNER_URL", with_database(configured.owner_url, TEST_DATABASE_NAME))
-        patch.setenv("DATABASE_APP_URL", with_database(configured.app_url, TEST_DATABASE_NAME))
-        yield
+    patch = pytest.MonkeyPatch()
+    patch.setenv("DATABASE_OWNER_URL", with_database(configured.owner_url, TEST_DATABASE_NAME))
+    patch.setenv("DATABASE_APP_URL", with_database(configured.app_url, TEST_DATABASE_NAME))
+    return patch
+
+
+_test_database_patch = _point_settings_at_the_test_database()
+
+
+def pytest_unconfigure(config: pytest.Config) -> None:
+    _test_database_patch.undo()
+
+
+@pytest.fixture(scope="session")
+def use_the_test_database() -> None:
+    """Kept as a dependency of `settings`: the environment already names the test database."""
 
 
 @pytest.fixture(scope="session")
