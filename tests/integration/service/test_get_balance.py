@@ -15,15 +15,7 @@ import pytest
 from ledger.errors import LedgerError, LedgerInvariantError, UnknownAccountError
 from ledger.infra.config import Settings
 from ledger.models.account_model import Balance
-from ledger.service.account_service import create_account
-
-
-@pytest.fixture
-def get_balance():
-    """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.service.account_service import get_balance
-
-    return get_balance
+from ledger.service.account_service import create_account, get_balance
 
 
 def set_cached_balance(conn: psycopg.Connection, account_id: int, balance_minor: int) -> None:
@@ -33,7 +25,7 @@ def set_cached_balance(conn: psycopg.Connection, account_id: int, balance_minor:
 
 
 def test_a_new_account_has_a_zero_balance_in_its_currency(
-    clean_db: None, app_conn: psycopg.Connection, get_balance
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     account = create_account(app_conn, "customer:alice", "EUR", False)
 
@@ -41,7 +33,7 @@ def test_a_new_account_has_a_zero_balance_in_its_currency(
 
 
 def test_it_returns_the_cached_balance_and_not_the_sum_of_the_entries(
-    clean_db: None, app_conn: psycopg.Connection, get_balance
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """There are no entries at all here, so a balance of 500 can only come from the cache."""
     account = create_account(app_conn, "customer:alice", "USD", False)
@@ -51,7 +43,7 @@ def test_it_returns_the_cached_balance_and_not_the_sum_of_the_entries(
 
 
 def test_a_funding_account_can_show_a_negative_balance(
-    clean_db: None, app_conn: psycopg.Connection, get_balance
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     funding = create_account(app_conn, "funding:usd", "USD", True)
     set_cached_balance(app_conn, funding.id, -300)
@@ -59,9 +51,7 @@ def test_a_funding_account_can_show_a_negative_balance(
     assert get_balance(app_conn, funding.id).balance_minor == -300
 
 
-def test_each_account_gets_its_own_balance(
-    clean_db: None, app_conn: psycopg.Connection, get_balance
-) -> None:
+def test_each_account_gets_its_own_balance(clean_db: None, app_conn: psycopg.Connection) -> None:
     alice = create_account(app_conn, "customer:alice", "USD", False)
     bob = create_account(app_conn, "customer:bob", "USD", False)
     set_cached_balance(app_conn, alice.id, 70)
@@ -72,7 +62,7 @@ def test_each_account_gets_its_own_balance(
 
 
 def test_an_unknown_account_raises_unknown_account_error(
-    clean_db: None, app_conn: psycopg.Connection, get_balance
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     with pytest.raises(UnknownAccountError) as failure:
         get_balance(app_conn, 999_999)
@@ -82,7 +72,7 @@ def test_an_unknown_account_raises_unknown_account_error(
 
 
 def test_an_account_with_no_balances_row_is_a_bug_and_not_a_balance(
-    clean_db: None, app_conn: psycopg.Connection, get_balance
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """create_account always writes the balances row with the account, so an account that has none
     means the data is damaged. That is a bug (a logged 500), not an unknown account (404), and it
@@ -99,9 +89,7 @@ def test_an_account_with_no_balances_row_is_a_bug_and_not_a_balance(
     assert not isinstance(failure.value, LedgerError)
 
 
-def test_it_refuses_an_autocommit_connection(
-    clean_db: None, settings: Settings, get_balance
-) -> None:
+def test_it_refuses_an_autocommit_connection(clean_db: None, settings: Settings) -> None:
     """Every service function that is given a connection assumes a transaction is in progress."""
     with psycopg.connect(settings.app_url, autocommit=True) as conn:
         with pytest.raises(LedgerInvariantError):
@@ -119,7 +107,7 @@ def account_repo():
 
 
 def test_the_service_asks_the_repository_and_returns_its_balance(
-    app_conn: psycopg.Connection, get_balance, account_repo, monkeypatch: pytest.MonkeyPatch
+    app_conn: psycopg.Connection, account_repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     asked = []
 
@@ -134,7 +122,7 @@ def test_the_service_asks_the_repository_and_returns_its_balance(
 
 
 def test_nothing_found_means_an_unknown_account(
-    app_conn: psycopg.Connection, get_balance, account_repo, monkeypatch: pytest.MonkeyPatch
+    app_conn: psycopg.Connection, account_repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(account_repo, "find_balance", lambda conn, account_id: None)
 
@@ -143,7 +131,7 @@ def test_nothing_found_means_an_unknown_account(
 
 
 def test_an_account_without_a_balance_is_a_bug_whatever_the_repository_class_is(
-    app_conn: psycopg.Connection, get_balance, account_repo, monkeypatch: pytest.MonkeyPatch
+    app_conn: psycopg.Connection, account_repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
         account_repo, "find_balance", lambda conn, account_id: Balance(account_id, "USD", None)

@@ -28,26 +28,13 @@ from psycopg_pool import ConnectionPool
 
 from ledger.errors import IdempotencyConflictError, LedgerError, LedgerInvariantError
 from ledger.infra.config import Settings
+from ledger.models.posting_model import Claim as claim_type
 from ledger.service.account_service import create_account
+from ledger.service.posting_service import claim_transaction
 from tests.db_helpers import hash_for, wait_until_waiting_for_a_lock
 
 HASH_A = hash_for("request a")
 HASH_B = hash_for("request b")
-
-
-@pytest.fixture
-def claim_transaction():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.service.posting_service import claim_transaction
-
-    return claim_transaction
-
-
-@pytest.fixture
-def claim_type():
-    from ledger.models.posting_model import Claim
-
-    return Claim
 
 
 def transaction_rows(conn: psycopg.Connection) -> list[tuple[int, str, str, int | None]]:
@@ -61,7 +48,7 @@ def transaction_rows(conn: psycopg.Connection) -> list[tuple[int, str, str, int 
 
 
 def test_a_new_key_returns_a_claim_that_is_not_a_replay(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction, claim_type
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     claim = claim_transaction(app_conn, "key-1", HASH_A)
 
@@ -70,9 +57,7 @@ def test_a_new_key_returns_a_claim_that_is_not_a_replay(
     assert claim.transaction_id >= 1
 
 
-def test_each_new_key_gets_a_new_id(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction
-) -> None:
+def test_each_new_key_gets_a_new_id(clean_db: None, app_conn: psycopg.Connection) -> None:
     first = claim_transaction(app_conn, "key-1", HASH_A)
     second = claim_transaction(app_conn, "key-2", HASH_B)
 
@@ -80,7 +65,7 @@ def test_each_new_key_gets_a_new_id(
     assert second.replay is False
 
 
-def test_a_claim_is_a_frozen_value(claim_type) -> None:
+def test_a_claim_is_a_frozen_value() -> None:
     claim = claim_type(transaction_id=7, replay=True)
 
     assert claim == claim_type(7, True)
@@ -89,7 +74,7 @@ def test_a_claim_is_a_frozen_value(claim_type) -> None:
 
 
 def test_stores_the_key_the_hash_and_no_reversal_by_default(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     claim = claim_transaction(app_conn, "key-1", HASH_A)
 
@@ -97,7 +82,7 @@ def test_stores_the_key_the_hash_and_no_reversal_by_default(
 
 
 def test_stores_the_transaction_a_reversal_points_at(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     original = claim_transaction(app_conn, "key-1", HASH_A)
     reversal = claim_transaction(
@@ -109,7 +94,7 @@ def test_stores_the_transaction_a_reversal_points_at(
 
 
 def test_the_same_hash_under_a_new_key_is_a_new_claim(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """The key is the identity of a request. Two keys may carry identical requests."""
     first = claim_transaction(app_conn, "key-1", HASH_A)
@@ -121,7 +106,7 @@ def test_the_same_hash_under_a_new_key_is_a_new_claim(
 
 @pytest.mark.parametrize("other_key", ["KEY-1", "key-1 ", " key-1", "key-1\N{NO-BREAK SPACE}"])
 def test_keys_are_compared_exactly(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction, other_key: str
+    clean_db: None, app_conn: psycopg.Connection, other_key: str
 ) -> None:
     first = claim_transaction(app_conn, "key-1", HASH_A)
     second = claim_transaction(app_conn, other_key, HASH_A)
@@ -134,7 +119,7 @@ def test_keys_are_compared_exactly(
 
 
 def test_the_same_key_and_hash_is_a_replay_of_the_original(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction, claim_type
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     first = claim_transaction(app_conn, "key-1", HASH_A)
 
@@ -147,7 +132,6 @@ def test_the_same_key_and_hash_is_a_replay_of_the_original(
 def test_a_replay_finds_the_row_for_exactly_its_own_key(
     clean_db: None,
     app_conn: psycopg.Connection,
-    claim_transaction,
     replayed_key: str,
     request_hash: str,
 ) -> None:
@@ -162,9 +146,7 @@ def test_a_replay_finds_the_row_for_exactly_its_own_key(
     assert again.transaction_id == expected.transaction_id
 
 
-def test_a_replay_writes_nothing(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction
-) -> None:
+def test_a_replay_writes_nothing(clean_db: None, app_conn: psycopg.Connection) -> None:
     first = claim_transaction(app_conn, "key-1", HASH_A)
     before = transaction_rows(app_conn)
 
@@ -175,7 +157,7 @@ def test_a_replay_writes_nothing(
 
 
 def test_the_transaction_is_still_usable_after_a_replay(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """A violated unique constraint would abort the whole database transaction. A replay must not:
     the caller goes on to read the stored transfer in the same transaction."""
@@ -187,7 +169,7 @@ def test_the_transaction_is_still_usable_after_a_replay(
 
 
 def test_a_replay_of_a_reversal_is_a_replay_and_not_a_unique_violation(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """A retried reversal repeats both the key and the reversal link, and Postgres does not say
     which unique constraint it reports. The claim resolves the key first, so it is a replay."""
@@ -205,7 +187,7 @@ def test_a_replay_of_a_reversal_is_a_replay_and_not_a_unique_violation(
 
 
 def test_a_second_reversal_under_a_new_key_is_not_taken_for_a_replay(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """Only the key conflict is a replay. A different key aimed at an already reversed transfer
     must still fail on the reversal link. Milestone 5 turns this into AlreadyReversedError and
@@ -229,7 +211,7 @@ def test_a_second_reversal_under_a_new_key_is_not_taken_for_a_replay(
 
 
 def test_the_same_key_with_a_different_hash_is_a_conflict(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     claim_transaction(app_conn, "key-1", HASH_A)
 
@@ -238,7 +220,7 @@ def test_the_same_key_with_a_different_hash_is_a_conflict(
 
 
 def test_a_conflict_changes_nothing_and_leaves_the_transaction_usable(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     first = claim_transaction(app_conn, "key-1", HASH_A)
 
@@ -250,7 +232,7 @@ def test_a_conflict_changes_nothing_and_leaves_the_transaction_usable(
 
 
 def test_a_conflict_message_does_not_repeat_the_key_or_the_hashes(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """The message becomes the response detail, so it is fixed text."""
     claim_transaction(app_conn, "secret-key-123", HASH_A)
@@ -272,7 +254,6 @@ def test_it_never_commits(
     clean_db: None,
     app_conn: psycopg.Connection,
     owner_conn: psycopg.Connection,
-    claim_transaction,
 ) -> None:
     """The caller owns the transaction, so a rollback must undo the claim."""
     claim_transaction(app_conn, "key-1", HASH_A)
@@ -282,7 +263,7 @@ def test_it_never_commits(
 
 
 def test_a_rolled_back_claim_frees_the_key_for_any_request(
-    clean_db: None, app_conn: psycopg.Connection, claim_transaction
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """A failed attempt does not consume the key: a retry, even a different request, claims it
     fresh."""
@@ -296,7 +277,7 @@ def test_a_rolled_back_claim_frees_the_key_for_any_request(
 
 
 def test_it_refuses_an_autocommit_connection(
-    clean_db: None, settings: Settings, owner_conn: psycopg.Connection, claim_transaction
+    clean_db: None, settings: Settings, owner_conn: psycopg.Connection
 ) -> None:
     """The claim and the posting must share one transaction, so a failure rolls back both."""
     with psycopg.connect(settings.app_url, autocommit=True) as conn:
@@ -413,7 +394,6 @@ def stored(transaction_id: int, request_hash: str) -> tuple[int, str]:
 
 def test_a_free_key_is_a_new_claim_and_the_key_is_never_looked_up(
     app_conn: psycopg.Connection,
-    claim_transaction,
     posting_repo,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -437,7 +417,6 @@ def test_a_free_key_is_a_new_claim_and_the_key_is_never_looked_up(
 
 def test_a_taken_key_with_the_same_hash_is_a_replay_of_the_stored_transaction(
     app_conn: psycopg.Connection,
-    claim_transaction,
     posting_repo,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -451,7 +430,6 @@ def test_a_taken_key_with_the_same_hash_is_a_replay_of_the_stored_transaction(
 
 def test_a_taken_key_with_another_hash_is_a_conflict_that_repeats_nothing_back(
     app_conn: psycopg.Connection,
-    claim_transaction,
     posting_repo,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -467,7 +445,6 @@ def test_a_taken_key_with_another_hash_is_a_conflict_that_repeats_nothing_back(
 
 def test_a_taken_key_that_cannot_be_found_is_a_bug(
     app_conn: psycopg.Connection,
-    claim_transaction,
     posting_repo,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -483,7 +460,7 @@ def test_a_taken_key_that_cannot_be_found_is_a_bug(
 
 
 def test_an_autocommit_connection_is_refused_before_the_repository_is_called(
-    claim_transaction, posting_repo, monkeypatch: pytest.MonkeyPatch
+    posting_repo, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The test above passes even without the guard, because an insert on an autocommit connection
     commits a transaction with no entries and the database trigger refuses it. This one has no
