@@ -19,7 +19,7 @@ class ConcurrencyCapMiddleware:
                 logger.warning(
                     f"Concurrency cap reached ({self.request_count}/{self.cap}). Rejecting request."
                 )
-                await self._send_503_response(self, scope, send)
+                await self._send_503_response(scope, send)
                 return
             self.request_count += 1
 
@@ -27,14 +27,14 @@ class ConcurrencyCapMiddleware:
             try:
                 await self.app(scope, receive, send)
             finally:
-                self.request_count -= 1
-
+                self.request_count = max(0, self.request_count - 1)
+            return
         # any non-http requests (lifespan, etc.) get passed through
         await self.app(scope, receive, send)
         return
 
-    @staticmethod
-    async def _send_503_response(self, scope: Scope, send: Send):
+    async def _send_503_response(self, scope: Scope, send: Send) -> None:
+        """Builds a 503 response to deal with the concurrency cap"""
         body = json.dumps(
             {
                 "title": "Service busy",
