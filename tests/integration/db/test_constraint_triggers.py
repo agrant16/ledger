@@ -25,17 +25,10 @@ import pytest
 from ledger.errors import LedgerError
 from ledger.models.account_model import Account
 from ledger.models.posting_model import Entry
+from ledger.service import posting_service as api
 from tests.db_helpers import VALID_HASH, make_account
 
 SAFETY_NET = (psycopg.errors.CheckViolation, psycopg.errors.RaiseException)
-
-
-@pytest.fixture
-def api():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.service import posting_service
-
-    return posting_service
 
 
 def insert_transaction(conn: psycopg.Connection, key: str) -> int:
@@ -202,7 +195,7 @@ def test_a_transaction_with_no_entries_fails_at_commit(
 
 
 def test_a_claim_that_was_never_posted_cannot_be_committed(
-    app_conn: psycopg.Connection, owner_conn: psycopg.Connection, accounts, api
+    app_conn: psycopg.Connection, owner_conn: psycopg.Connection, accounts
 ) -> None:
     """The bug this guards against: a caller claims the key, skips post_transaction, and commits."""
     api.claim_transaction(app_conn, "key-1", VALID_HASH)
@@ -227,7 +220,7 @@ def test_one_transaction_without_entries_stops_a_commit_that_has_a_good_one(
 
 
 def test_a_claimed_and_posted_transfer_commits(
-    app_conn: psycopg.Connection, owner_conn: psycopg.Connection, accounts, api
+    app_conn: psycopg.Connection, owner_conn: psycopg.Connection, accounts
 ) -> None:
     """The claim inserts the transactions row before any entry exists. Because the triggers are
     deferred, claim_transaction followed by post_transaction commits as one unit."""

@@ -23,14 +23,7 @@ from psycopg_pool import ConnectionPool
 
 from ledger.errors import DuplicateAccountNameError, LedgerError, LedgerInvariantError
 from ledger.models.account_model import Account, Balance
-
-
-@pytest.fixture
-def repo():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.repository import account_repo
-
-    return account_repo
+from ledger.repository import account_repo as repo
 
 
 def count(conn: psycopg.Connection, table: str) -> int:
@@ -54,7 +47,7 @@ def set_cached_balance(conn: psycopg.Connection, account_id: int, balance_minor:
 
 
 def test_insert_account_returns_the_new_account(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     account = repo.insert_account(app_conn, "customer:alice", "EUR", False)
 
@@ -68,7 +61,7 @@ def test_insert_account_returns_the_new_account(
 
 
 def test_insert_account_writes_the_row_and_nothing_else(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """The balances row is a separate step, so the service can decide when it is created."""
     account = repo.insert_account(app_conn, "customer:alice", "USD", True)
@@ -80,21 +73,21 @@ def test_insert_account_writes_the_row_and_nothing_else(
     assert count(app_conn, "balances") == 0
 
 
-def test_each_account_gets_a_new_id(clean_db: None, app_conn: psycopg.Connection, repo) -> None:
+def test_each_account_gets_a_new_id(clean_db: None, app_conn: psycopg.Connection) -> None:
     first = repo.insert_account(app_conn, "customer:alice", "USD", False)
     second = repo.insert_account(app_conn, "customer:bob", "USD", False)
 
     assert second.id > first.id
 
 
-def test_names_are_case_sensitive(clean_db: None, app_conn: psycopg.Connection, repo) -> None:
+def test_names_are_case_sensitive(clean_db: None, app_conn: psycopg.Connection) -> None:
     repo.insert_account(app_conn, "customer:alice", "USD", False)
     repo.insert_account(app_conn, "Customer:Alice", "USD", False)
 
 
 @pytest.mark.parametrize("currency", ["USD", "EUR"], ids=["same currency", "other currency"])
 def test_a_duplicate_name_is_a_duplicate_account_name_error(
-    clean_db: None, app_conn: psycopg.Connection, repo, currency: str
+    clean_db: None, app_conn: psycopg.Connection, currency: str
 ) -> None:
     """Names are unique across currencies."""
     repo.insert_account(app_conn, "customer:alice", "USD", False)
@@ -121,7 +114,7 @@ def test_a_duplicate_name_is_a_duplicate_account_name_error(
     ids=["lowercase currency", "short currency", "empty name", "padded name", "long name"],
 )
 def test_a_value_the_database_refuses_is_a_bug_and_not_a_ledger_error(
-    clean_db: None, app_conn: psycopg.Connection, repo, name: str, currency: str
+    clean_db: None, app_conn: psycopg.Connection, name: str, currency: str
 ) -> None:
     """Validation belongs to the API. A CHECK that fires means the API let something through."""
     with pytest.raises(LedgerInvariantError) as failure:
@@ -136,7 +129,7 @@ def test_a_value_the_database_refuses_is_a_bug_and_not_a_ledger_error(
 
 @pytest.mark.parametrize("allow_negative", [False, True])
 def test_insert_balance_writes_a_zero_row_copying_allow_negative(
-    clean_db: None, app_conn: psycopg.Connection, repo, allow_negative: bool
+    clean_db: None, app_conn: psycopg.Connection, allow_negative: bool
 ) -> None:
     account = repo.insert_account(app_conn, "customer:alice", "USD", allow_negative)
 
@@ -151,7 +144,7 @@ def test_insert_balance_writes_a_zero_row_copying_allow_negative(
 
 
 def test_a_balance_for_an_unknown_account_is_a_bug(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     with pytest.raises(LedgerInvariantError) as failure:
         repo.insert_balance(app_conn, 999_999, False)
@@ -161,7 +154,7 @@ def test_a_balance_for_an_unknown_account_is_a_bug(
 
 
 def test_a_balance_whose_allow_negative_differs_from_the_account_is_a_bug(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     account = repo.insert_account(app_conn, "customer:alice", "USD", False)
 
@@ -172,7 +165,7 @@ def test_a_balance_whose_allow_negative_differs_from_the_account_is_a_bug(
 
 
 def test_a_second_balance_row_for_an_account_is_a_bug(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     account = repo.insert_account(app_conn, "customer:alice", "USD", False)
     repo.insert_balance(app_conn, account.id, False)
@@ -189,7 +182,7 @@ def test_a_second_balance_row_for_an_account_is_a_bug(
 
 
 def test_find_balance_returns_a_balance_for_an_account(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     account = repo.insert_account(app_conn, "customer:alice", "EUR", False)
     repo.insert_balance(app_conn, account.id, False)
@@ -201,7 +194,7 @@ def test_find_balance_returns_a_balance_for_an_account(
 
 
 def test_find_balance_returns_the_cached_value_and_not_the_sum_of_the_entries(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """There are no entries at all here, so 500 can only come from the cache."""
     account = repo.insert_account(app_conn, "customer:alice", "USD", False)
@@ -212,7 +205,7 @@ def test_find_balance_returns_the_cached_value_and_not_the_sum_of_the_entries(
 
 
 def test_find_balance_can_return_a_negative_balance(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     funding = repo.insert_account(app_conn, "funding:usd", "USD", True)
     repo.insert_balance(app_conn, funding.id, True)
@@ -221,9 +214,7 @@ def test_find_balance_can_return_a_negative_balance(
     assert repo.find_balance(app_conn, funding.id).balance_minor == -300
 
 
-def test_each_account_has_its_own_balance(
-    clean_db: None, app_conn: psycopg.Connection, repo
-) -> None:
+def test_each_account_has_its_own_balance(clean_db: None, app_conn: psycopg.Connection) -> None:
     alice = repo.insert_account(app_conn, "customer:alice", "USD", False)
     bob = repo.insert_account(app_conn, "customer:bob", "USD", False)
     repo.insert_balance(app_conn, alice.id, False)
@@ -236,14 +227,14 @@ def test_each_account_has_its_own_balance(
 
 
 def test_find_balance_returns_none_for_an_unknown_account(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """Not an error at this layer: the query ran and found nothing."""
     assert repo.find_balance(app_conn, 999_999) is None
 
 
 def test_an_account_with_no_balances_row_comes_back_as_it_is(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """The repository does not know that every account should have a balances row. It reports the
     account and an empty balance, and the service decides that this is a bug."""
@@ -260,7 +251,6 @@ def test_find_balance_takes_no_row_locks(
     app_conn: psycopg.Connection,
     app_pool: ConnectionPool,
     commit_setup,
-    repo,
 ) -> None:
     """Another connection holds the balances row FOR UPDATE, as a transfer in flight would. A plain
     read must not wait for it: the reading connection refuses to wait more than 300 ms."""
@@ -277,7 +267,7 @@ def test_find_balance_takes_no_row_locks(
     assert result.balance_minor == 0
 
 
-def test_find_balance_changes_nothing(clean_db: None, app_conn: psycopg.Connection, repo) -> None:
+def test_find_balance_changes_nothing(clean_db: None, app_conn: psycopg.Connection) -> None:
     account = repo.insert_account(app_conn, "customer:alice", "USD", False)
     repo.insert_balance(app_conn, account.id, False)
     set_cached_balance(app_conn, account.id, 12)
@@ -303,7 +293,6 @@ def test_find_balance_changes_nothing(clean_db: None, app_conn: psycopg.Connecti
 def test_a_missing_value_is_a_bug_and_not_a_raw_database_error(
     clean_db: None,
     app_conn: psycopg.Connection,
-    repo,
     name: str | None,
     currency: str | None,
     allow_negative: bool | None,
@@ -318,7 +307,7 @@ def test_a_missing_value_is_a_bug_and_not_a_raw_database_error(
 
 
 def test_a_balance_with_no_allow_negative_is_a_bug(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     account = repo.insert_account(app_conn, "customer:alice", "USD", False)
 
@@ -332,7 +321,7 @@ def test_a_balance_with_no_allow_negative_is_a_bug(
 
 
 def test_find_account_by_name_returns_the_account(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     created = repo.insert_account(app_conn, "funding:USD", "USD", True)
 
@@ -343,25 +332,21 @@ def test_find_account_by_name_returns_the_account(
 
 
 def test_find_account_by_name_returns_none_for_an_unknown_name(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     repo.insert_account(app_conn, "funding:USD", "USD", True)
 
     assert repo.find_account_by_name(app_conn, "funding:EUR") is None
 
 
-def test_find_account_by_name_matches_exactly(
-    clean_db: None, app_conn: psycopg.Connection, repo
-) -> None:
+def test_find_account_by_name_matches_exactly(clean_db: None, app_conn: psycopg.Connection) -> None:
     repo.insert_account(app_conn, "funding:USD", "USD", True)
 
     assert repo.find_account_by_name(app_conn, "FUNDING:USD") is None
     assert repo.find_account_by_name(app_conn, "funding:USD%") is None  # not a LIKE pattern
 
 
-def test_find_account_by_name_changes_nothing(
-    clean_db: None, app_conn: psycopg.Connection, repo
-) -> None:
+def test_find_account_by_name_changes_nothing(clean_db: None, app_conn: psycopg.Connection) -> None:
     repo.insert_account(app_conn, "funding:USD", "USD", True)
     before = (count(app_conn, "accounts"), count(app_conn, "balances"))
 

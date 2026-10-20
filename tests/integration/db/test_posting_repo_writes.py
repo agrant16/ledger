@@ -25,20 +25,13 @@ import pytest
 from ledger.errors import LedgerError, LedgerInvariantError
 from ledger.models.account_model import Account
 from ledger.models.posting_model import Entry
+from ledger.repository import posting_repo as repo
 from tests.db_helpers import VALID_HASH, make_account
 
 KEYS = itertools.count(1)
 
 
-@pytest.fixture
-def repo():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.repository import posting_repo
-
-    return posting_repo
-
-
-def claim(repo, conn: psycopg.Connection) -> int:
+def claim(conn: psycopg.Connection) -> int:
     transaction_id = repo.insert_claim(conn, f"key-{next(KEYS)}", VALID_HASH, None)
     assert transaction_id is not None
     return transaction_id
@@ -81,12 +74,12 @@ def count(conn: psycopg.Connection, table: str) -> int:
 
 
 def test_insert_writes_one_row_per_entry_in_list_order(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     alice = make_account(app_conn, "customer:alice")
     bob = make_account(app_conn, "customer:bob")
     carol = make_account(app_conn, "customer:carol")
-    tx = claim(repo, app_conn)
+    tx = claim(app_conn)
     entries = [
         Entry(bob.id, -300, "USD"),
         Entry(alice.id, 100, "USD"),
@@ -104,12 +97,12 @@ def test_insert_writes_one_row_per_entry_in_list_order(
 
 
 def test_insert_files_the_rows_under_the_given_transaction_only(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     alice = make_account(app_conn, "customer:alice")
     bob = make_account(app_conn, "customer:bob")
-    first = claim(repo, app_conn)
-    second = claim(repo, app_conn)
+    first = claim(app_conn)
+    second = claim(app_conn)
 
     repo.insert_entries(app_conn, second, [Entry(alice.id, -5, "USD"), Entry(bob.id, 5, "USD")])
 
@@ -117,13 +110,11 @@ def test_insert_files_the_rows_under_the_given_transaction_only(
     assert len(entry_rows(app_conn, second)) == 2
 
 
-def test_insert_does_not_touch_the_balances(
-    clean_db: None, app_conn: psycopg.Connection, repo
-) -> None:
+def test_insert_does_not_touch_the_balances(clean_db: None, app_conn: psycopg.Connection) -> None:
     """Updating balances is apply_balance_deltas's job; the two steps stay separate."""
     alice = make_account(app_conn, "customer:alice")
     bob = make_account(app_conn, "customer:bob")
-    tx = claim(repo, app_conn)
+    tx = claim(app_conn)
     before = balances(app_conn)
 
     repo.insert_entries(app_conn, tx, [Entry(alice.id, -5, "USD"), Entry(bob.id, 5, "USD")])
@@ -136,13 +127,12 @@ def test_insert_never_commits(
     clean_db: None,
     app_conn: psycopg.Connection,
     owner_conn: psycopg.Connection,
-    repo,
 ) -> None:
     """The accounts and the claim are uncommitted too, so if the helper committed, everything
     would become visible to the owner connection below."""
     alice = make_account(app_conn, "customer:alice")
     bob = make_account(app_conn, "customer:bob")
-    tx = claim(repo, app_conn)
+    tx = claim(app_conn)
 
     repo.insert_entries(app_conn, tx, [Entry(alice.id, -5, "USD"), Entry(bob.id, 5, "USD")])
 
@@ -156,7 +146,7 @@ def test_insert_never_commits(
 
 
 def test_apply_adds_each_delta_to_its_accounts_balance(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     alice = make_account(app_conn, "customer:alice")
     bob = make_account(app_conn, "customer:bob")
@@ -174,7 +164,7 @@ def test_apply_adds_each_delta_to_its_accounts_balance(
 
 
 def test_apply_changes_only_the_accounts_in_the_map(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     alice = make_account(app_conn, "customer:alice")
     bob = make_account(app_conn, "customer:bob")
@@ -189,7 +179,7 @@ def test_apply_changes_only_the_accounts_in_the_map(
 
 
 def test_apply_with_a_zero_delta_leaves_the_balance_alone(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     alice = make_account(app_conn, "customer:alice")
     set_balance(app_conn, alice, 70)
@@ -197,9 +187,7 @@ def test_apply_with_a_zero_delta_leaves_the_balance_alone(
     assert balance(app_conn, alice) == 70
 
 
-def test_apply_with_no_deltas_changes_nothing(
-    clean_db: None, app_conn: psycopg.Connection, repo
-) -> None:
+def test_apply_with_no_deltas_changes_nothing(clean_db: None, app_conn: psycopg.Connection) -> None:
     alice = make_account(app_conn, "customer:alice")
     set_balance(app_conn, alice, 70)
     assert repo.apply_balance_deltas(app_conn, {}) == set()
@@ -207,7 +195,7 @@ def test_apply_with_no_deltas_changes_nothing(
 
 
 def test_apply_does_not_check_for_an_overdraft_the_database_constraint_is_the_safety_net(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """The overdraft check belongs to post_transaction. If it ever let a protected account go
     negative through here, the balances CHECK refuses, and that is a bug (a logged 500), not a
@@ -223,7 +211,7 @@ def test_apply_does_not_check_for_an_overdraft_the_database_constraint_is_the_sa
 
 
 def test_apply_lets_an_allow_negative_account_go_below_zero(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     funding = make_account(app_conn, "funding:usd", allow_negative=True)
     repo.apply_balance_deltas(app_conn, {funding.id: -500})
@@ -231,7 +219,7 @@ def test_apply_lets_an_allow_negative_account_go_below_zero(
 
 
 def test_apply_reports_which_accounts_it_updated_and_leaves_the_judging_to_the_service(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """The lock step has already established that every row exists, so a delta for a missing one
     means the caller is wrong. Whether that is a bug is the service's call: this function only says
@@ -250,7 +238,6 @@ def test_apply_never_commits(
     app_conn: psycopg.Connection,
     owner_conn: psycopg.Connection,
     commit_setup,
-    repo,
 ) -> None:
     alice = make_account(app_conn, "customer:alice")
     bob = make_account(app_conn, "funding:usd", allow_negative=True)
@@ -267,18 +254,18 @@ def test_apply_never_commits(
 
 
 def test_insert_with_no_entries_writes_nothing(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
-    tx = claim(repo, app_conn)
+    tx = claim(app_conn)
 
     assert repo.insert_entries(app_conn, tx, []) is None
 
     assert count(app_conn, "entries") == 0
 
 
-def test_an_entry_of_zero_is_a_bug(clean_db: None, app_conn: psycopg.Connection, repo) -> None:
+def test_an_entry_of_zero_is_a_bug(clean_db: None, app_conn: psycopg.Connection) -> None:
     alice = make_account(app_conn, "customer:alice")
-    tx = claim(repo, app_conn)
+    tx = claim(app_conn)
 
     with pytest.raises(LedgerInvariantError) as failure:
         repo.insert_entries(app_conn, tx, [Entry(alice.id, 0, "USD")])
@@ -288,9 +275,9 @@ def test_an_entry_of_zero_is_a_bug(clean_db: None, app_conn: psycopg.Connection,
 
 
 def test_an_entry_for_an_unknown_account_is_a_bug(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
-    tx = claim(repo, app_conn)
+    tx = claim(app_conn)
 
     with pytest.raises(LedgerInvariantError) as failure:
         repo.insert_entries(app_conn, tx, [Entry(999_999, 5, "USD")])
@@ -299,11 +286,11 @@ def test_an_entry_for_an_unknown_account_is_a_bug(
 
 
 def test_an_entry_in_the_wrong_currency_for_its_account_is_a_bug(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     """The foreign key is on (account_id, currency), so the database refuses a mismatch."""
     alice = make_account(app_conn, "customer:alice", "USD")
-    tx = claim(repo, app_conn)
+    tx = claim(app_conn)
 
     with pytest.raises(LedgerInvariantError) as failure:
         repo.insert_entries(app_conn, tx, [Entry(alice.id, 5, "EUR")])
@@ -312,7 +299,7 @@ def test_an_entry_in_the_wrong_currency_for_its_account_is_a_bug(
 
 
 def test_an_entry_for_an_unknown_transaction_is_a_bug(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     alice = make_account(app_conn, "customer:alice")
 

@@ -22,14 +22,7 @@ from psycopg.pq import TransactionStatus
 from psycopg_pool import ConnectionPool, PoolTimeout
 
 from ledger.errors import ServiceBusyError
-
-
-@pytest.fixture
-def check_database():
-    """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.infra.db import check_database
-
-    return check_database
+from ledger.infra.db import check_database
 
 
 @pytest.fixture
@@ -39,11 +32,11 @@ def single_pool(settings):
         yield pool
 
 
-def test_a_healthy_pool_returns_nothing(single_pool: ConnectionPool, check_database) -> None:
+def test_a_healthy_pool_returns_nothing(single_pool: ConnectionPool) -> None:
     assert check_database(single_pool) is None
 
 
-def test_the_connection_goes_back_to_the_pool(single_pool: ConnectionPool, check_database) -> None:
+def test_the_connection_goes_back_to_the_pool(single_pool: ConnectionPool) -> None:
     """With one connection in the pool, repeated checks only work if each one gave it back."""
     for _ in range(5):
         check_database(single_pool)
@@ -52,20 +45,20 @@ def test_the_connection_goes_back_to_the_pool(single_pool: ConnectionPool, check
         assert conn.execute("SELECT 42").fetchone() == (42,)
 
 
-def test_it_leaves_no_transaction_open(single_pool: ConnectionPool, check_database) -> None:
+def test_it_leaves_no_transaction_open(single_pool: ConnectionPool) -> None:
     check_database(single_pool)
 
     with single_pool.connection() as conn:
         assert conn.info.transaction_status == TransactionStatus.IDLE
 
 
-def test_it_takes_exactly_one_connection(single_pool: ConnectionPool, check_database) -> None:
+def test_it_takes_exactly_one_connection(single_pool: ConnectionPool) -> None:
     """It works on a pool of one, so it never needs a second connection while holding the first."""
     assert check_database(single_pool) is None
 
 
 def test_a_pool_with_no_free_connection_is_a_service_busy_error_chained_to_the_timeout(
-    single_pool: ConnectionPool, check_database
+    single_pool: ConnectionPool,
 ) -> None:
     with single_pool.connection():  # the only connection is in use
         with pytest.raises(ServiceBusyError) as failure:
@@ -74,7 +67,7 @@ def test_a_pool_with_no_free_connection_is_a_service_busy_error_chained_to_the_t
     assert isinstance(failure.value.__cause__, PoolTimeout)
 
 
-def test_the_timeout_does_not_damage_the_pool(single_pool: ConnectionPool, check_database) -> None:
+def test_the_timeout_does_not_damage_the_pool(single_pool: ConnectionPool) -> None:
     with single_pool.connection():
         with pytest.raises(ServiceBusyError):
             check_database(single_pool)
@@ -83,7 +76,7 @@ def test_the_timeout_does_not_damage_the_pool(single_pool: ConnectionPool, check
 
 
 def test_a_connection_whose_server_session_died_is_reported_as_a_failure(
-    single_pool: ConnectionPool, app_pool: ConnectionPool, check_database
+    single_pool: ConnectionPool, app_pool: ConnectionPool
 ) -> None:
     """A check that only looked at the pool would pass with the database session gone. This one
     runs a statement: the pooled connection's backend is terminated from another session, and the

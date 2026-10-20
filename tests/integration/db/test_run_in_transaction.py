@@ -37,6 +37,7 @@ from ledger.errors import (
     LedgerInvariantError,
     ServiceBusyError,
 )
+from ledger.infra.db import run_in_transaction as run
 from ledger.service.account_service import create_account
 from tests.db_helpers import VALID_HASH
 
@@ -45,14 +46,6 @@ LONE_TRANSACTION = "INSERT INTO transactions (idempotency_key, request_hash) VAL
 
 class Boom(Exception):
     pass
-
-
-@pytest.fixture
-def run():
-    """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.infra.db import run_in_transaction
-
-    return run_in_transaction
 
 
 @pytest.fixture
@@ -76,13 +69,13 @@ def count(conn: psycopg.Connection, table: str) -> int:
 
 
 def test_the_work_gets_a_connection_with_a_transaction_in_progress(
-    clean_db: None, single_pool, run
+    clean_db: None, single_pool
 ) -> None:
     assert run(single_pool, lambda conn: conn.autocommit) is False
 
 
 def test_a_successful_run_commits_and_returns_the_result(
-    clean_db: None, owner_conn: psycopg.Connection, single_pool, run
+    clean_db: None, owner_conn: psycopg.Connection, single_pool
 ) -> None:
     account = run(single_pool, lambda conn: create_account(conn, "customer:alice", "USD", False))
 
@@ -91,7 +84,7 @@ def test_a_successful_run_commits_and_returns_the_result(
 
 
 def test_a_run_whose_work_raises_rolls_back_and_re_raises(
-    clean_db: None, owner_conn: psycopg.Connection, single_pool, run
+    clean_db: None, owner_conn: psycopg.Connection, single_pool
 ) -> None:
     def work(conn):
         create_account(conn, "customer:alice", "USD", False)
@@ -104,7 +97,7 @@ def test_a_run_whose_work_raises_rolls_back_and_re_raises(
 
 
 def test_a_failed_commit_raises_and_keeps_nothing(
-    clean_db: None, owner_conn: psycopg.Connection, single_pool, run
+    clean_db: None, owner_conn: psycopg.Connection, single_pool
 ) -> None:
     """A transaction row with no entries is refused by the deferred trigger at commit. That is a
     bug, so the caller gets a LedgerInvariantError (never a LedgerError) and the psycopg error
@@ -118,7 +111,7 @@ def test_a_failed_commit_raises_and_keeps_nothing(
 
 
 def test_the_connection_is_usable_again_after_each_kind_of_failure(
-    clean_db: None, single_pool, run
+    clean_db: None, single_pool
 ) -> None:
     """With one connection in the pool, a later run only works if the failed run gave its
     connection back, and in a state where it can start a new transaction."""
@@ -135,7 +128,7 @@ def test_the_connection_is_usable_again_after_each_kind_of_failure(
     assert run(single_pool, lambda conn: conn.execute("SELECT 43").fetchone()) == (43,)
 
 
-def test_many_failures_do_not_leak_connections(clean_db: None, settings, run) -> None:
+def test_many_failures_do_not_leak_connections(clean_db: None, settings) -> None:
     with ConnectionPool(settings.app_url, min_size=2, max_size=2, timeout=2, open=True) as pool:
 
         def raises(conn):
@@ -147,19 +140,19 @@ def test_many_failures_do_not_leak_connections(clean_db: None, settings, run) ->
         assert run(pool, lambda conn: conn.execute("SELECT 1").fetchone()) == (1,)
 
 
-def test_a_run_takes_exactly_one_connection(clean_db: None, single_pool, run) -> None:
+def test_a_run_takes_exactly_one_connection(clean_db: None, single_pool) -> None:
     """It works on a pool of one, so it never needs a second connection while holding the first,
     which is what would deadlock a full pool."""
     assert run(single_pool, lambda conn: conn.execute("SELECT 1").fetchone()) == (1,)
 
 
-def test_a_read_only_run_can_read(clean_db: None, single_pool, run) -> None:
+def test_a_read_only_run_can_read(clean_db: None, single_pool) -> None:
     result = run(single_pool, lambda conn: conn.execute("SELECT 1").fetchone(), read_only=True)
     assert result == (1,)
 
 
 def test_a_read_only_run_cannot_write(
-    clean_db: None, owner_conn: psycopg.Connection, single_pool, run
+    clean_db: None, owner_conn: psycopg.Connection, single_pool
 ) -> None:
     with pytest.raises(psycopg.errors.ReadOnlySqlTransaction):
         run(
@@ -172,7 +165,7 @@ def test_a_read_only_run_cannot_write(
 
 
 def test_the_read_only_setting_does_not_reach_the_next_run(
-    clean_db: None, owner_conn: psycopg.Connection, single_pool, run
+    clean_db: None, owner_conn: psycopg.Connection, single_pool
 ) -> None:
     """The pool has one connection, so the next run reuses the very one that was read only."""
     run(single_pool, lambda conn: conn.execute("SELECT 1").fetchone(), read_only=True)
@@ -186,7 +179,7 @@ def test_the_read_only_setting_does_not_reach_the_next_run(
 
 
 def test_an_integrity_error_inside_the_work_becomes_a_chained_invariant_error(
-    clean_db: None, owner_conn: psycopg.Connection, single_pool, run
+    clean_db: None, owner_conn: psycopg.Connection, single_pool
 ) -> None:
     """Nothing below translated this duplicate, so it is a bug: the caller never sees a raw
     psycopg integrity error, and the original is kept as the cause."""
@@ -210,7 +203,7 @@ def test_an_integrity_error_inside_the_work_becomes_a_chained_invariant_error(
 
 
 def test_a_check_violation_inside_the_work_becomes_a_chained_invariant_error(
-    clean_db: None, single_pool, run
+    clean_db: None, single_pool
 ) -> None:
     def work(conn):
         conn.execute(
@@ -225,7 +218,7 @@ def test_a_check_violation_inside_the_work_becomes_a_chained_invariant_error(
 
 
 def test_an_expected_ledger_error_passes_through_untouched(
-    clean_db: None, owner_conn: psycopg.Connection, single_pool, run
+    clean_db: None, owner_conn: psycopg.Connection, single_pool
 ) -> None:
     expected = DuplicateAccountNameError("customer:alice")
 
@@ -241,7 +234,7 @@ def test_an_expected_ledger_error_passes_through_untouched(
 
 
 def test_a_database_error_that_is_not_an_integrity_error_is_not_translated(
-    clean_db: None, single_pool, run
+    clean_db: None, single_pool
 ) -> None:
     """Only constraint violations are translated. A syntax error is a different kind of failure
     and keeps its own type."""
@@ -249,7 +242,7 @@ def test_a_database_error_that_is_not_an_integrity_error_is_not_translated(
         run(single_pool, lambda conn: conn.execute("SELEKT 1"))
 
 
-def test_a_pool_wait_timeout_is_a_service_busy_error_after_the_wait(busy_pool, run) -> None:
+def test_a_pool_wait_timeout_is_a_service_busy_error_after_the_wait(busy_pool) -> None:
     with busy_pool.connection():  # the only connection is in use
         started = time.monotonic()
         with pytest.raises(ServiceBusyError) as failure:
@@ -261,7 +254,7 @@ def test_a_pool_wait_timeout_is_a_service_busy_error_after_the_wait(busy_pool, r
     assert 0.25 <= waited < 5  # it waited the pool's 0.3 seconds, and did not hang
 
 
-def test_the_work_is_not_called_when_no_connection_is_free(busy_pool, run) -> None:
+def test_the_work_is_not_called_when_no_connection_is_free(busy_pool) -> None:
     called = []
 
     with busy_pool.connection():
@@ -271,7 +264,7 @@ def test_the_work_is_not_called_when_no_connection_is_free(busy_pool, run) -> No
     assert called == []
 
 
-def test_a_pool_timeout_raised_inside_the_work_is_not_rewritten(busy_pool, run) -> None:
+def test_a_pool_timeout_raised_inside_the_work_is_not_rewritten(busy_pool) -> None:
     """Only the wait for the connection is a busy service. The work already holds its connection,
     so a PoolTimeout coming out of it would be a bug (the one-connection rule) and must stay one."""
 
@@ -282,7 +275,7 @@ def test_a_pool_timeout_raised_inside_the_work_is_not_rewritten(busy_pool, run) 
         run(busy_pool, work)
 
 
-def test_the_pool_works_again_once_a_connection_is_free(busy_pool, run) -> None:
+def test_the_pool_works_again_once_a_connection_is_free(busy_pool) -> None:
     with busy_pool.connection():
         with pytest.raises(ServiceBusyError):
             run(busy_pool, lambda conn: conn.execute("SELECT 1"))
