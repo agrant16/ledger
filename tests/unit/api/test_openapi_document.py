@@ -26,6 +26,9 @@ import json
 
 import pytest
 
+from ledger.api.rest.problems import PROBLEMS
+from ledger.main import app
+
 PATHS = [
     ("post", "/accounts"),
     ("get", "/accounts/{account_id}/balance"),
@@ -91,8 +94,6 @@ EXTENSION_MEMBERS = {
 
 @pytest.fixture(scope="module")
 def document() -> dict:
-    from ledger.main import app
-
     return app.openapi()
 
 
@@ -162,8 +163,6 @@ def test_error_descriptions_name_the_type_of_every_error_that_can_cause_them(
 
 
 def test_every_documented_type_exists_in_the_error_table() -> None:
-    from ledger.api.rest.problems import PROBLEMS
-
     known = {spec.type for spec in PROBLEMS.values()}
     documented = {
         urn for per_route in EXPECTED_TYPES.values() for urns in per_route.values() for urn in urns

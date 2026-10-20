@@ -19,9 +19,10 @@ FastAPI adds to every route with parameters, because validation errors are 400 h
 insufficient funds. A 422 a route documents itself is kept.
 """
 
-import pytest
 from fastapi import FastAPI
 
+from ledger.api.rest import openapi
+from ledger.api.rest.problems import problem_for
 from ledger.errors import (
     CurrencyMismatchError,
     InsufficientFundsError,
@@ -31,59 +32,49 @@ from ledger.errors import (
 )
 
 
-@pytest.fixture
-def module():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.api.rest import openapi
-
-    return openapi
-
-
-def test_each_distinct_status_gets_one_entry_and_a_500_is_always_added(module) -> None:
-    responses = module.problem_responses(UnknownAccountError, InsufficientFundsError)
+def test_each_distinct_status_gets_one_entry_and_a_500_is_always_added() -> None:
+    responses = openapi.problem_responses(UnknownAccountError, InsufficientFundsError)
     assert set(responses) == {404, 422, 500}
 
 
-def test_errors_sharing_a_status_share_one_entry_naming_every_type(module) -> None:
-    responses = module.problem_responses(InvalidRequestError, CurrencyMismatchError)
+def test_errors_sharing_a_status_share_one_entry_naming_every_type() -> None:
+    responses = openapi.problem_responses(InvalidRequestError, CurrencyMismatchError)
     description = responses[400]["description"]
     assert "urn:ledger:error:invalid-request" in description
     assert "urn:ledger:error:currency-mismatch" in description
 
 
-def test_every_entry_is_problem_json_with_the_problem_schema(module) -> None:
-    responses = module.problem_responses(UnknownAccountError, ServiceBusyError)
+def test_every_entry_is_problem_json_with_the_problem_schema() -> None:
+    responses = openapi.problem_responses(UnknownAccountError, ServiceBusyError)
     for entry in responses.values():
         assert set(entry["content"]) == {"application/problem+json"}
 
 
-def test_a_503_declares_retry_after_and_other_entries_do_not(module) -> None:
-    responses = module.problem_responses(UnknownAccountError, ServiceBusyError)
+def test_a_503_declares_retry_after_and_other_entries_do_not() -> None:
+    responses = openapi.problem_responses(UnknownAccountError, ServiceBusyError)
     assert "Retry-After" in responses[503]["headers"]
     assert "headers" not in responses[404]
 
 
-def test_the_response_is_documented_from_the_error_table(module) -> None:
-    from ledger.api.rest.problems import problem_for
-
-    (status,) = {s for s in module.problem_responses(UnknownAccountError) if s != 500}
+def test_the_response_is_documented_from_the_error_table() -> None:
+    (status,) = {s for s in openapi.problem_responses(UnknownAccountError) if s != 500}
     assert status == problem_for(UnknownAccountError).status
 
 
-def test_install_openapi_removes_fastapis_422_and_keeps_a_documented_one(module) -> None:
+def test_install_openapi_removes_fastapis_422_and_keeps_a_documented_one() -> None:
     app = FastAPI()
 
     @app.get("/plain")
     def plain(page: int = 0) -> dict:
         return {}
 
-    @app.get("/funds", responses=module.problem_responses(InsufficientFundsError))
+    @app.get("/funds", responses=openapi.problem_responses(InsufficientFundsError))
     def funds(page: int = 0) -> dict:
         return {}
 
     assert "422" in app.openapi()["paths"]["/plain"]["get"]["responses"]  # FastAPI's own
     app.openapi_schema = None
-    module.install_openapi(app)
+    openapi.install_openapi(app)
     document = app.openapi()
 
     assert "422" not in document["paths"]["/plain"]["get"]["responses"]
