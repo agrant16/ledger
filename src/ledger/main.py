@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -10,11 +11,16 @@ from ledger.infra.config import load_settings
 from ledger.infra.db import create_pool
 from ledger.infra.logging_config import configure_logging
 
+logger: logging.Logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
     settings = load_settings()
+
+    logger.info(settings.get_startup_log_message())
+
     to_thread.current_default_thread_limiter().total_tokens = settings.handler_thread_limit
     pool = create_pool(settings)
     pool.open(wait=True)

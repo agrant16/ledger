@@ -8,6 +8,8 @@ DEFAULT_OWNER_URL = "postgresql://ledger_owner:owner-dev-only@127.0.0.1:5432/led
 DEFAULT_APP_URL = "postgresql://ledger_app:app-dev-only@127.0.0.1:5432/ledger"
 DEFAULT_MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
 
+PUBLIC_SETTINGS = ["pool_size", "pool_timeout_seconds", "handler_thread_limit", "concurrency_cap"]
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore", frozen=True, case_sensitive=True)
@@ -24,6 +26,16 @@ class Settings(BaseSettings):
     )
     # Max concurrent handler threads (anyio’s default is 40)
     handler_thread_limit: PositiveInt = Field(default=20, alias="HANDLER_THREAD_LIMIT")
+    # Max concurrent HTTP requests before a 503 is returned
+    concurrency_cap: PositiveInt = Field(default=40, alias="CONCURRENCY_CAP")
+
+    def get_startup_log_message(self) -> str:
+        """Returns a startup log message that lists public settings key/value pairs.
+        Ignores database urls and migration directories. If any non-public settings
+        are added going forward they will need to be added to the list.
+        """
+        message = " ".join(f"{k}={v}" for k, v in self.model_dump().items() if k in PUBLIC_SETTINGS)
+        return f"Starting app: {message}"
 
 
 def load_settings() -> Settings:

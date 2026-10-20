@@ -5,9 +5,9 @@ module moves, the number of parent directories to climb changes, and `find_migra
 returns an empty list for a directory that does not exist: the database would be left without a
 schema and the failure would show up much later. This test makes the mistake loud.
 
-The numeric settings (pool size, pool wait, handler thread limit) are validated when they are
-loaded: a bad value fails at startup with an error that names the environment variable (#93).
-No correctness rule is involved; valid configurations behave as before.
+The numeric settings (pool size, pool wait, handler thread limit, concurrency cap) are validated
+when they are loaded: a bad value fails at startup with an error that names the environment
+variable (#93). No correctness rule is involved; valid configurations behave as before.
 """
 
 from pathlib import Path
@@ -55,7 +55,7 @@ def test_the_handler_thread_limit_can_be_set_by_the_environment(monkeypatch) -> 
     assert load_settings().handler_thread_limit == 7
 
 
-POSITIVE_INTEGER_VARIABLES = ["POOL_SIZE", "HANDLER_THREAD_LIMIT"]
+POSITIVE_INTEGER_VARIABLES = ["POOL_SIZE", "HANDLER_THREAD_LIMIT", "CONCURRENCY_CAP"]
 POSITIVE_NUMBER_VARIABLES = [*POSITIVE_INTEGER_VARIABLES, "POOL_TIMEOUT_SECONDS"]
 
 
@@ -76,18 +76,21 @@ def test_every_setting_has_its_default_when_the_environment_is_empty(monkeypatch
     assert settings.pool_size == 10
     assert settings.pool_timeout_seconds == 2
     assert settings.handler_thread_limit == 20
+    assert settings.concurrency_cap == 40
 
 
 def test_valid_numeric_values_are_read_from_the_environment(monkeypatch) -> None:
     monkeypatch.setenv("POOL_SIZE", "3")
     monkeypatch.setenv("POOL_TIMEOUT_SECONDS", "0.5")
     monkeypatch.setenv("HANDLER_THREAD_LIMIT", "1")
+    monkeypatch.setenv("CONCURRENCY_CAP", "5")
 
     settings = load_settings()
 
     assert settings.pool_size == 3
     assert settings.pool_timeout_seconds == 0.5
     assert settings.handler_thread_limit == 1
+    assert settings.concurrency_cap == 5
 
 
 @pytest.mark.parametrize("value", ["0", "-1", "-20"])
