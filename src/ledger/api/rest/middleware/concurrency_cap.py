@@ -27,7 +27,7 @@ class ConcurrencyCapMiddleware:
             try:
                 await self.app(scope, receive, send)
             finally:
-                self.request_count = max(0, self.request_count - 1)
+                self.request_count -= 1
             return
         # any non-http requests (lifespan, etc.) get passed through
         await self.app(scope, receive, send)
