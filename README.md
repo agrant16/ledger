@@ -2,7 +2,7 @@
 
 A small double-entry ledger service that keeps money correct under retries, concurrency, and failures. It records money movements between accounts and guarantees they balance; it does not move real money.
 
-> **Status:** early development. Milestones 1 (foundation: schema for accounts, transactions and entries, role setup, CI) and 2 (the double-entry core) are complete and milestone 3 (the API and idempotency) is in progress: account creation, the balance endpoint, `GET /transfers/{id}`, idempotent `POST /transfers` and the entries history are done, while the overload handling (pool timeout, thread limit, concurrency cap) is still to come. The rest of what's described below is still planned. See [docs/design.md](docs/design.md) for the full scope, API contract, and milestone plan.
+> **Status:** early development. Milestones 1 (foundation: schema for accounts, transactions and entries, role setup, CI) and 2 (the double-entry core) are complete and milestone 3 (the API and idempotency) is in progress: account creation, the balance endpoint, `GET /transfers/{id}`, idempotent `POST /transfers`, the entries history and the overload handling (pool timeout, thread limit, concurrency cap) are done, while the OpenAPI polish is still to come. The rest of what's described below is still planned. See [docs/design.md](docs/design.md) for the full scope, API contract, and milestone plan.
 
 ## What it does
 

@@ -21,17 +21,10 @@ from dataclasses import dataclass
 import pytest
 
 from ledger.api.rest.error_handlers import RETRY_AFTER_SECONDS
+from ledger.api.rest.middleware.concurrency_cap import ConcurrencyCapMiddleware
 
 WAIT_SECONDS = 5
 REQUEST_ID = str(uuid.uuid4())
-
-
-@pytest.fixture
-def middleware_class():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.api.rest.middleware.concurrency_cap import ConcurrencyCapMiddleware
-
-    return ConcurrencyCapMiddleware
 
 
 @dataclass
@@ -44,12 +37,12 @@ class Reply:
 class Harness:
     """A middleware around a fake app, plus helpers to drive requests through it."""
 
-    def __init__(self, middleware_class, cap: int) -> None:
+    def __init__(self, cap: int) -> None:
         self.reached_app = 0  # http requests that got past the middleware
         self.release = asyncio.Event()  # lets the held requests finish
         self.release_lifespan = asyncio.Event()
         self.lifespans_seen = 0
-        self.app = middleware_class(self.inner, cap=cap)
+        self.app = ConcurrencyCapMiddleware(self.inner, cap=cap)
 
     async def inner(self, scope, receive, send) -> None:
         if scope["type"] == "lifespan":
@@ -110,9 +103,9 @@ async def wait_until(condition: Callable[[], bool], what: str) -> None:
         pytest.fail(f"timed out waiting for {what}")
 
 
-def test_requests_up_to_the_cap_are_all_admitted(middleware_class) -> None:
+def test_requests_up_to_the_cap_are_all_admitted() -> None:
     async def scenario() -> None:
-        harness = Harness(middleware_class, cap=3)
+        harness = Harness(cap=3)
         held = harness.hold(3)
         await wait_until(lambda: harness.reached_app == 3, "three requests inside the app")
 
@@ -124,11 +117,9 @@ def test_requests_up_to_the_cap_are_all_admitted(middleware_class) -> None:
     asyncio.run(scenario())
 
 
-def test_the_request_over_the_cap_gets_a_503_problem_and_never_reaches_the_app(
-    middleware_class,
-) -> None:
+def test_the_request_over_the_cap_gets_a_503_problem_and_never_reaches_the_app() -> None:
     async def scenario() -> None:
-        harness = Harness(middleware_class, cap=2)
+        harness = Harness(cap=2)
         held = harness.hold(2)
         await wait_until(lambda: harness.reached_app == 2, "two requests inside the app")
 
@@ -154,9 +145,9 @@ def test_the_request_over_the_cap_gets_a_503_problem_and_never_reaches_the_app(
     asyncio.run(scenario())
 
 
-def test_of_many_requests_arriving_together_exactly_the_cap_is_admitted(middleware_class) -> None:
+def test_of_many_requests_arriving_together_exactly_the_cap_is_admitted() -> None:
     async def scenario() -> None:
-        harness = Harness(middleware_class, cap=3)
+        harness = Harness(cap=3)
         tasks = harness.hold(10)
 
         await wait_until(
@@ -174,9 +165,9 @@ def test_of_many_requests_arriving_together_exactly_the_cap_is_admitted(middlewa
     asyncio.run(scenario())
 
 
-def test_a_slot_is_free_again_once_a_request_has_finished(middleware_class) -> None:
+def test_a_slot_is_free_again_once_a_request_has_finished() -> None:
     async def scenario() -> None:
-        harness = Harness(middleware_class, cap=1)
+        harness = Harness(cap=1)
 
         statuses = [(await harness.request("/ok")).status for _ in range(5)]
 
@@ -185,9 +176,9 @@ def test_a_slot_is_free_again_once_a_request_has_finished(middleware_class) -> N
     asyncio.run(scenario())
 
 
-def test_rejected_requests_do_not_use_up_slots(middleware_class) -> None:
+def test_rejected_requests_do_not_use_up_slots() -> None:
     async def scenario() -> None:
-        harness = Harness(middleware_class, cap=1)
+        harness = Harness(cap=1)
         (held,) = harness.hold(1)
         await wait_until(lambda: harness.reached_app == 1, "the held request inside the app")
 
@@ -201,9 +192,9 @@ def test_rejected_requests_do_not_use_up_slots(middleware_class) -> None:
     asyncio.run(scenario())
 
 
-def test_a_slot_is_free_again_after_the_app_raised(middleware_class) -> None:
+def test_a_slot_is_free_again_after_the_app_raised() -> None:
     async def scenario() -> None:
-        harness = Harness(middleware_class, cap=1)
+        harness = Harness(cap=1)
 
         for _ in range(3):  # with a leak, the second attempt would be a 503, not the error
             with pytest.raises(RuntimeError, match="boom"):
@@ -214,11 +205,11 @@ def test_a_slot_is_free_again_after_the_app_raised(middleware_class) -> None:
     asyncio.run(scenario())
 
 
-def test_a_slot_is_free_again_after_the_request_was_cancelled(middleware_class) -> None:
+def test_a_slot_is_free_again_after_the_request_was_cancelled() -> None:
     """A client that disconnects mid-request cancels the task serving it."""
 
     async def scenario() -> None:
-        harness = Harness(middleware_class, cap=1)
+        harness = Harness(cap=1)
         (held,) = harness.hold(1)
         await wait_until(lambda: harness.reached_app == 1, "the held request inside the app")
         assert (await harness.request("/ok")).status == 503  # the slot is in use
@@ -232,11 +223,11 @@ def test_a_slot_is_free_again_after_the_request_was_cancelled(middleware_class) 
     asyncio.run(scenario())
 
 
-def test_the_lifespan_is_passed_through_and_never_takes_a_slot(middleware_class) -> None:
+def test_the_lifespan_is_passed_through_and_never_takes_a_slot() -> None:
     """The lifespan scope lasts as long as the app does, so counting it would fill the cap."""
 
     async def scenario() -> None:
-        harness = Harness(middleware_class, cap=1)
+        harness = Harness(cap=1)
         lifespan = asyncio.ensure_future(harness.lifespan())
         await wait_until(lambda: harness.lifespans_seen == 1, "the lifespan inside the app")
 
@@ -248,10 +239,10 @@ def test_the_lifespan_is_passed_through_and_never_takes_a_slot(middleware_class)
     asyncio.run(scenario())
 
 
-def test_each_middleware_instance_keeps_its_own_count(middleware_class) -> None:
+def test_each_middleware_instance_keeps_its_own_count() -> None:
     async def scenario() -> None:
-        first = Harness(middleware_class, cap=1)
-        second = Harness(middleware_class, cap=1)
+        first = Harness(cap=1)
+        second = Harness(cap=1)
         (held,) = first.hold(1)
         await wait_until(lambda: first.reached_app == 1, "the held request inside the app")
 
