@@ -2,7 +2,7 @@
 
 A small double-entry ledger service that keeps money correct under retries, concurrency, and failures. It records money movements between accounts and guarantees they balance; it does not move real money.
 
-> **Status:** early development. Milestones 1 (foundation: schema for accounts, transactions and entries, role setup, CI) and 2 (the double-entry core) are complete and milestone 3 (the API and idempotency) is in progress: account creation, the balance endpoint, `GET /transfers/{id}`, idempotent `POST /transfers`, the entries history and the overload handling (pool timeout, thread limit, concurrency cap) are done, while the OpenAPI polish is still to come. The rest of what's described below is still planned. See [docs/design.md](docs/design.md) for the full scope, API contract, and milestone plan.
+> **Status:** early development. Milestones 1 (foundation: schema for accounts, transactions and entries, role setup, CI), 2 (the double-entry core) and 3 (the API and idempotency) are complete: account creation, the balance endpoint, `GET /transfers/{id}`, idempotent `POST /transfers`, the entries history, the overload handling (pool timeout, thread limit, concurrency cap) and the OpenAPI documentation of every route's error responses. Milestone 4 (concurrency) is next. The rest of what's described below is still planned. See [docs/design.md](docs/design.md) for the full scope, API contract, and milestone plan.
 
 ## What it does
 
@@ -33,6 +33,24 @@ To apply migrations by hand against the local database: `PYTHONPATH=src uv run p
 To start over with an empty local database, run `PYTHONPATH=src uv run python scripts/reset_db.py` (add `--yes` to skip the confirmation). It deletes all data in the database named by `DATABASE_OWNER_URL`, restarts the identity counters at 1 and re-applies every migration. It refuses any host that is not this machine. The test suite uses its own `ledger_test` database, so it is unaffected.
 
 To fill the local database with accounts for manual API testing, run `PYTHONPATH=src uv run python scripts/seed_dev.py`. It creates a funding account (`allow_negative`) and five protected customer accounts for each of USD and EUR through `create_account`, all with a balance of 0, and skips any name that already exists, so it is safe to run on a database that holds data you created through the API. `reset_db.py --seed` does both in one command, and the ids are then always the same (funding accounts 1 and 2, USD customers 3 to 7, EUR customers 8 to 12).
+
+### Configuration
+
+The service and its tools read these environment variables (`Settings` in `src/ledger/infra/config.py`). Every one has a default, so none is required for local development.
+
+| Variable | Default | Used by | What it does |
+| --- | --- | --- | --- |
+| `DATABASE_APP_URL` | `postgresql://ledger_app:app-dev-only@127.0.0.1:5432/ledger` | the service, `ledger.seed`, the dev scripts | Connection string for the app role, which owns no tables. The service never connects as the owner. |
+| `DATABASE_OWNER_URL` | `postgresql://ledger_owner:owner-dev-only@127.0.0.1:5432/ledger` | `ledger.migrate`, `scripts/reset_db.py`, test fixtures | Connection string for the owner role, used only to run migrations and reset data. |
+| `MIGRATIONS_DIR` | the repository's `migrations/` folder | `ledger.migrate`, `scripts/reset_db.py` | Where the numbered SQL migration files are read from. |
+| `POOL_SIZE` | `10` | the service | Number of connections in the fixed pool (a positive integer). |
+| `POOL_TIMEOUT_SECONDS` | `2.0` | the service | How long a request waits for a pooled connection before it gets a 503 with `Retry-After` (a number greater than 0). |
+| `HANDLER_THREAD_LIMIT` | `20` | the service | Maximum number of handler threads running at once (a positive integer). |
+| `CONCURRENCY_CAP` | `40` | the service | Maximum number of requests in flight before a 503 with `Retry-After` (a positive integer). |
+
+A value that does not validate stops the service at startup with an error that names the variable. The pool size, pool wait, thread limit and concurrency cap are logged in one INFO line when the service starts, so the effective values are on record; the database URLs are not.
+
+Docker Compose builds the two URLs for its containers from three more variables that only Compose reads, and no Python code does: `POSTGRES_PASSWORD` (the superuser, used by the database container), `LEDGER_OWNER_PASSWORD` (default `owner-dev-only`) and `LEDGER_APP_PASSWORD` (default `app-dev-only`). These defaults are for development only.
 
 ### Funding accounts (the seed script)
 
