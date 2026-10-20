@@ -14,6 +14,7 @@ import pytest
 from psycopg_pool import PoolTimeout
 
 from ledger.errors import ServiceBusyError
+from ledger.infra.db import check_database
 
 
 class StatementRecorder:
@@ -41,15 +42,7 @@ class StandInPool:
         yield self.connection_obj
 
 
-@pytest.fixture
-def check_database():
-    """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.infra.db import check_database
-
-    return check_database
-
-
-def test_it_runs_one_statement_on_one_connection(check_database) -> None:
+def test_it_runs_one_statement_on_one_connection() -> None:
     recorder = StatementRecorder()
     pool = StandInPool(recorder)
 
@@ -68,7 +61,7 @@ def test_it_runs_one_statement_on_one_connection(check_database) -> None:
     ],
     ids=["unreachable", "shutdown", "timeout"],
 )
-def test_a_failing_statement_comes_out_as_it_was(check_database, failure: Exception) -> None:
+def test_a_failing_statement_comes_out_as_it_was(failure: Exception) -> None:
     pool = StandInPool(StatementRecorder(failure))
 
     with pytest.raises(type(failure)) as caught:
@@ -77,7 +70,7 @@ def test_a_failing_statement_comes_out_as_it_was(check_database, failure: Except
     assert caught.value is failure
 
 
-def test_a_failure_to_get_a_connection_comes_out_as_it_was(check_database) -> None:
+def test_a_failure_to_get_a_connection_comes_out_as_it_was() -> None:
     failure = psycopg.OperationalError("no connection available")
     pool = StandInPool(StatementRecorder(), failure_on_checkout=failure)
 
@@ -87,7 +80,7 @@ def test_a_failure_to_get_a_connection_comes_out_as_it_was(check_database) -> No
     assert caught.value is failure
 
 
-def test_a_pool_timeout_at_checkout_is_a_service_busy_error_chained_to_it(check_database) -> None:
+def test_a_pool_timeout_at_checkout_is_a_service_busy_error_chained_to_it() -> None:
     timeout = PoolTimeout("no connection after 2.00 sec")
     recorder = StatementRecorder()
     pool = StandInPool(recorder, failure_on_checkout=timeout)
@@ -99,7 +92,7 @@ def test_a_pool_timeout_at_checkout_is_a_service_busy_error_chained_to_it(check_
     assert recorder.statements == []
 
 
-def test_a_pool_timeout_while_the_statement_runs_is_not_rewritten(check_database) -> None:
+def test_a_pool_timeout_while_the_statement_runs_is_not_rewritten() -> None:
     """Only the wait for the connection is a busy service; the same rule as run_in_transaction."""
     failure = PoolTimeout("raised after the connection was held")
     pool = StandInPool(StatementRecorder(failure))

@@ -17,6 +17,7 @@ import pytest
 
 from ledger.errors import LedgerError, LedgerInvariantError
 from ledger.models.posting_model import Entry
+from ledger.repository import posting_repo as repo
 from tests.db_helpers import VALID_HASH
 from tests.unit.repository.fakes import FakeConnection
 
@@ -25,14 +26,6 @@ WRITES = {
     "insert_entries": lambda repo, conn: repo.insert_entries(conn, 1, [Entry(1, 5, "USD")]),
     "apply_balance_deltas": lambda repo, conn: repo.apply_balance_deltas(conn, {1: 5}),
 }
-
-
-@pytest.fixture
-def repo():
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from ledger.repository import posting_repo
-
-    return posting_repo
 
 
 @pytest.mark.parametrize("function", list(WRITES))
@@ -46,9 +39,7 @@ def repo():
         psycopg.errors.ExclusionViolation,
     ],
 )
-def test_every_integrity_error_is_a_bug_with_its_cause_kept(
-    repo, function: str, error_class
-) -> None:
+def test_every_integrity_error_is_a_bug_with_its_cause_kept(function: str, error_class) -> None:
     failure = error_class("probe")
 
     with pytest.raises(LedgerInvariantError) as caught:
@@ -63,7 +54,7 @@ def test_every_integrity_error_is_a_bug_with_its_cause_kept(
     "error_class", [psycopg.errors.SyntaxError, psycopg.errors.LockNotAvailable]
 )
 def test_an_error_that_is_not_an_integrity_error_is_not_translated(
-    repo, function: str, error_class
+    function: str, error_class
 ) -> None:
     failure = error_class("probe")
 

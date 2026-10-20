@@ -15,52 +15,44 @@ or a transfer to the same account is rejected by the API's request schema before
 
 import dataclasses
 
-import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
 from ledger.models.posting_model import Entry
+from ledger.service.transfer_service import entries_for_transfer as build
 
 BIGINT_MAX = 9_223_372_036_854_775_807
 MAX_AMOUNT = 99_900_000_000
 
 
-@pytest.fixture
-def build():
-    """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.service.transfer_service import entries_for_transfer
-
-    return entries_for_transfer
-
-
-def test_the_sender_is_debited_and_the_receiver_credited(build) -> None:
+def test_the_sender_is_debited_and_the_receiver_credited() -> None:
     assert build(12, 34, 2500, "USD") == [Entry(12, -2500, "USD"), Entry(34, 2500, "USD")]
 
 
-def test_the_arguments_can_be_given_by_name(build) -> None:
+def test_the_arguments_can_be_given_by_name() -> None:
     entries = build(from_account_id=12, to_account_id=34, amount_minor=2500, currency="USD")
 
     assert entries == [Entry(12, -2500, "USD"), Entry(34, 2500, "USD")]
 
 
-def test_the_currency_and_the_amount_come_from_the_arguments(build) -> None:
+def test_the_currency_and_the_amount_come_from_the_arguments() -> None:
     assert build(12, 34, 1, "EUR") == [Entry(12, -1, "EUR"), Entry(34, 1, "EUR")]
 
 
-def test_the_largest_amount_is_not_changed(build) -> None:
+def test_the_largest_amount_is_not_changed() -> None:
     entries = build(12, 34, MAX_AMOUNT, "USD")
 
     assert [e.amount_minor for e in entries] == [-MAX_AMOUNT, MAX_AMOUNT]
 
 
-def test_building_twice_gives_equal_independent_lists(build) -> None:
+def test_building_twice_gives_equal_independent_lists() -> None:
     first, second = build(12, 34, 2500, "USD"), build(12, 34, 2500, "USD")
 
     assert first == second
     assert first is not second
 
 
-def test_unbalancing_the_output_is_a_matter_of_replacing_one_entry(build) -> None:
+def test_unbalancing_the_output_is_a_matter_of_replacing_one_entry() -> None:
     """How the posting tests make an unbalanced set: Entry is frozen, so replace the last one."""
     entries = build(12, 34, 2500, "USD")
     entries[-1] = dataclasses.replace(entries[-1], amount_minor=entries[-1].amount_minor + 1)
