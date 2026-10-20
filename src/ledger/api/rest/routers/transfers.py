@@ -5,8 +5,18 @@ from fastapi import APIRouter, Depends, Header, Request
 
 from ledger.api.rest.dependencies import get_pool
 from ledger.api.rest.idempotency import request_hash
+from ledger.api.rest.openapi import problem_responses
 from ledger.api.rest.schemas.transfer_schema import TransferRequest, TransferResponse
 from ledger.api.rest.schemas.types import IdempotencyKey, TransferIdInPath
+from ledger.errors import (
+    CurrencyMismatchError,
+    IdempotencyConflictError,
+    InsufficientFundsError,
+    InvalidRequestError,
+    ServiceBusyError,
+    UnknownAccountError,
+    UnknownTransferError,
+)
 from ledger.infra.db import run_in_transaction
 from ledger.service.posting_service import claim_and_post
 from ledger.service.transfer_service import get_transfer
@@ -35,6 +45,14 @@ router = APIRouter()
         "key, so it can be retried with the same key and is checked again against current "
         "balances. A 503 means the request may not have completed; retrying with the same key is "
         "safe either way."
+    ),
+    responses=problem_responses(
+        InvalidRequestError,
+        CurrencyMismatchError,
+        UnknownAccountError,
+        IdempotencyConflictError,
+        InsufficientFundsError,
+        ServiceBusyError,
     ),
 )
 def create_transfer(
@@ -71,6 +89,7 @@ def create_transfer(
         "never part of one. Account balances are not included, because they change after the "
         "transfer. An unknown id is a 404; an id that is not plain decimal digits is a 400."
     ),
+    responses=problem_responses(InvalidRequestError, UnknownTransferError, ServiceBusyError),
 )
 def get_transfer_by_id(
     transfer_id: TransferIdInPath,

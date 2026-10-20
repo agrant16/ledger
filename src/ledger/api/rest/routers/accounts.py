@@ -4,6 +4,7 @@ from http import HTTPStatus
 from fastapi import APIRouter, Depends, Request
 
 from ledger.api.rest.dependencies import get_pool
+from ledger.api.rest.openapi import problem_responses
 from ledger.api.rest.schemas.account_schema import (
     AccountResponse,
     BalanceResponse,
@@ -11,6 +12,12 @@ from ledger.api.rest.schemas.account_schema import (
     EntryPageResponse,
 )
 from ledger.api.rest.schemas.types import AccountIdInPath, CursorInQuery, LimitInQuery
+from ledger.errors import (
+    DuplicateAccountNameError,
+    InvalidRequestError,
+    ServiceBusyError,
+    UnknownAccountError,
+)
 from ledger.infra.db import run_in_transaction
 from ledger.models.entry_history_model import DEFAULT_PAGE_SIZE
 from ledger.service.account_service import create_account, get_balance, get_entry_history
@@ -25,6 +32,15 @@ logger: logging.Logger = logging.getLogger(__name__)
     status_code=HTTPStatus.CREATED,
     response_model=AccountResponse,
     summary="Create a new account",
+    description=(
+        "Creates an account from `account_name` (1 to 100 characters, no leading or trailing "
+        "whitespace, unique and case-sensitive) and `currency` (three uppercase letters). Every "
+        "account created here is protected: it cannot go below zero, and the request cannot say "
+        "otherwise (`allow_negative` is rejected as an unknown field). The balance starts at 0 "
+        "and is read through the balance endpoint. A name that is already taken is a 409. "
+        "There is no idempotency key, so retrying after a lost response returns that 409."
+    ),
+    responses=problem_responses(InvalidRequestError, DuplicateAccountNameError, ServiceBusyError),
 )
 def create_new_account(
     body: CreateAccountRequest,
@@ -47,8 +63,10 @@ def create_new_account(
         "Returns the account's cached balance in minor units. It is read with a single "
         "lock-free statement and reflects every transfer committed when the read ran, so it "
         "may not include a transfer still in flight. It never shows part of a transfer, "
-        "because a transfer's entries and balance update commit together."
+        "because a transfer's entries and balance update commit together. An unknown account "
+        "is a 404; an id that is not plain decimal digits is a 400."
     ),
+    responses=problem_responses(InvalidRequestError, UnknownAccountError, ServiceBusyError),
 )
 def get_account_balance(
     account_id: AccountIdInPath,
@@ -79,6 +97,7 @@ def get_account_balance(
         "any page already read, so they appear only at the start of a fresh walk. An unknown "
         "account is a 404; an account with no entries returns an empty page."
     ),
+    responses=problem_responses(InvalidRequestError, UnknownAccountError, ServiceBusyError),
 )
 def read_account_entries(
     account_id: AccountIdInPath,

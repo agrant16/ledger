@@ -6,6 +6,7 @@ from anyio import to_thread
 from fastapi import FastAPI
 
 from ledger.api.rest.error_handlers import install_error_handling
+from ledger.api.rest.openapi import install_openapi
 from ledger.api.rest.router import router as api_router
 from ledger.infra.config import load_settings
 from ledger.infra.db import create_pool
@@ -36,3 +37,4 @@ app = FastAPI(title="Ledger Service", lifespan=lifespan)
 install_error_handling(app)
 
 app.include_router(api_router)
+install_openapi(app)
