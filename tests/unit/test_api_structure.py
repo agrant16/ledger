@@ -16,8 +16,11 @@ down and read the source with the ast module, so they need no database:
 2. File names say what a file is: `_model.py` in models, `_repo.py` in repository, `_service.py` in
    service, `_schema.py` in schemas. The suffixes keep names unique across layers.
 
-3. The web frameworks (fastapi, starlette, pydantic) are imported only by the API layer and the
-   entry points. Nothing else in the ledger knows what carries a request.
+3. The web frameworks (fastapi, starlette) are imported only by the API layer and the entry points.
+   Nothing else in the ledger knows what carries a request. The validation libraries (pydantic,
+   pydantic_settings) may also be imported by the infrastructure layer, because `config.py` is a
+   `BaseSettings` class that validates the environment; the models, repositories, services and
+   `errors.py` stay free of them.
 
 What the code in the router modules may do, and what main.py may do, is checked in
 tests/unit/test_router_rules.py.
@@ -146,25 +149,39 @@ def test_files_are_named_for_what_they_are() -> None:
 
 # --- 3. the web frameworks stay in the API layer ----------------------------------------------
 
-FRAMEWORKS = ("fastapi", "starlette", "pydantic")
-MAY_USE_FRAMEWORKS = {"api", "entry"}
+WEB_FRAMEWORKS = ("fastapi", "starlette")
+MAY_USE_WEB_FRAMEWORKS = {"api", "entry"}
+VALIDATION_LIBRARIES = ("pydantic", "pydantic_settings")
+MAY_USE_VALIDATION_LIBRARIES = {"api", "entry", "infra"}
 
 
-def framework_violations(root: Path) -> list[str]:
+def import_violations(root: Path, packages: tuple[str, ...], allowed: set[str]) -> list[str]:
     problems: list[str] = []
     for path in sorted(root.rglob("*.py")):
         name = module_name(root, path)
         layer = layer_of(name)
-        if layer is None or layer in MAY_USE_FRAMEWORKS:
+        if layer is None or layer in allowed:
             continue
         for imported in sorted(imported_names(ast.parse(path.read_text(encoding="utf-8")))):
-            if imported.split(".")[0] in FRAMEWORKS:
+            if imported.split(".")[0] in packages:
                 problems.append(f"{name} ({layer}) imports {imported}")
     return problems
 
 
+def web_framework_violations(root: Path) -> list[str]:
+    return import_violations(root, WEB_FRAMEWORKS, MAY_USE_WEB_FRAMEWORKS)
+
+
+def validation_library_violations(root: Path) -> list[str]:
+    return import_violations(root, VALIDATION_LIBRARIES, MAY_USE_VALIDATION_LIBRARIES)
+
+
 def test_the_web_frameworks_are_imported_only_by_the_api_layer_and_the_entry_points() -> None:
-    assert framework_violations(SRC) == []
+    assert web_framework_violations(SRC) == []
+
+
+def test_pydantic_is_imported_only_by_the_api_layer_infrastructure_and_the_entry_points() -> None:
+    assert validation_library_violations(SRC) == []
 
 
 # --- the rules themselves must catch what they claim to catch ---------------------------------
@@ -303,7 +320,7 @@ def test_a_file_without_its_folders_suffix_is_caught(tmp_path: Path, path: str) 
     assert suffix_violations(root) != []
 
 
-def test_a_clean_tree_keeps_the_frameworks_in_the_api_layer(tmp_path: Path) -> None:
+def test_a_clean_tree_keeps_the_frameworks_where_they_belong(tmp_path: Path) -> None:
     root = build_tree(
         tmp_path,
         {
@@ -314,27 +331,50 @@ def test_a_clean_tree_keeps_the_frameworks_in_the_api_layer(tmp_path: Path) -> N
             "api/rest/middleware/request_id.py": "from starlette.types import Scope\n",
             "service/account_service.py": "import psycopg\nfrom dataclasses import dataclass\n",
             "infra/db.py": "import psycopg_pool\n",
+            "infra/config.py": (
+                "from pydantic import Field\n"
+                "from pydantic_settings import BaseSettings, SettingsConfigDict\n"
+            ),
         },
     )
 
-    assert framework_violations(root) == []
+    assert web_framework_violations(root) == []
+    assert validation_library_violations(root) == []
+
+
+@pytest.mark.parametrize(
+    "path, source",
+    [
+        ("service/account_service.py", "import fastapi\n"),
+        ("repository/account_repo.py", "from starlette.requests import Request\n"),
+        ("infra/config.py", "from fastapi import HTTPException\n"),
+        ("infra/db.py", "import starlette\n"),
+        ("models/account_model.py", "from fastapi import Query\n"),
+        ("errors.py", "from fastapi import HTTPException\n"),
+    ],
+    ids=lambda value: value.strip() if isinstance(value, str) else value,
+)
+def test_a_web_framework_outside_the_api_layer_is_caught(
+    tmp_path: Path, path: str, source: str
+) -> None:
+    root = build_tree(tmp_path, {path: source})
+
+    assert web_framework_violations(root) != []
 
 
 @pytest.mark.parametrize(
     "path, source",
     [
         ("service/account_service.py", "from pydantic import BaseModel\n"),
-        ("service/account_service.py", "import fastapi\n"),
-        ("repository/account_repo.py", "from starlette.requests import Request\n"),
+        ("repository/account_repo.py", "from pydantic_settings import BaseSettings\n"),
         ("models/account_model.py", "from pydantic import BaseModel\n"),
-        ("infra/config.py", "from pydantic import BaseSettings\n"),
-        ("errors.py", "from fastapi import HTTPException\n"),
+        ("errors.py", "from pydantic import ValidationError\n"),
     ],
     ids=lambda value: value.strip() if isinstance(value, str) else value,
 )
-def test_a_framework_outside_the_api_layer_is_caught(
+def test_a_validation_library_outside_its_layers_is_caught(
     tmp_path: Path, path: str, source: str
 ) -> None:
     root = build_tree(tmp_path, {path: source})
 
-    assert framework_violations(root) != []
+    assert validation_library_violations(root) != []

@@ -8,7 +8,6 @@ Two roles, as in production:
 - app_pool / app_conn: the role the service connects as. Everything under test uses these.
 """
 
-import dataclasses
 import uuid
 from collections.abc import Callable, Iterator
 
@@ -51,10 +50,11 @@ def use_the_test_database() -> Iterator[None]:
 def settings(use_the_test_database: None) -> Settings:
     """The settings with a short connect timeout, so a stopped database fails in seconds."""
     configured = load_settings()
-    return dataclasses.replace(
-        configured,
-        owner_url=with_connect_timeout(configured.owner_url),
-        app_url=with_connect_timeout(configured.app_url),
+    return configured.model_copy(
+        update={
+            "owner_url": with_connect_timeout(configured.owner_url),
+            "app_url": with_connect_timeout(configured.app_url),
+        }
     )
 
 
