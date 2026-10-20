@@ -28,7 +28,7 @@ from tests.unit.layering_scan import SRC, build_tree, imported_names, module_nam
 ROUTERS = "api/rest/routers"
 TRANSACTION_HELPER = "run_in_transaction"
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "options", "head", "route", "api_route"}
-MAIN_MAY_USE_FROM_THE_API = {"router", "error_handlers"}
+MAIN_MAY_USE_FROM_THE_API = {"router", "error_handlers", "openapi"}
 
 
 def service_names(tree: ast.Module) -> set[str]:

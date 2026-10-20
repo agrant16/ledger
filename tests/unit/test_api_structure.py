@@ -51,8 +51,10 @@ PART_RULES = {
     "dependencies": {"schemas"},
     "middleware": {"infra"},
     "error_handlers": {"problems", "middleware", "infra", "errors"},
+    "openapi": {"problems", "schemas", "errors"},
     "routers": {
         "schemas",
+        "openapi",
         "idempotency",
         "cursor",
         "dependencies",
