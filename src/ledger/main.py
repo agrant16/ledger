@@ -16,6 +16,13 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
+    """Create the FastAPI application using any custom Settings object. If no Settings object
+    is passed default to the settings created through config.py load_settings(). Install
+    routers, error handling, generate OpenAPI docs, and return app.
+
+    Args:
+        settings (Settings | None): custom Settings object to be used if desired
+    """
     app = FastAPI(title="Ledger Service", lifespan=lifespan)
     app.state.settings = settings if settings is not None else load_settings()
     install_error_handling(app, app.state.settings.concurrency_cap)
@@ -27,11 +34,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
-    to_thread.current_default_thread_limiter().total_tokens = (
-        app.state.settings.handler_thread_limit
-    )
-    logger.info(app.state.settings.get_startup_log_message())
-    pool = create_pool(app.state.settings)
+    settings = app.state.settings
+    logger.info(settings.get_startup_log_message())
+    to_thread.current_default_thread_limiter().total_tokens = settings.handler_thread_limit
+    pool = create_pool(settings)
     pool.open(wait=True)
     app.state.pool = pool
     try:
