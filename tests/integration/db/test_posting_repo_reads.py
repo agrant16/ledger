@@ -14,20 +14,12 @@ works in a read-only transaction), takes no row locks, and does not commit.
 from datetime import timedelta
 
 import psycopg
-import pytest
 
 from ledger.models import transfer_model
 from ledger.models.posting_model import Entry
+from ledger.repository import posting_repo as repo
 from ledger.service.posting_service import claim_transaction, post_transaction
 from tests.db_helpers import hash_for, make_account
-
-
-@pytest.fixture
-def repo():
-    """Imported lazily so these tests fail one by one while the function does not exist yet."""
-    from ledger.repository import posting_repo
-
-    return posting_repo
 
 
 def post(conn: psycopg.Connection, key: str, entries: list[Entry], reverses=None) -> int:
@@ -37,7 +29,7 @@ def post(conn: psycopg.Connection, key: str, entries: list[Entry], reverses=None
 
 
 def test_it_returns_the_transaction_and_its_entries_in_entry_id_order(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     low = make_account(app_conn, "funding:usd", allow_negative=True)
     high = make_account(app_conn, "customer:high")
@@ -58,12 +50,12 @@ def test_it_returns_the_transaction_and_its_entries_in_entry_id_order(
     assert [entry.account_id for entry in result.entries] == [high.id, low.id]
 
 
-def test_a_missing_transaction_is_none(clean_db: None, app_conn: psycopg.Connection, repo) -> None:
+def test_a_missing_transaction_is_none(clean_db: None, app_conn: psycopg.Connection) -> None:
     assert repo.find_transfer(app_conn, 999_999) is None
 
 
 def test_a_transaction_with_no_entries_has_an_empty_entries_tuple(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     claim = claim_transaction(app_conn, "k1", hash_for("k1"))
 
@@ -74,7 +66,7 @@ def test_a_transaction_with_no_entries_has_an_empty_entries_tuple(
 
 
 def test_only_the_asked_transfers_entries_come_back(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     funding = make_account(app_conn, "funding:usd", allow_negative=True)
     alice = make_account(app_conn, "customer:alice")
@@ -86,7 +78,7 @@ def test_only_the_asked_transfers_entries_come_back(
 
 
 def test_a_reversal_carries_the_id_it_reverses(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     funding = make_account(app_conn, "funding:usd", allow_negative=True)
     alice = make_account(app_conn, "customer:alice")
@@ -102,7 +94,7 @@ def test_a_reversal_carries_the_id_it_reverses(
 
 
 def test_created_at_is_aware_and_utc_whatever_the_session_time_zone(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     funding = make_account(app_conn, "funding:usd", allow_negative=True)
     alice = make_account(app_conn, "customer:alice")
@@ -118,7 +110,7 @@ def test_created_at_is_aware_and_utc_whatever_the_session_time_zone(
 
 
 def test_it_works_in_a_read_only_transaction_and_changes_nothing(
-    clean_db: None, app_conn: psycopg.Connection, repo
+    clean_db: None, app_conn: psycopg.Connection
 ) -> None:
     funding = make_account(app_conn, "funding:usd", allow_negative=True)
     alice = make_account(app_conn, "customer:alice")
