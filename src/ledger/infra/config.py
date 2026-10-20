@@ -34,9 +34,7 @@ class Settings(BaseSettings):
         Ignores database urls and migration directories. If any non-public settings
         are added going forward they will need to be added to the list.
         """
-        message = " ".join(
-            f"{k}={v}" for k, v in self.model_dump().items() if k in PUBLIC_SETTINGS
-        )
+        message = " ".join(f"{k}={v}" for k, v in self.model_dump().items() if k in PUBLIC_SETTINGS)
         return f"Starting app: {message}"
 
 
