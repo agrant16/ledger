@@ -19,7 +19,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
     settings = load_settings()
 
-    logger.info(settings.startup_log_message())
+    logger.info(settings.get_startup_log_message())
 
     to_thread.current_default_thread_limiter().total_tokens = settings.handler_thread_limit
     pool = create_pool(settings)

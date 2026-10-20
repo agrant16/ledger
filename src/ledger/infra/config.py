@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     # Max concurrent HTTP requests before a 503 is returned
     concurrency_cap: PositiveInt = Field(default=40, alias="CONCURRENCY_CAP")
 
-    def startup_log_message(self):
+    def get_startup_log_message(self) -> str:
         """ Returns a startup log message that lists public settings key/value pairs.
         Ignores database urls and migration directories. If any non-public settings
         are added going forward they will need to be added to the list.
