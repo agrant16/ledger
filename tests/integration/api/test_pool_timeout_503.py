@@ -5,9 +5,10 @@ is a busy service, not a bug: the response is a 503 `service-busy` problem with 
 header, and the cause is logged at WARNING. No transaction started, so retrying is safe and nothing
 was written.
 
-These tests use the real app (ledger.main.app) with a pool of one connection, which the test holds
-to exhaust it, so the wiring from the pool to the response is covered end to end. The connection is
-held by the test, never by a request, so no request takes a second connection while holding one.
+These tests use the real app (built by ledger.main.create_app) with a pool of one connection,
+which the test holds to exhaust it, so the wiring from the pool to the response is covered end to
+end. The connection is held by the test, never by a request, so no request takes a second
+connection while holding one.
 """
 
 import logging
@@ -18,8 +19,8 @@ import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
+import ledger.main
 from ledger.api.rest.error_handlers import RETRY_AFTER_SECONDS
-from ledger.main import app
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
 
@@ -33,7 +34,7 @@ WRITE = ("POST", "/accounts", WRITE_BODY)
 def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setenv("POOL_SIZE", "1")
     monkeypatch.setenv("POOL_TIMEOUT_SECONDS", "0.3")
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(ledger.main.create_app(), raise_server_exceptions=False) as client:
         yield client
 
 
@@ -49,7 +50,7 @@ def test_an_exhausted_pool_gives_a_503_with_retry_after(
 ) -> None:
     caplog.set_level(logging.DEBUG)
 
-    with app.state.pool.connection():  # the only connection is in use
+    with client.app.state.pool.connection():  # the only connection is in use
         response = client.request(method, path, json=body)
 
     assert response.status_code == 503
@@ -69,7 +70,7 @@ def test_an_exhausted_pool_gives_a_503_with_retry_after(
 
 
 def test_the_request_waits_the_configured_time_before_the_503(client: TestClient) -> None:
-    with app.state.pool.connection():
+    with client.app.state.pool.connection():
         started = time.monotonic()
         response = client.get(READ[1])
         waited = time.monotonic() - started
@@ -79,7 +80,7 @@ def test_the_request_waits_the_configured_time_before_the_503(client: TestClient
 
 
 def test_a_503_writes_nothing(client: TestClient, owner_conn: psycopg.Connection) -> None:
-    with app.state.pool.connection():
+    with client.app.state.pool.connection():
         response = client.post(WRITE[1], json=WRITE_BODY)
     assert response.status_code == 503
 
@@ -90,7 +91,7 @@ def test_a_503_writes_nothing(client: TestClient, owner_conn: psycopg.Connection
 
 
 def test_the_pool_recovers_once_the_connection_is_free(client: TestClient) -> None:
-    with app.state.pool.connection():
+    with client.app.state.pool.connection():
         assert client.get(READ[1]).status_code == 503
 
     # A free connection: the request runs and finds no such account (404), not a 503 or a 500.

@@ -15,13 +15,13 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import ledger.main
 from ledger.infra.config import (
     DEFAULT_APP_URL,
     DEFAULT_MIGRATIONS_DIR,
     DEFAULT_OWNER_URL,
     load_settings,
 )
-from ledger.main import app
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -132,7 +132,7 @@ def test_an_infinite_or_nan_pool_wait_is_rejected(monkeypatch, value: str) -> No
         load_settings()
 
 
-def test_the_app_refuses_to_start_on_a_bad_setting_and_names_it(monkeypatch) -> None:
+def test_the_app_refuses_to_be_built_on_a_bad_setting_and_names_it(monkeypatch) -> None:
     def create_pool_must_not_be_reached(*args, **kwargs):
         raise RuntimeError("startup went on to create the pool with a bad setting")
 
@@ -142,5 +142,5 @@ def test_the_app_refuses_to_start_on_a_bad_setting_and_names_it(monkeypatch) -> 
     monkeypatch.setenv("HANDLER_THREAD_LIMIT", "0")
 
     with pytest.raises(ValueError, match="HANDLER_THREAD_LIMIT"):
-        with TestClient(app):
+        with TestClient(ledger.main.create_app()):
             pass
