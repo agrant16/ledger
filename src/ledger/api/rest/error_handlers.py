@@ -171,6 +171,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 def install_error_handling(app: FastAPI) -> None:
     install_log_record_factory()
+    # ConcurrencyCapMiddleware must be added before RequestIDMiddleware so
+    # RequestIDMiddleware remains the outer scope.
     app.add_middleware(ConcurrencyCapMiddleware, cap=load_settings().concurrency_cap)
     app.add_middleware(RequestIDMiddleware)
     # Starlette passes only LedgerError to this handler
