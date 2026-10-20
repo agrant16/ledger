@@ -169,9 +169,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     )
 
 
-def install_error_handling(
-    app: FastAPI, concurrency_cap: int = CONCURRENCY_CAP
-) -> None:
+def install_error_handling(app: FastAPI, concurrency_cap: int = CONCURRENCY_CAP) -> None:
     install_log_record_factory()
     # ConcurrencyCapMiddleware must be added before RequestIDMiddleware so
     # RequestIDMiddleware remains the outer scope. This allows the response from
