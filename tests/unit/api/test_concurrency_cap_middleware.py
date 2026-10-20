@@ -19,9 +19,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 import pytest
+from starlette.requests import Request
 
-from ledger.api.rest.error_handlers import RETRY_AFTER_SECONDS
+from ledger.api.rest.error_handlers import RETRY_AFTER_SECONDS, ledger_error_handler
 from ledger.api.rest.middleware.concurrency_cap import ConcurrencyCapMiddleware
+from ledger.api.rest.problems import problem_for
+from ledger.errors import ServiceBusyError
 
 WAIT_SECONDS = 5
 REQUEST_ID = str(uuid.uuid4())
@@ -252,3 +255,41 @@ def test_each_middleware_instance_keeps_its_own_count() -> None:
         await held
 
     asyncio.run(scenario())
+
+
+def test_the_cap_503_has_the_same_shape_as_the_service_busy_problem_from_the_error_handler() -> (
+    None
+):
+    """The middleware builds its 503 by hand (it may not import the error handlers' machinery), so
+    this compares it with what the real handler returns for a `ServiceBusyError`, and with the
+    error table, so the two cannot drift apart."""
+
+    async def scenario() -> tuple[Reply, dict, dict[str, str], bytes]:
+        harness = Harness(cap=1)
+        held = harness.hold(1)
+        await wait_until(lambda: harness.reached_app == 1, "one request inside the app")
+        cap_reply = await harness.request("/ok")
+        harness.release.set()
+        await asyncio.gather(*held)
+
+        request = Request({"type": "http", "state": {"request_id": REQUEST_ID}})
+        handler_response = await ledger_error_handler(request, ServiceBusyError("busy"))
+        handler_headers = {k.lower(): v for k, v in handler_response.headers.items()}
+        return cap_reply, json.loads(handler_response.body), handler_headers, handler_response.body
+
+    cap_reply, handler_problem, handler_headers, _ = asyncio.run(scenario())
+    cap_problem = json.loads(cap_reply.body)
+    spec = problem_for(ServiceBusyError)
+
+    assert set(cap_problem) == set(handler_problem)
+    for member in ("type", "title", "status", "instance"):
+        assert cap_problem[member] == handler_problem[member], member
+    assert (cap_problem["type"], cap_problem["title"], cap_problem["status"]) == (
+        spec.type,
+        spec.title,
+        spec.status,
+    )
+    assert cap_reply.status == spec.status
+    assert cap_reply.headers["retry-after"] == handler_headers["retry-after"]
+    assert cap_reply.headers["content-type"].split(";")[0] == "application/problem+json"
+    assert handler_headers["content-type"].split(";")[0] == "application/problem+json"
