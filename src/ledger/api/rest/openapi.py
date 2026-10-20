@@ -1,9 +1,11 @@
 """Helpers that make `/openapi.json` describe the errors the service really returns.
 
-`problem_responses` builds a route's `responses=` from the error table, so a documented status,
-type and title cannot drift from what the handlers send. `install_openapi` adds the problem
-schemas to the document and removes the `422` FastAPI documents for validation errors, because
-validation errors are 400 here and 422 means insufficient funds.
+`problem_responses` builds a route's `responses=` from the error table, so a documented type and
+title cannot drift from what the handlers send. Which errors a route lists is written by hand.
+
+`install_openapi` adds the problem schemas to the document and removes the `422` FastAPI
+documents for validation errors, because validation errors are 400 here and 422 means
+insufficient funds.
 """
 
 from typing import Any
@@ -38,7 +40,7 @@ def problem_responses(*error_classes: type[LedgerError]) -> dict[int | str, dict
     responses: dict[int | str, dict[str, Any]] = {}
     for status, lines in sorted(lines_by_status.items()):
         entry: dict[str, Any] = {
-            "description": "\n".join(lines),
+            "description": "\n\n".join(lines),
             "content": {PROBLEM_MEDIA_TYPE: {"schema": PROBLEM_REF}},
         }
         if status == 503:
@@ -78,4 +80,6 @@ def install_openapi(app: FastAPI) -> None:
         _fix_document(document)
         return document
 
+    # Replacing `app.openapi` is FastAPI's documented way to customize the schema; the type
+    # checker objects to assigning to a method.
     app.openapi = openapi  # type: ignore[method-assign]

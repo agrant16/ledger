@@ -47,7 +47,9 @@ def test_errors_sharing_a_status_share_one_entry_naming_every_type() -> None:
 def test_every_entry_is_problem_json_with_the_problem_schema() -> None:
     responses = openapi.problem_responses(UnknownAccountError, ServiceBusyError)
     for entry in responses.values():
-        assert set(entry["content"]) == {"application/problem+json"}
+        assert entry["content"] == {
+            "application/problem+json": {"schema": {"$ref": "#/components/schemas/ProblemDetails"}}
+        }
 
 
 def test_a_503_declares_retry_after_and_other_entries_do_not() -> None:
@@ -65,11 +67,11 @@ def test_install_openapi_removes_fastapis_422_and_keeps_a_documented_one() -> No
     app = FastAPI()
 
     @app.get("/plain")
-    def plain(page: int = 0) -> dict:
+    def plain(page: int = 0) -> dict[str, object]:
         return {}
 
     @app.get("/funds", responses=openapi.problem_responses(InsufficientFundsError))
-    def funds(page: int = 0) -> dict:
+    def funds(page: int = 0) -> dict[str, object]:
         return {}
 
     assert "422" in app.openapi()["paths"]["/plain"]["get"]["responses"]  # FastAPI's own
