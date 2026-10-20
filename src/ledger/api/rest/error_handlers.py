@@ -13,7 +13,7 @@ from ledger.api.rest.middleware.concurrency_cap import ConcurrencyCapMiddleware
 from ledger.api.rest.middleware.request_id import RequestIDMiddleware
 from ledger.api.rest.problems import problem_for
 from ledger.errors import InvalidRequestError, LedgerError
-from ledger.infra.config import Settings
+from ledger.infra.config import CONCURRENCY_CAP
 from ledger.infra.logging_config import install_log_record_factory, request_id_ctx_var
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -170,7 +170,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 
 def install_error_handling(
-    app: FastAPI, concurrency_cap: int = Settings.model_fields["concurrency_cap"].default
+    app: FastAPI, concurrency_cap: int = CONCURRENCY_CAP
 ) -> None:
     install_log_record_factory()
     # ConcurrencyCapMiddleware must be added before RequestIDMiddleware so
