@@ -1,7 +1,7 @@
 import json
 import logging
 
-from starlette.types import Receive, Scope, Send, ASGIApp
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 logger: logging.Logger = logging.getLogger(__name__)
 
