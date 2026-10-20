@@ -9,6 +9,7 @@ DEFAULT_APP_URL = "postgresql://ledger_app:app-dev-only@127.0.0.1:5432/ledger"
 DEFAULT_MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
 
 PUBLIC_SETTINGS = ["pool_size", "pool_timeout_seconds", "handler_thread_limit", "concurrency_cap"]
+CONCURRENCY_CAP = 40
 
 
 class Settings(BaseSettings):
@@ -27,7 +28,7 @@ class Settings(BaseSettings):
     # Max concurrent handler threads (anyio’s default is 40)
     handler_thread_limit: PositiveInt = Field(default=20, alias="HANDLER_THREAD_LIMIT")
     # Max concurrent HTTP requests before a 503 is returned
-    concurrency_cap: PositiveInt = Field(default=40, alias="CONCURRENCY_CAP")
+    concurrency_cap: PositiveInt = Field(default=CONCURRENCY_CAP, alias="CONCURRENCY_CAP")
 
     def get_startup_log_message(self) -> str:
         """Returns a startup log message that lists public settings key/value pairs.
