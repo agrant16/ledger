@@ -9,7 +9,7 @@ dependencies = [
     "uvicorn",
     "psycopg[binary]",
     "psycopg-pool",
-    "pydantic-settings>=2.16.0",
+    "pydantic-settings",
 ]
 
 [dependency-groups]

@@ -527,7 +527,7 @@ requires-dist = [
     { name = "fastapi" },
     { name = "psycopg", extras = ["binary"] },
     { name = "psycopg-pool" },
-    { name = "pydantic-settings", specifier = ">=2.16.0" },
+    { name = "pydantic-settings" },
     { name = "uvicorn" },
 ]
 
