@@ -9,9 +9,11 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse, Response
 
+from ledger.api.rest.middleware.concurrency_cap import ConcurrencyCapMiddleware
 from ledger.api.rest.middleware.request_id import RequestIDMiddleware
 from ledger.api.rest.problems import problem_for
 from ledger.errors import InvalidRequestError, LedgerError
+from ledger.infra.config import load_settings
 from ledger.infra.logging_config import install_log_record_factory, request_id_ctx_var
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -169,6 +171,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 def install_error_handling(app: FastAPI) -> None:
     install_log_record_factory()
+    app.add_middleware(ConcurrencyCapMiddleware, cap=load_settings().concurrency_cap)
     app.add_middleware(RequestIDMiddleware)
     # Starlette passes only LedgerError to this handler
     # noinspection PyTypeChecker
