@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     )
     # Max concurrent handler threads (anyio’s default is 40)
     handler_thread_limit: PositiveInt = Field(default=20, alias="HANDLER_THREAD_LIMIT")
+    # Max
+    concurrency_cap: PositiveInt = Field(default=40, alias="CONCURRENCY_CAP")
 
 
 def load_settings() -> Settings:
