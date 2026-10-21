@@ -1,7 +1,7 @@
 """The OpenAPI document of the real app (docs/design.md, Milestone 3 and Error model; issue #107).
 
 `/openapi.json` is the contract clients read, so it must say what the service really does. These
-tests read `app.openapi()` of the real app and need no database.
+tests read `create_app().openapi()` of the real app and need no database.
 
 Contract these tests expect:
 
@@ -27,7 +27,7 @@ import json
 import pytest
 
 from ledger.api.rest.problems import PROBLEMS
-from ledger.main import app
+from ledger.main import create_app
 
 PATHS = [
     ("post", "/accounts"),
@@ -94,7 +94,7 @@ EXTENSION_MEMBERS = {
 
 @pytest.fixture(scope="module")
 def document() -> dict:
-    return app.openapi()
+    return create_app().openapi()
 
 
 def operation(document: dict, method: str, path: str) -> dict:
