@@ -58,7 +58,6 @@ def test_with_database_adds_a_name_to_a_url_that_has_none() -> None:
 def test_load_settings_points_at_the_test_database_during_a_test_run() -> None:
     """Code that reads its own settings (the app's startup, the property test) must also land in
     the test database, because the tests empty the tables they use."""
-
     configured = load_settings()
 
     assert urlsplit(configured.owner_url).path == f"/{TEST_DATABASE_NAME}"

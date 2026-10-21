@@ -19,7 +19,6 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from ledger.models.posting_model import Entry
-from ledger.service.transfer_service import entries_for_transfer
 from ledger.service.transfer_service import entries_for_transfer as build
 
 BIGINT_MAX = 9_223_372_036_854_775_807
@@ -73,7 +72,7 @@ DISTINCT_IDS = st.tuples(st.integers(1, BIGINT_MAX), st.integers(1, BIGINT_MAX))
 )
 def test_the_entries_always_balance(ids, amount, currency) -> None:
     sender, receiver = ids
-    entries = entries_for_transfer(sender, receiver, amount, currency)
+    entries = build(sender, receiver, amount, currency)
 
     assert len(entries) == 2
     assert sum(e.amount_minor for e in entries) == 0
