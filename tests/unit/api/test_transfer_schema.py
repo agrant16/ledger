@@ -143,7 +143,6 @@ def test_every_problem_is_reported_together() -> None:
 def test_through_a_route_the_json_kinds_are_strict() -> None:
     """A whole-number float, a string, a boolean and null all arrive as JSON, so check them as JSON
     text and see the 400 with a pointer at the field."""
-
     app = FastAPI()
     install_error_handling(app)
 
