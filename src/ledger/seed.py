@@ -12,8 +12,11 @@ from ledger.infra.config import load_settings
 from ledger.models.account_model import Account
 from ledger.service.account_service import create_account, find_account_by_name
 
+DEFAULT_CURRENCIES = [
+    "USD",
+    "EUR",
+]
 
-DEFAULT_CURRENCIES = ["USD", "EUR",]
 
 class SeedError(Exception):
     """The seed run cannot continue: the existing data isn't what the script needs."""
