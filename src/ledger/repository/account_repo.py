@@ -82,6 +82,7 @@ def insert_account(
         row = cursor.fetchone()
         return Account(*row)
 
+
 def insert_balance(conn: psycopg.Connection, account_id: int, allow_negative: bool) -> None:
     with conn.cursor() as cursor:
         try:
