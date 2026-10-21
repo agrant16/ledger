@@ -29,8 +29,10 @@ from psycopg_pool import ConnectionPool
 from ledger.errors import IdempotencyConflictError, LedgerError, LedgerInvariantError
 from ledger.infra.config import Settings
 from ledger.models.posting_model import Claim as claim_type
+from ledger.models.posting_model import Entry
+from ledger.repository import posting_repo as posting_repo_module
 from ledger.service.account_service import create_account
-from ledger.service.posting_service import claim_transaction
+from ledger.service.posting_service import claim_transaction, post_transaction
 from tests.db_helpers import hash_for, wait_until_waiting_for_a_lock
 
 HASH_A = hash_for("request a")
@@ -300,8 +302,6 @@ def funded(app_conn: psycopg.Connection, commit_setup):
 
 def claim_and_post(conn: psycopg.Connection, funded, key: str, request_hash: str):
     """Claim a key and post a transfer on it, leaving the transaction open."""
-    from ledger.models.posting_model import Entry
-    from ledger.service.posting_service import claim_transaction, post_transaction
 
     funding, alice = funded
     claim = claim_transaction(conn, key, request_hash)
@@ -323,7 +323,6 @@ def second_claim_waits_for_the_first(
     """The first connection claims "key-1" and holds it open. The second connection claims the same
     key and must wait. Then `first_finishes(conn)` commits or rolls back the first transaction.
     Returns what the first claim was and what the second claim returned or raised."""
-    from ledger.service.posting_service import claim_transaction
 
     with app_pool.connection() as first_conn, app_pool.connection() as second_conn:
         first = claim_and_post(first_conn, funded, "key-1", HASH_A)
@@ -382,9 +381,7 @@ def test_a_second_claim_waits_and_then_conflicts_with_a_committed_first_of_anoth
 
 @pytest.fixture
 def posting_repo():
-    from ledger.repository import posting_repo
-
-    return posting_repo
+    return posting_repo_module
 
 
 def stored(transaction_id: int, request_hash: str) -> tuple[int, str]:

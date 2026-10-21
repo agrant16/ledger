@@ -30,6 +30,7 @@ from ledger.errors import (
 from ledger.infra.config import Settings
 from ledger.models.account_model import Account
 from ledger.models.posting_model import Entry, LockedAccount
+from ledger.repository import posting_repo as posting_repo_module
 from ledger.service import posting_service as api
 from tests.db_helpers import VALID_HASH, make_account
 
@@ -459,9 +460,7 @@ def test_the_cleanup_fixture_leaves_the_database_empty(owner_conn: psycopg.Conne
 
 @pytest.fixture
 def posting_repo():
-    from ledger.repository import posting_repo
-
-    return posting_repo
+    return posting_repo_module
 
 
 def stand_in_repository(

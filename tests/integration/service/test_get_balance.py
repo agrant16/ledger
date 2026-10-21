@@ -15,6 +15,7 @@ import pytest
 from ledger.errors import LedgerError, LedgerInvariantError, UnknownAccountError
 from ledger.infra.config import Settings
 from ledger.models.account_model import Balance
+from ledger.repository import account_repo as account_repo_module
 from ledger.service.account_service import create_account, get_balance
 
 
@@ -101,9 +102,7 @@ def test_it_refuses_an_autocommit_connection(clean_db: None, settings: Settings)
 
 @pytest.fixture
 def account_repo():
-    from ledger.repository import account_repo
-
-    return account_repo
+    return account_repo_module
 
 
 def test_the_service_asks_the_repository_and_returns_its_balance(
