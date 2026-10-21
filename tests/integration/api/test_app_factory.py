@@ -30,6 +30,7 @@ from fastapi.testclient import TestClient
 from ledger.api.rest.error_handlers import install_error_handling
 from ledger.api.rest.routers import accounts as accounts_router
 from ledger.infra.config import Settings
+from ledger.main import app as module_level_app
 from ledger.main import create_app
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
@@ -167,9 +168,7 @@ def test_two_apps_from_the_factory_keep_their_own_settings(
 
 def test_the_module_level_app_comes_from_the_factory_and_serves_requests() -> None:
     """`uvicorn ledger.main:app` keeps working: the module still exposes a ready `app`."""
-    from ledger.main import app
-
-    with TestClient(app) as client:
+    with TestClient(module_level_app) as client:
         assert client.get("/health").status_code == 200
 
 

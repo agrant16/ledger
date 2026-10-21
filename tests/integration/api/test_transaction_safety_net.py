@@ -16,7 +16,9 @@ from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
 
+from ledger.api.rest.error_handlers import install_error_handling
 from ledger.errors import LedgerInvariantError
+from ledger.infra.db import run_in_transaction
 from tests.db_helpers import VALID_HASH, reset_database
 
 LONE_TRANSACTION = "INSERT INTO transactions (idempotency_key, request_hash) VALUES ('k', %s)"
@@ -24,9 +26,6 @@ LONE_TRANSACTION = "INSERT INTO transactions (idempotency_key, request_hash) VAL
 
 @pytest.fixture
 def client(settings, owner_conn: psycopg.Connection):
-    from ledger.api.rest.error_handlers import install_error_handling
-    from ledger.infra.db import run_in_transaction
-
     reset_database(owner_conn)
     with ConnectionPool(settings.app_url, min_size=1, max_size=1, timeout=2, open=True) as pool:
         app = FastAPI()

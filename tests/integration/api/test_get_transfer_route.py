@@ -29,6 +29,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
 
+from ledger.api.rest.error_handlers import install_error_handling
+from ledger.api.rest.router import router
 from ledger.models.posting_model import Entry
 from ledger.service.posting_service import claim_transaction, post_transaction
 from tests.db_helpers import commit_accounts, commit_transfer, hash_for, reset_database
@@ -39,8 +41,6 @@ CREATED_AT = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$")
 @pytest.fixture
 def app(app_pool: ConnectionPool, owner_conn: psycopg.Connection) -> FastAPI:
     """A throwaway app with the real router, the error handling and the shared test pool."""
-    from ledger.api.rest.error_handlers import install_error_handling
-    from ledger.api.rest.router import router
 
     reset_database(owner_conn)
     application = FastAPI()
