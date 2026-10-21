@@ -25,6 +25,7 @@ from fastapi.routing import APIRoute
 from starlette.routing import Match, Route
 
 from ledger.api.rest.router import router as aggregate
+from ledger.main import create_app
 
 # (path, methods) of every endpoint the service offers. Update it together with the design doc's
 # API table when an endpoint is added or removed.
@@ -129,7 +130,7 @@ def test_the_router_modules_hold_exactly_the_listed_endpoints() -> None:
 
 
 def test_the_app_defines_no_route_itself_and_serves_every_endpoint() -> None:
-    from ledger.main import app
+    app = create_app()
 
     assert [route for route in app.routes if isinstance(route, APIRoute)] == []
     for path, methods in ENDPOINTS:
@@ -138,17 +139,14 @@ def test_the_app_defines_no_route_itself_and_serves_every_endpoint() -> None:
 
 
 def test_the_apps_only_plain_routes_are_the_documentation_routes() -> None:
-    from ledger.main import app
-
+    app = create_app()
     plain = {route.path for route in app.routes if isinstance(route, Route)}
 
     assert plain <= DOCUMENTATION_ROUTES
 
 
 def test_the_documented_endpoints_are_the_ones_in_the_openapi_document() -> None:
-    from ledger.main import app
-
-    paths = app.openapi()["paths"]
+    paths = create_app().openapi()["paths"]
     found = {(path, method) for path, item in paths.items() for method in item}
 
     assert found == DOCUMENTED
