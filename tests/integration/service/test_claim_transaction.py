@@ -302,7 +302,6 @@ def funded(app_conn: psycopg.Connection, commit_setup):
 
 def claim_and_post(conn: psycopg.Connection, funded, key: str, request_hash: str):
     """Claim a key and post a transfer on it, leaving the transaction open."""
-
     funding, alice = funded
     claim = claim_transaction(conn, key, request_hash)
     post_transaction(
@@ -323,7 +322,6 @@ def second_claim_waits_for_the_first(
     """The first connection claims "key-1" and holds it open. The second connection claims the same
     key and must wait. Then `first_finishes(conn)` commits or rolls back the first transaction.
     Returns what the first claim was and what the second claim returned or raised."""
-
     with app_pool.connection() as first_conn, app_pool.connection() as second_conn:
         first = claim_and_post(first_conn, funded, "key-1", HASH_A)
         with ThreadPoolExecutor(max_workers=1) as executor:
