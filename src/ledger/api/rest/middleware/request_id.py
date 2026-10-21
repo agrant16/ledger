@@ -1,6 +1,5 @@
 import uuid
 
-
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ledger.infra.logging_config import request_id_ctx_var
