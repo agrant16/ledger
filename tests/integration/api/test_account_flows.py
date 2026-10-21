@@ -8,7 +8,8 @@ database in one flow.
 - Creating an account through the route writes the account and its zero balance row together.
 - Two creates of the same name at the same moment give one 201 and one 409.
 - A balance read does not wait for a row lock that a transfer in flight holds.
-- The real app (ledger.main.app, with its startup) creates an account and reads its balance.
+- The real app (built by ledger.main.create_app, with its startup) creates an account and reads
+  its balance.
 """
 
 import threading
@@ -20,6 +21,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
 
+from ledger.main import create_app
 from tests.db_helpers import reset_database
 
 VALID = {"account_name": "customer:alice", "currency": "USD"}
@@ -118,10 +120,8 @@ def test_the_read_does_not_wait_for_a_row_lock(
 def test_the_real_app_creates_an_account_and_reads_its_balance(
     clean_db: None, owner_conn: psycopg.Connection
 ) -> None:
-    from ledger.main import app
-
     try:
-        with TestClient(app, raise_server_exceptions=False) as real_client:
+        with TestClient(create_app(), raise_server_exceptions=False) as real_client:
             created = real_client.post("/accounts", json=VALID)
             assert created.status_code == 201
             balance = real_client.get(f"/accounts/{created.json()['id']}/balance")

@@ -1,4 +1,4 @@
-"""The real app (ledger.main.app) has the error handling installed.
+"""The real app (built by ledger.main.create_app) has the error handling installed.
 
 unit/api/test_problem_responses.py builds a throwaway app, so it cannot notice if
 `install_error_handling` is never called on the real one. These tests look at the real app: its
@@ -17,13 +17,13 @@ from fastapi.testclient import TestClient
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ledger.errors import LedgerError
-from ledger.main import app
+from ledger.main import create_app
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
 
 
 def test_the_real_app_uses_its_own_handlers() -> None:
-    handlers = app.exception_handlers
+    handlers = create_app().exception_handlers
     assert LedgerError in handlers
     assert Exception in handlers
     assert handlers[RequestValidationError] is not defaults.request_validation_exception_handler
@@ -31,7 +31,7 @@ def test_the_real_app_uses_its_own_handlers() -> None:
 
 
 def test_an_unknown_route_on_the_real_app_is_a_problem_with_a_request_id() -> None:
-    with TestClient(app, raise_server_exceptions=False) as client:
+    with TestClient(create_app(), raise_server_exceptions=False) as client:
         response = client.get("/no-such-route")
 
     assert response.status_code == 404
@@ -42,7 +42,7 @@ def test_an_unknown_route_on_the_real_app_is_a_problem_with_a_request_id() -> No
 
 
 def test_health_still_works_and_carries_a_request_id() -> None:
-    with TestClient(app) as client:
+    with TestClient(create_app()) as client:
         response = client.get("/health")
 
     assert response.status_code == 200
