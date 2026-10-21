@@ -72,19 +72,15 @@ def insert_account(
     with conn.cursor() as cursor:
         try:
             cursor.execute(INSERT_ACCOUNTS_SQL, (account_name, currency, allow_negative))
-            row = cursor.fetchone()
-            account = Account(
-                id=row[0], account_name=row[1], currency=row[2], allow_negative=row[3]
-            )
-            return account
         except errors.UniqueViolation as failure:
             constraint = failure.diag.constraint_name
             if constraint == "accounts_account_name_key":
                 raise DuplicateAccountNameError(account_name) from failure
             raise LedgerInvariantError("Critical error in insert account") from failure
         except errors.IntegrityError as failure:
-            raise LedgerInvariantError("Critical error on in insert account") from failure
-
+            raise LedgerInvariantError("Critical error in insert account") from failure
+        row = cursor.fetchone()
+        return Account(*row)
 
 def insert_balance(conn: psycopg.Connection, account_id: int, allow_negative: bool) -> None:
     with conn.cursor() as cursor:
