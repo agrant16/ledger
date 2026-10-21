@@ -18,9 +18,7 @@ def _validate_encoded_str(encoded_str: str) -> None:
 
 def _in_bounds(entry_id: int) -> bool:
     """Entry ids must be integers between 1 and 9223372036854775807"""
-    if not 0 < entry_id <= POSTGRES_BIG_INT:
-        return False
-    return True
+    return 0 < entry_id <= POSTGRES_BIG_INT
 
 
 def encode_cursor(entry_id: int) -> str:

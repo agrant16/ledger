@@ -11,9 +11,6 @@ class LedgerError(Exception):
     and is logged.
     """
 
-    def __init__(self, message: str):
-        super().__init__(message)
-
 
 class LedgerInvariantError(Exception):
     """A ledger invariant was violated by our own code, which means a bug.
@@ -27,9 +24,6 @@ class LedgerInvariantError(Exception):
     currency (UnbalancedEntriesError).
     """
 
-    def __init__(self, message: str):
-        super().__init__(message)
-
 
 class DuplicateAccountNameError(LedgerError):
     def __init__(self, account_name: str):
@@ -42,8 +36,7 @@ class InvalidRequestError(LedgerError):
 
 
 class UnknownAccountError(LedgerError):
-    def __init__(self, message):
-        super().__init__(message)
+    pass
 
 
 class UnknownTransferError(LedgerError):
@@ -51,8 +44,7 @@ class UnknownTransferError(LedgerError):
 
 
 class CurrencyMismatchError(LedgerError):
-    def __init__(self, message):
-        super().__init__(message)
+    pass
 
 
 class InsufficientFundsError(LedgerError):
@@ -83,5 +75,4 @@ class ServiceBusyError(LedgerError):
 
 
 class UnbalancedEntriesError(LedgerInvariantError):
-    def __init__(self, message):
-        super().__init__(message)
+    pass

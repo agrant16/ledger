@@ -32,7 +32,7 @@ ERROR_LOC_MAPPING: dict[str, str] = {
 }
 
 
-def escape_pointer_tokens(pointer_tokens: Sequence[Any]) -> list[str]:
+def _escape_pointer_tokens(pointer_tokens: Sequence[Any]) -> list[str]:
     return [str(token).replace("~", "~0").replace("/", "~1") for token in pointer_tokens]
 
 
@@ -41,38 +41,28 @@ def is_body_allowed(status_code: int) -> bool:
     return not (100 <= status_code < 200 or status_code in (204, 205, 304))
 
 
+def _locator(error: dict[str, Any]) -> dict[str, str]:
+    """Where in the request the error is: a pointer, a parameter, or nothing."""
+    if error.get("type") == "json_invalid":
+        return {"pointer": ""}
+    loc = error.get("loc", [])
+    if not loc:
+        return {}
+    where, *path = loc
+    kind = ERROR_LOC_MAPPING.get(where)
+    if kind == "pointer":
+        return {"pointer": "".join(f"/{token}" for token in _escape_pointer_tokens(path))}
+    if kind == "parameter" and path:
+        return {"parameter": ".".join(str(token) for token in path)}
+    return {}
+
+
 def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Converts Pydantic errors into the items of the RFC 9457 errors
     extension: detail plus a pointer or parameter
-
-    :param errors: the Pydantic errors to convert.
-    :return: Pydantic error formatted to RFC 9457-style error shape.
     """
-    transformed_errors: list[dict[str, Any]] = []
-
-    for error in errors:
-        error_dict = {"detail": error.get("msg", "")}
-        type_ = error.get("type", "")
-        loc_ = error.get("loc", [])
-
-        if type_ == "json_invalid":
-            error_dict["pointer"] = ""
-        elif loc_:
-            loc_kind = ERROR_LOC_MAPPING.get(loc_[0], "")
-            if loc_kind == "pointer":
-                if len(loc_) >= 2:
-                    error_dict["pointer"] = "".join(
-                        "/" + token for token in escape_pointer_tokens(loc_[1:])
-                    )
-                else:
-                    error_dict["pointer"] = ""
-            elif loc_kind == "parameter" and len(loc_) >= 2:
-                error_dict["parameter"] = ".".join(str(token) for token in loc_[1:])
-
-        transformed_errors.append(error_dict)
-
-    return transformed_errors
+    return [{"detail": error.get("msg", ""), **_locator(error)} for error in errors]
 
 
 def problem_response(
