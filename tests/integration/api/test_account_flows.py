@@ -21,6 +21,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
 
+from ledger.api.rest.error_handlers import install_error_handling
+from ledger.api.rest.router import router
 from ledger.main import create_app
 from tests.db_helpers import reset_database
 
@@ -30,9 +32,6 @@ VALID = {"account_name": "customer:alice", "currency": "USD"}
 @pytest.fixture
 def app(app_pool: ConnectionPool, owner_conn: psycopg.Connection) -> FastAPI:
     """A throwaway app with the real router, the error handling and the shared test pool."""
-    from ledger.api.rest.error_handlers import install_error_handling
-    from ledger.api.rest.router import router
-
     reset_database(owner_conn)
     application = FastAPI()
     install_error_handling(application)
