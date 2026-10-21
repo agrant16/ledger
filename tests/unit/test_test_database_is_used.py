@@ -22,6 +22,7 @@ def database_name(url: str) -> str:
 
 
 def test_the_real_app_built_at_import_uses_the_test_database() -> None:
+    # Late on purpose: run alone, this import builds the app (see the module docstring).
     from ledger.main import app
 
     assert database_name(app.state.settings.app_url) == TEST_DATABASE_NAME
