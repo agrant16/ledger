@@ -41,7 +41,6 @@ CREATED_AT = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?Z$")
 @pytest.fixture
 def app(app_pool: ConnectionPool, owner_conn: psycopg.Connection) -> FastAPI:
     """A throwaway app with the real router, the error handling and the shared test pool."""
-
     reset_database(owner_conn)
     application = FastAPI()
     install_error_handling(application)

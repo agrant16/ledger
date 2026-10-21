@@ -34,7 +34,6 @@ VALID = {"account_name": "customer:alice", "currency": "USD"}
 @pytest.fixture
 def app(app_pool: ConnectionPool, owner_conn: psycopg.Connection) -> FastAPI:
     """A throwaway app with the real router, the error handling and the shared test pool."""
-
     reset_database(owner_conn)
     application = FastAPI()
     install_error_handling(application)
