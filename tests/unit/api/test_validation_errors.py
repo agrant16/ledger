@@ -19,11 +19,11 @@ Nothing else is passed on. In particular the client's `input` value is not echoe
 
 import pytest
 
+from ledger.api.rest.error_handlers import validation_errors
+
 
 @pytest.fixture
 def convert():
-    from ledger.api.rest.error_handlers import validation_errors
-
     return validation_errors
 
 

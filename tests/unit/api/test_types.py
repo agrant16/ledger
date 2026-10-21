@@ -27,6 +27,7 @@ from fastapi import FastAPI, Header
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter, ValidationError
 
+from ledger.api.rest.error_handlers import install_error_handling
 from ledger.api.rest.schemas import types
 
 BIGINT_MAX = 9_223_372_036_854_775_807
@@ -61,8 +62,6 @@ def test_an_account_id_in_a_body_rejects_everything_else(value) -> None:
 
 @pytest.fixture
 def path_client() -> TestClient:
-    from ledger.api.rest.error_handlers import install_error_handling
-
     app = FastAPI()
     install_error_handling(app)
 
@@ -110,8 +109,6 @@ def test_an_account_id_in_a_path_rejects_anything_but_canonical_digits(path_clie
 
 @pytest.fixture
 def transfer_path_client() -> TestClient:
-    from ledger.api.rest.error_handlers import install_error_handling
-
     app = FastAPI()
     install_error_handling(app)
 
@@ -262,8 +259,6 @@ def test_an_idempotency_key_rejects_everything_else(value) -> None:
 
 @pytest.fixture
 def header_client() -> TestClient:
-    from ledger.api.rest.error_handlers import install_error_handling
-
     app = FastAPI()
     install_error_handling(app)
 
