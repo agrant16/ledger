@@ -14,6 +14,7 @@ import pytest
 
 from ledger.errors import DuplicateAccountNameError, LedgerError, LedgerInvariantError
 from ledger.infra.config import Settings
+from ledger.repository import account_repo
 from ledger.service.account_service import create_account
 
 
@@ -179,8 +180,6 @@ def test_a_failure_creating_the_balances_row_leaves_no_account(
 def test_it_writes_the_account_and_then_its_balance_row_through_the_repository(
     clean_db: None, app_conn: psycopg.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from ledger.repository import account_repo
-
     calls = []
     real_insert_account = account_repo.insert_account
     real_insert_balance = account_repo.insert_balance
@@ -207,8 +206,6 @@ def test_it_writes_the_account_and_then_its_balance_row_through_the_repository(
 def test_a_duplicate_name_does_not_reach_the_balance_step(
     clean_db: None, app_conn: psycopg.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from ledger.repository import account_repo
-
     create_account(app_conn, "customer:alice", "USD", False)
     balance_inserts = []
     real_insert_balance = account_repo.insert_balance
