@@ -15,7 +15,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from ledger.api.rest.error_handlers import install_error_handling
 from ledger.api.rest.schemas.transfer_schema import TransferRequest as model
+from ledger.api.rest.schemas.transfer_schema import TransferResponse
+from ledger.models.transfer_model import Transfer, TransferEntry
 
 VALID = {"from_account_id": 12, "to_account_id": 34, "amount_minor": 2500, "currency": "USD"}
 INTEGER_FIELDS = ["from_account_id", "to_account_id", "amount_minor"]
@@ -140,8 +143,6 @@ def test_every_problem_is_reported_together() -> None:
 def test_through_a_route_the_json_kinds_are_strict() -> None:
     """A whole-number float, a string, a boolean and null all arrive as JSON, so check them as JSON
     text and see the 400 with a pointer at the field."""
-    from ledger.api.rest.error_handlers import install_error_handling
-
     app = FastAPI()
     install_error_handling(app)
 
@@ -180,8 +181,6 @@ TOKYO = timezone(timedelta(hours=9))
 
 
 def transfer(created_at: datetime, reverses: int | None = None):
-    from ledger.models.transfer_model import Transfer, TransferEntry
-
     return Transfer(
         id=7,
         reverses_transaction_id=reverses,
@@ -192,8 +191,6 @@ def transfer(created_at: datetime, reverses: int | None = None):
 
 @pytest.fixture
 def response_model():
-    from ledger.api.rest.schemas.transfer_schema import TransferResponse
-
     return TransferResponse
 
 

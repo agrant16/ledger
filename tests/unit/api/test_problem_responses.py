@@ -40,7 +40,9 @@ from fastapi.testclient import TestClient
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 from starlette.requests import Request
 
+from ledger.api.rest.error_handlers import install_error_handling, unhandled_exception_handler
 from ledger.errors import LedgerInvariantError, ServiceBusyError, UnbalancedEntriesError
+from ledger.infra.logging_config import install_log_record_factory
 from tests.unit.api.api_cases import EXAMPLES, EXPECTED, EXTENSIONS, STANDARD_MEMBERS
 
 LEDGER_ERRORS = {error.__name__: error for error in EXPECTED}
@@ -75,8 +77,6 @@ class TransferBody(BaseModel):
 
 @pytest.fixture
 def client() -> TestClient:
-    from ledger.api.rest.error_handlers import install_error_handling
-
     app = FastAPI()
     install_error_handling(app)
 
@@ -226,9 +226,6 @@ def test_the_500_detail_is_the_same_whatever_went_wrong(client) -> None:
 def test_the_catch_all_makes_an_id_when_the_request_has_none(caplog) -> None:
     """The middleware always runs first, so this cannot happen in the app. The catch-all is the last
     resort and must not fail itself, so it covers a request that reached it without an id."""
-    from ledger.api.rest.error_handlers import unhandled_exception_handler
-    from ledger.infra.logging_config import install_log_record_factory
-
     install_log_record_factory()  # normally done by install_error_handling
     caplog.set_level(logging.DEBUG)
     request = Request({"type": "http", "method": "GET", "path": "/x", "headers": []})

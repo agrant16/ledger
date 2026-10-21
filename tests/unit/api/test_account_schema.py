@@ -14,7 +14,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from ledger.api.rest.error_handlers import install_error_handling
+from ledger.api.rest.schemas.account_schema import AccountResponse, BalanceResponse
 from ledger.api.rest.schemas.account_schema import CreateAccountRequest as model
+from ledger.models.account_model import Account, Balance
 
 VALID = {"account_name": "customer:alice", "currency": "USD"}
 
@@ -78,8 +81,6 @@ def test_every_problem_is_reported_together() -> None:
 
 
 def test_through_a_route_a_bad_request_is_a_400_with_pointers() -> None:
-    from ledger.api.rest.error_handlers import install_error_handling
-
     app = FastAPI()
     install_error_handling(app)
 
@@ -107,9 +108,6 @@ def test_through_a_route_a_bad_request_is_a_400_with_pointers() -> None:
 
 
 def test_an_account_response_is_built_from_the_account_model() -> None:
-    from ledger.api.rest.schemas.account_schema import AccountResponse
-    from ledger.models.account_model import Account
-
     response = AccountResponse.from_model(Account(7, "customer:alice", "EUR", False))
 
     assert response == AccountResponse(
@@ -124,23 +122,15 @@ def test_an_account_response_is_built_from_the_account_model() -> None:
 
 
 def test_the_account_response_carries_allow_negative_as_the_model_has_it() -> None:
-    from ledger.api.rest.schemas.account_schema import AccountResponse
-    from ledger.models.account_model import Account
-
     assert AccountResponse.from_model(Account(1, "funding:usd", "USD", True)).allow_negative is True
 
 
 def test_a_balance_response_is_built_from_the_balance_model() -> None:
-    from ledger.api.rest.schemas.account_schema import BalanceResponse
-    from ledger.models.account_model import Balance
-
     response = BalanceResponse.from_model(Balance(7, "USD", -300))
 
     assert response.model_dump() == {"account_id": 7, "currency": "USD", "balance_minor": -300}
 
 
 def test_the_response_schemas_have_exactly_the_documented_fields() -> None:
-    from ledger.api.rest.schemas.account_schema import AccountResponse, BalanceResponse
-
     assert set(AccountResponse.model_fields) == {"id", "account_name", "currency", "allow_negative"}
     assert set(BalanceResponse.model_fields) == {"account_id", "currency", "balance_minor"}
