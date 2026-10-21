@@ -15,23 +15,25 @@ MIGRATION_NAME = re.compile(r"^\d+_[a-z0-9_]+\.sql$")
 # Arbitrary constant; serializes concurrent runners (e.g. two containers starting at once).
 ADVISORY_LOCK_KEY = 7_262_001
 
+def _get_integer_prefix(path: Path) -> int:
+    return int(path.name.split("_", 1)[0])
 
 def find_migrations(directory: Path) -> list[Path]:
     """Return migration files in numeric-prefix order. Fails on a bad name or repeated number."""
     if not directory.is_dir():
         return []
     files = list(directory.glob("*.sql"))
-    for f in files:
-        if not MIGRATION_NAME.match(f.name):
-            raise ValueError(f"migration file name must look like 001_create_x.sql: {f.name}")
+    for path in files:
+        if not MIGRATION_NAME.match(path.name):
+            raise ValueError(...)
+    files.sort(key=lambda path: (_get_integer_prefix(path), path.name))
     seen: dict[int, str] = {}
-    for f in sorted(files):
-        number = int(f.name.split("_", 1)[0])
+    for path in files:
+        number = _get_integer_prefix(path)
         if number in seen:
-            raise ValueError(f"duplicate migration number {number}: {seen[number]} and {f.name}")
-        seen[number] = f.name
-    # Sort by the integer prefix, so 2_x runs before 10_x.
-    return sorted(files, key=lambda f: int(f.name.split("_", 1)[0]))
+            raise ValueError(...)
+        seen[number] = path.name
+    return files
 
 
 def run_migrations(owner_url: str, directory: Path) -> list[str]:
