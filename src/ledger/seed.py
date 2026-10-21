@@ -1,10 +1,10 @@
 import argparse
 import json
-import pathlib
 import re
 import sys
 import tempfile
 
+from pathlib import Path
 import psycopg
 
 from ledger.errors import DuplicateAccountNameError, LedgerInvariantError
@@ -129,11 +129,11 @@ def _create_accounts(
 
 def _write_file(accounts: dict[str, dict[str, list[int]]], target_path: str) -> None:
     """Writes the resulting accounts to a file at target_path."""
-    target = pathlib.Path(target_path)
+    target = Path(target_path)
     tmp_file = tempfile.NamedTemporaryFile(
         dir=target.resolve().parent, delete=False, mode="w", encoding="utf-8"
     )
-    tmp_path = pathlib.Path(tmp_file.name)
+    tmp_path = Path(tmp_file.name)
     # file is opened outside try. This is fine here because if either json.dump or replace
     # fail the with tmp_file context block has already closed the file and cleanup is done.
     try:
