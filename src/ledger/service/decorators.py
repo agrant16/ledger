@@ -5,7 +5,8 @@ from ledger.errors import LedgerInvariantError
 
 
 def transactional_service_method[**P, R](func: Callable[P, R]) -> Callable[P, R]:
-    """Decorator to automatically check for conn.autocommit and raise LedgerInvariantError if true"""
+    """Decorator to check for conn.autocommit and raise LedgerInvariantError if true"""
+
     @wraps(func)
     def require_transaction(*args, **kwargs):
         """Caller makes commit so disallow autocommit in service methods."""
