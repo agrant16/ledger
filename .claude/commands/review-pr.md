@@ -81,6 +81,7 @@ Group findings under these headings, each with a file and line reference where p
 - **Pythonic Score:** A 1 to 10 score of how Pythonic the code I have written is. The baseline is 7, any function or other part that falls below 7 should be pointed out for review. 
 - **Questions for me:** anything ambiguous that I need to decide.
 - **Could not verify:** what you could not check and why.
+- **Issue tasks:** For any attached issue verify the listed items are actually done.
 
 Finish with up to five questions I should be able to answer about the code in the "I write
 myself" areas, as if an interviewer asked. Then draft, but do not post, text for the PR's review
