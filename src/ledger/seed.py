@@ -3,8 +3,8 @@ import json
 import re
 import sys
 import tempfile
-
 from pathlib import Path
+
 import psycopg
 
 from ledger.errors import DuplicateAccountNameError, LedgerInvariantError
