@@ -189,13 +189,8 @@ def transfer(created_at: datetime, reverses: int | None = None):
     )
 
 
-@pytest.fixture
-def response_model():
-    return TransferResponse
-
-
-def test_the_response_has_exactly_the_documented_fields(response_model) -> None:
-    body = response_model.from_model(transfer(datetime(2026, 10, 13, 10, 11, 12, tzinfo=UTC)))
+def test_the_response_has_exactly_the_documented_fields() -> None:
+    body = TransferResponse.from_model(transfer(datetime(2026, 10, 13, 10, 11, 12, tzinfo=UTC)))
 
     assert body.model_dump(mode="json") == {
         "id": 7,
@@ -208,23 +203,23 @@ def test_the_response_has_exactly_the_documented_fields(response_model) -> None:
     }
 
 
-def test_the_response_carries_the_reversed_id(response_model) -> None:
-    body = response_model.from_model(transfer(datetime(2026, 1, 1, tzinfo=UTC), reverses=3))
+def test_the_response_carries_the_reversed_id() -> None:
+    body = TransferResponse.from_model(transfer(datetime(2026, 1, 1, tzinfo=UTC), reverses=3))
 
     assert body.model_dump(mode="json")["reverses_transaction_id"] == 3
 
 
-def test_microseconds_are_kept_and_the_time_ends_in_z(response_model) -> None:
+def test_microseconds_are_kept_and_the_time_ends_in_z() -> None:
     created = datetime(2026, 10, 13, 10, 11, 12, 123456, tzinfo=UTC)
 
-    body = response_model.from_model(transfer(created)).model_dump(mode="json")
+    body = TransferResponse.from_model(transfer(created)).model_dump(mode="json")
 
     assert body["created_at"] == "2026-10-13T10:11:12.123456Z"
 
 
-def test_a_time_in_another_zone_is_written_as_the_same_instant_in_utc(response_model) -> None:
+def test_a_time_in_another_zone_is_written_as_the_same_instant_in_utc() -> None:
     created = datetime(2026, 10, 13, 19, 11, 12, tzinfo=TOKYO)
 
-    body = response_model.from_model(transfer(created)).model_dump(mode="json")
+    body = TransferResponse.from_model(transfer(created)).model_dump(mode="json")
 
     assert body["created_at"] == "2026-10-13T10:11:12Z"
