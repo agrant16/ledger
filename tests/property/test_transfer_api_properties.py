@@ -45,7 +45,7 @@ from hypothesis.stateful import (
 )
 
 from ledger.infra.config import load_settings
-from ledger.main import app
+from ledger.main import create_app
 from ledger.service.account_service import create_account
 from tests.db_helpers import reset_database
 from tests.ledger_invariants import assert_ledger_consistent
@@ -69,12 +69,13 @@ class TransferApiMachine(RuleBasedStateMachine):
         try:
             reset_database(self.owner)
             # The real app: entering the client runs its lifespan, which opens the real pool.
-            self.client = TestClient(app, raise_server_exceptions=False)
+            self.app = create_app()
+            self.client = TestClient(self.app, raise_server_exceptions=False)
             self.client.__enter__()
         except BaseException:
             self.owner.close()
             raise
-        self.pool = app.state.pool
+        self.pool = self.app.state.pool
         # account id -> (currency, allow_negative); the model of what each balance must be
         self.accounts: dict[int, tuple[str, bool]] = {}
         self.model: dict[int, int] = {}
