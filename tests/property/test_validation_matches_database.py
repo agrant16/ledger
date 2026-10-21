@@ -20,6 +20,8 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from pydantic import TypeAdapter, ValidationError
 
+from ledger.api.rest.schemas.account_schema import CreateAccountRequest
+from ledger.api.rest.schemas.types import AccountId, AmountMinor, IdempotencyKey
 from tests.db_helpers import VALID_HASH
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
@@ -113,8 +115,6 @@ def accepted_by(adapter: TypeAdapter):
 
 
 def test_an_account_name_the_api_accepts_can_be_stored(conn) -> None:
-    from ledger.api.rest.schemas.account_schema import CreateAccountRequest
-
     def accepts(name) -> bool:
         try:
             CreateAccountRequest.model_validate({"account_name": name, "currency": "USD"})
@@ -134,8 +134,6 @@ def test_an_account_name_the_api_accepts_can_be_stored(conn) -> None:
 
 
 def test_a_currency_the_api_accepts_can_be_stored(conn) -> None:
-    from ledger.api.rest.schemas.account_schema import CreateAccountRequest
-
     def accepts(currency) -> bool:
         try:
             CreateAccountRequest.model_validate({"account_name": "a", "currency": currency})
@@ -154,8 +152,6 @@ def test_a_currency_the_api_accepts_can_be_stored(conn) -> None:
 
 
 def test_an_idempotency_key_the_api_accepts_can_be_stored(conn) -> None:
-    from ledger.api.rest.schemas.types import IdempotencyKey
-
     def store(connection, key) -> None:
         stored_without_complaint(
             connection,
@@ -167,8 +163,6 @@ def test_an_idempotency_key_the_api_accepts_can_be_stored(conn) -> None:
 
 
 def test_an_amount_the_api_accepts_is_a_nonzero_bigint(conn) -> None:
-    from ledger.api.rest.schemas.types import AmountMinor
-
     def store(connection, amount) -> None:
         row = connection.execute("SELECT %s::bigint <> 0", (amount,)).fetchone()
         assert row == (True,)
@@ -177,8 +171,6 @@ def test_an_amount_the_api_accepts_is_a_nonzero_bigint(conn) -> None:
 
 
 def test_an_account_id_the_api_accepts_is_a_positive_bigint(conn) -> None:
-    from ledger.api.rest.schemas.types import AccountId
-
     def store(connection, account_id) -> None:
         row = connection.execute("SELECT %s::bigint >= 1", (account_id,)).fetchone()
         assert row == (True,)
