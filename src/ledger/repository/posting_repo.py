@@ -88,9 +88,7 @@ def insert_claim(
                 INSERT_CLAIM_SQL, (idempotency_key, request_hash, reverses_transaction_id)
             )
             row = cursor.fetchone()
-            if row:
-                return row[0]
-            return None
+            return row[0] if row else None
     except errors.IntegrityError as failure:
         raise LedgerInvariantError("Critical error on insertion of transfer record") from failure
 
@@ -125,8 +123,8 @@ def apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> se
     try:
         with conn.cursor() as cursor:
             updated_accounts = set()
-            for key, delta in deltas.items():
-                cursor.execute(UPDATE_BALANCE_SQL, (delta, key))
+            for account_id, delta in deltas.items():
+                cursor.execute(UPDATE_BALANCE_SQL, (delta, account_id))
                 row = cursor.fetchone()
                 if row:
                     updated_accounts.add(row[0])
