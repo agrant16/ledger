@@ -24,15 +24,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
 
-from ledger.api.rest.error_handlers import RETRY_AFTER_SECONDS
+from ledger.api.rest.error_handlers import RETRY_AFTER_SECONDS, install_error_handling
+from ledger.api.rest.routers.health import router
 from ledger.errors import ServiceBusyError
 
 
 @pytest.fixture
 def app(app_pool: ConnectionPool) -> FastAPI:
-    from ledger.api.rest.error_handlers import install_error_handling
-    from ledger.api.rest.routers.health import router
-
     application = FastAPI()
     install_error_handling(application)
     application.include_router(router)

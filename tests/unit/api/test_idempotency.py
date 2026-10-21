@@ -20,6 +20,8 @@ import pytest
 from pydantic import BaseModel
 
 from ledger.api.rest.idempotency import request_hash
+from ledger.api.rest.schemas.account_schema import CreateAccountRequest
+from ledger.api.rest.schemas.transfer_schema import TransferRequest
 
 TRANSFER = {"from_account_id": 12, "to_account_id": 34, "amount_minor": 2500, "currency": "USD"}
 TRANSFER_JSON = json.dumps(TRANSFER)
@@ -27,8 +29,6 @@ TRANSFER_JSON = json.dumps(TRANSFER)
 
 @pytest.fixture
 def transfer_model():
-    from ledger.api.rest.schemas.transfer_schema import TransferRequest
-
     return TransferRequest
 
 
@@ -39,8 +39,6 @@ def transfer(transfer_model):
 
 @pytest.fixture
 def account_model():
-    from ledger.api.rest.schemas.account_schema import CreateAccountRequest
-
     return CreateAccountRequest
 
 
