@@ -58,6 +58,7 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 # PLC0415: no imports outside the top of a file. A late import needs a `# noqa: PLC0415` and a
 # comment saying why (a circular import, a patch target, or import timing that the test checks).
+# The same rule is stated in CLAUDE.md (Working style).
 select = ["E", "F", "I", "B", "UP", "PLC0415"]
 
 [tool.ruff.lint.isort]
