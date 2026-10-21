@@ -1,12 +1,13 @@
 import uuid
 
-from starlette.types import Receive, Scope, Send
+
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from ledger.infra.logging_config import request_id_ctx_var
 
 
 class RequestIDMiddleware:
-    def __init__(self, app) -> None:
+    def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
