@@ -13,8 +13,10 @@ from ledger.models.account_model import Account
 from ledger.service.account_service import create_account, find_account_by_name
 
 
+DEFAULT_CURRENCIES = ["USD", "EUR",]
+
 class SeedError(Exception):
-    """The seed run cannot continue: the existing data isn’t what the script needs."""
+    """The seed run cannot continue: the existing data isn't what the script needs."""
 
 
 def _currency_validator(value: str) -> str:
@@ -47,7 +49,7 @@ def _set_up_parser() -> argparse.ArgumentParser:
         action="append",
         type=_currency_validator,
         help="Currency code to include (e.g., --currency USD --currency EUR). "
-        "Can be repeated. Defaults to ['USD', 'EUR'].",
+        f"Can be repeated. Defaults to {DEFAULT_CURRENCIES}.",
     )
     parser.add_argument(
         "--per-currency",
@@ -113,7 +115,6 @@ def _create_accounts(
     """The ids file content and one report line per account."""
     ids: dict[str, list[int]] = {currency: [] for currency in currencies}
     report: list[str] = []
-    currencies.sort()
     for currency in sorted(currencies):
         for number in range(1, n + 1):
             account_name = f"funding:{currency}" if number == 1 else f"funding:{currency}:{number}"
@@ -130,6 +131,8 @@ def _write_file(accounts: dict[str, dict[str, list[int]]], target_path: str) -> 
         dir=target.resolve().parent, delete=False, mode="w", encoding="utf-8"
     )
     tmp_path = pathlib.Path(tmp_file.name)
+    # file is opened outside try. This is fine here because if either json.dump or replace
+    # fail the with tmp_file context block has already closed the file and cleanup is done.
     try:
         with tmp_file:
             json.dump(accounts, tmp_file)
@@ -142,7 +145,7 @@ def _write_file(accounts: dict[str, dict[str, list[int]]], target_path: str) -> 
 def main(argv: list[str] | None = None) -> int:
     args = _set_up_parser().parse_args(argv)  # None reads sys.argv; a usage error exits with 2
     # dict.fromkeys drops repeated currencies and keeps the order they were given in.
-    currencies = list(dict.fromkeys(args.currency or ["USD", "EUR"]))
+    currencies = list(dict.fromkeys(args.currency or DEFAULT_CURRENCIES))
 
     try:
         with psycopg.connect(load_settings().app_url, connect_timeout=20) as conn:
