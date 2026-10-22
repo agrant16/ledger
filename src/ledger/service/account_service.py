@@ -77,10 +77,10 @@ def get_entry_history(
 ) -> EntryPage:
     """Returns one page of an account's entries, newest first. (ADR 0014)
 
-    The page is the entries with id below before_id (or the newest, if
-    before_id is None), ordered by id descending.
+    The page is the entries with id below `before_id` (or the newest, if
+    `before_id` is None), ordered by id descending.
 
-    The API guarantees 1 <= limit <= MAX_PAGE_SIZE, so a value outside that
+    The API guarantees 1 <= `limit` <= `MAX_PAGE_SIZE`, so a value outside that
     range is a bug and not a client error.
 
     Args:

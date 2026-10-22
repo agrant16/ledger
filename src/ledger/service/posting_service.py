@@ -24,7 +24,7 @@ def claim_transaction(
     request_hash: str,
     reverses_transaction_id: int | None = None,
 ) -> Claim:
-    """Claims an idempotency key, or recognises a repeat of an earlier claim. (rule 5)
+    """Claims an idempotency key, or recognizes a repeat of an earlier claim. (rule 5)
 
     A new key inserts the transactions row and returns its id with
     replay=False. If the key already exists, the stored request hash decides:
@@ -184,10 +184,7 @@ def claim_and_post(
         UnknownAccountError: The debit or credit account does not exist.
         CurrencyMismatchError: The transfer currency differs from an account's currency.
         InsufficientFundsError: The debit account cannot cover the transfer amount.
-        LedgerInvariantError: The claimed row cannot be found, or a balance row was not
-            updated.
-
-    Propagates repository level safety-net violations.
+        LedgerInvariantError: Propagates from called functions.
     """
     claim = claim_transaction(conn, idempotency_key, request_hash)
     if not claim.replay:
