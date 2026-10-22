@@ -26,12 +26,19 @@ def _factory(*args, **kwargs):
 
 
 def install_log_record_factory():
-    """Applies the request-id from context variables to the log record."""
+    """Sets the log record factory so every record carries the current `request_id`.
+
+    Outside a request the `request_id` is `-`.
+    """
     logging.setLogRecordFactory(_factory)
 
 
 def configure_logging() -> None:
-    """Adds the uvicorn duplicate filter to remove duplicate 500 logs. Safe to call twice."""
+    """Configures logging for the service and for scripts.
+
+    Installs the request id log record factory, sets the log format, and adds the filter
+    that drops uvicorn's duplicate 500 record. Safe to call more than once.
+    """
     install_log_record_factory()
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s [%(request_id)s] %(message)s"

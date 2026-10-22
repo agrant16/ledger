@@ -28,7 +28,11 @@ class LedgerInvariantError(Exception):
 
 
 class DuplicateAccountNameError(LedgerError):
-    """An account with this name already exists."""
+    """An account with this name already exists.
+
+    Attributes:
+        account_name (str): The name that is already taken.
+    """
 
     def __init__(self, account_name: str):
         self.account_name = account_name
@@ -54,14 +58,10 @@ class CurrencyMismatchError(LedgerError):
 class InsufficientFundsError(LedgerError):
     """A non-funding account would go negative (rule 4).
 
-    Args:
-        account_id: The account id of the sender
-        balance_minor: The current balance of the sender
-        net_change_minor: The net change that would be applied to the sender balance
-
-    Example: Non-funding account A transfers 5000 to non-funding account B. A's
-    current balance is 4000. The net change is -5000 which results in a new balance of
-    -1000. This raises an InsufficientFundsError.
+    Attributes:
+        account_id (int): The account id of the sender.
+        balance_minor (int): The current balance of the sender.
+        net_change_minor (int): The net change that would be applied to the sender balance.
     """
 
     def __init__(self, account_id: int, balance_minor: int, net_change_minor: int):
