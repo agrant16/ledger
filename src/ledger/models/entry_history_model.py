@@ -27,8 +27,8 @@ class EntryPage:
 
     Attributes:
         entries (tuple[HistoryEntry, ...]): A page of entries.
-       has_more (bool): says whether older entries exist beyond this page.
-       """
+        has_more (bool): says whether older entries exist beyond this page.
+    """
 
     entries: tuple[HistoryEntry, ...]
     has_more: bool
