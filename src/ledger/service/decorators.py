@@ -8,14 +8,11 @@ def transactional_service_method[**P, R](func: Callable[P, R]) -> Callable[P, R]
     """Refuse a connection that is None or in autocommit mode before calling the function.
 
     Service functions never commit, because the caller owns the transaction
-    (ADR 0005). In autocommit mode each statement would commit on its own, so
-    a failure partway through a posting could not be rolled back. The wrapper
-    raises LedgerInvariantError instead, since this is a programming error and
-    not a client error.
+    (ADR 0005). Calling one without a transaction in progress is a programming
+    error, not a client error, so the wrapper raises LedgerInvariantError.
 
-    The connection is the `conn` keyword argument if given, otherwise the
-    first positional argument, so every decorated function must take the
-    connection first.
+    The decorated function must take the connection as its first argument or as
+    `conn`.
 
     Raises:
         LedgerInvariantError: A connection was not given or it is in autocommit mode.

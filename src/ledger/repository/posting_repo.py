@@ -82,6 +82,21 @@ def insert_claim(
     request_hash: str,
     reverses_transaction_id: int | None = None,
 ) -> int | None:
+    """Insert the transactions row that claims an idempotency key. (rule 5)
+
+    Args:
+        conn: An active, open PostgreSQL connection or transaction context.
+        idempotency_key: The client's Idempotency-Key.
+        request_hash: The canonical hash of the request.
+        reverses_transaction_id: The transaction this one reverses, if any.
+
+    Returns:
+        The new transaction id, or None if the key already existed, in which
+        case nothing is written.
+
+    Raises:
+        LedgerInvariantError: The database safety net rejected the insert.
+    """
     try:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -94,6 +109,17 @@ def insert_claim(
 
 
 def find_claim(conn: psycopg.Connection, idempotency_key: str) -> tuple[int, str] | None:
+    """Retrieves the stored transaction ID and request hash for a given idempotency key.
+
+    Args:
+        conn: An active, open PostgreSQL connection or transaction context.
+        idempotency_key: The unique string identifier sent by the client to track
+            the lifecycle of this specific request.
+
+    Returns:
+        A tuple containing ``(transaction_id, request_hash)`` if a matching claim is found.
+        Returns ``None`` if the idempotency key has never been seen before.
+    """
     with conn.cursor() as cursor:
         cursor.execute(SELECT_CLAIM_SQL, (idempotency_key,))
         row = cursor.fetchone()
@@ -101,6 +127,22 @@ def find_claim(conn: psycopg.Connection, idempotency_key: str) -> tuple[int, str
 
 
 def lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int, LockedAccount]:
+    """Lock the balance rows of the given accounts and read them. (rule 4)
+
+    The rows stay locked until the caller's transaction ends. The locks are taken
+    in ascending account id, which keeps concurrent transfers from deadlocking.
+    (ADR 0006)
+
+    Args:
+        conn: An active, open PostgreSQL connection or transaction context.
+        account_ids: The accounts to lock.
+
+    Returns:
+        The locked accounts keyed by account id, in ascending id order. Each holds
+        the account's currency, its allow_negative flag and its balance. An unknown
+        account id is absent. Overdraft must be checked against these balances,
+        not a separate read.
+    """
     with conn.cursor() as cursor:
         cursor.execute(LOCK_ACCOUNTS_SQL, (account_ids,))
         rows = cursor.fetchall()
@@ -108,6 +150,16 @@ def lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int,
 
 
 def insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
+    """Insert the entries of a transaction. (rules 1, 6)
+
+    Args:
+        conn: An active, open PostgreSQL connection or transaction context.
+        transaction_id: The id of the transaction associated with the entries
+        entries: The entries to be inserted
+
+    Raises:
+        LedgerInvariantError: The database safety net rejected an entry.
+    """
     try:
         with conn.cursor() as cursor:
             params = [
@@ -120,6 +172,19 @@ def insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[
 
 
 def apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> set[int]:
+    """Add each delta to its account's cached balance. (rule 3)
+
+    Args:
+        conn: An active, open PostgreSQL connection or transaction context.
+        deltas: The balance deltas in the form {"account_id": net_change_delta}
+
+    Returns:
+        The ids of the accounts whose balance row was updated. A requested id
+        missing from the result has no balance row.
+
+    Raises:
+        LedgerInvariantError: The database safety net rejected an update.
+    """
     try:
         with conn.cursor() as cursor:
             updated_accounts = set()
@@ -134,6 +199,16 @@ def apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> se
 
 
 def find_transfer(conn: psycopg.Connection, id: int) -> Transfer | None:
+    """Retrieves a specific transfer record and its associated ledger entries.
+
+    Args:
+        conn: An active, open PostgreSQL connection or transaction context.
+        id: The unique identifier of the transfer to locate.
+
+    Returns:
+        A fully populated ``Transfer`` object with its ``entries`` ordered by their entry ID.
+        Returns ``None`` if no transfer matches the provided ID.
+    """
     with conn.cursor() as cursor:
         cursor.execute(SELECT_TRANSFER_SQL, (id,))
         transfer_row = cursor.fetchone()

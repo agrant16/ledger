@@ -25,9 +25,6 @@ def create_account(
 def get_balance(conn: psycopg.Connection, account_id: int) -> Balance:
     """Return the cached balance of an account. (rule 3)
 
-    LedgerInvariantError should not happen here as create_account creates both
-    the account and initial balance row, but bubble up a bug if it does.
-
     Raises:
         UnknownAccountError: The account does not exist.
         LedgerInvariantError: The account exists but has no balance row.
@@ -54,8 +51,7 @@ def get_entry_history(
     """Return one page of an account's entries, newest first. (ADR 0014)
 
     The page is the entries with id below before_id (or the newest, if
-    before_id is None), ordered by id descending. limit + 1 rows are fetched
-    so that has_more is known without a count, and only limit are returned.
+    before_id is None), ordered by id descending.
 
     The API guarantees 1 <= limit <= MAX_PAGE_SIZE, so a value outside that
     range is a bug and not a client error.

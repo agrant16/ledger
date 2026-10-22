@@ -69,6 +69,22 @@ FIND_ENTRIES_SQL = """
 def insert_account(
     conn: psycopg.Connection, account_name: str, currency: str, allow_negative: bool
 ) -> Account:
+    """Insert an account row. (ADR 0013)
+
+    Args:
+        conn: An active, open PostgreSQL connection or transaction context.
+        account_name: The account's unique name.
+        currency: The account's currency code.
+        allow_negative: Whether the account may go below zero.
+
+    Returns:
+        The stored account.
+
+    Raises:
+        DuplicateAccountNameError: An account with this name already exists.
+        LedgerInvariantError: The database safety net rejected the insert for any
+            other reason.
+    """
     with conn.cursor() as cursor:
         try:
             cursor.execute(INSERT_ACCOUNTS_SQL, (account_name, currency, allow_negative))
@@ -84,6 +100,16 @@ def insert_account(
 
 
 def insert_balance(conn: psycopg.Connection, account_id: int, allow_negative: bool) -> None:
+    """Insert an account's zero balance row. (rule 3)
+
+    Args:
+        conn: An active, open PostgreSQL connection or transaction context.
+        account_id: The account's unique ID.
+        allow_negative: Whether the account may go below zero (protected account or not).
+
+    Raises:
+        LedgerInvariantError: The database safety net rejected the insert.
+    """
     with conn.cursor() as cursor:
         try:
             cursor.execute(INSERT_BALANCES_SQL, (account_id, allow_negative))
@@ -94,6 +120,18 @@ def insert_balance(conn: psycopg.Connection, account_id: int, allow_negative: bo
 
 
 def find_balance(conn: psycopg.Connection, account_id: int) -> Balance | None:
+    """Return the cached balance of an account, or None if the account does not exist.
+
+    Its balance_minor is None if the account has no balance row.
+
+    Args:
+        conn: An active, open PostgreSQL connection or transaction context.
+        account_id: The account's unique ID.
+
+    Returns:
+        A fully populated ``Balance`` object. Returns ``None`` if no account matches the
+        provided ID.
+    """
     with conn.cursor() as cursor:
         cursor.execute(GET_BALANCE_SQL, (account_id,))
         row = cursor.fetchone()
@@ -112,6 +150,15 @@ def find_account_by_name(conn: psycopg.Connection, account_name: str) -> Account
 
 
 def account_exists(conn: psycopg.Connection, account_id: int) -> bool:
+    """Checks the database to verify if an account ID exists.
+
+    Args:
+        conn: An active, open PostgreSQL connection or transaction context.
+        account_id: The account identifier to check.
+
+    Returns:
+        True if the account is registered in the ledger, False otherwise.
+    """
     with conn.cursor() as cursor:
         return cursor.execute(ACCOUNT_EXISTS_SQL, (account_id,)).fetchone()[0]
 
@@ -119,6 +166,20 @@ def account_exists(conn: psycopg.Connection, account_id: int) -> bool:
 def find_entries(
     conn: psycopg.Connection, account_id: int, before_id: int | None, limit: int
 ) -> list[HistoryEntry]:
+    """Return up to limit entries of an account, newest first.
+
+    Only entries with an id below before_id are returned. A before_id of None
+    starts from the newest entry. (ADR 0014)
+
+    Args:
+        conn: An active, open PostgreSQL connection or transaction context.
+        account_id: The account's unique ID.
+        before_id: An integer representing the where to cut off the returned entries.
+        limit: The maximum number of entries to return.
+
+    Returns:
+        A list of fully populated ``HistoryEntry`` objects.
+    """
     with conn.cursor() as cursor:
         cursor.execute(FIND_ENTRIES_SQL, (account_id, before_id, limit))
         rows = cursor.fetchall()
