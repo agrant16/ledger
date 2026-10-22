@@ -30,9 +30,8 @@ def claim_transaction(
     replay=False. If the key already exists, the stored request hash decides:
     the same hash is a replay of the original request and returns the original
     id with replay=True, and nothing is written. A different hash means the key
-    was reused for another request and raises IdempotencyConflictError. The
-    stored row is read in a second statement because the app role cannot
-    UPDATE transactions. (ADR 0012)
+    was reused for another request and raises IdempotencyConflictError.
+    (ADR 0012)
 
     Args:
         conn: The request's connection, inside the caller's transaction.
@@ -72,17 +71,17 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
     """Validate and write the entries of a claimed transaction. (rules 1, 4, 6)
 
     The checks run in a fixed order and nothing is written until all of them
-    pass, so a rejected post leaves no entries and no balance change.
+    pass, so a rejected post leaves no entries and no balance change. An account
+    that may not go negative stays at or above zero under concurrent posts.
+    (ADR 0006)
 
     Checks:
     1. entries are present
     2. they sum to zero per currency (rule 1)
-    3. the entries are netted into one delta per account
-    4. the accounts are locked in ascending id order (ADR 0006) and each must exist
-    5. each entry's currency matches its account (rule 6)
-    6. no account with allow_negative false would go below zero (rule 4).
-    7. The overdraft check uses the balance returned by the same statement that took
-       the lock, so no other transaction can change it before this one commits.
+    3. every account named exists
+    4. each entry's currency matches its account (rule 6)
+    5. no account with allow_negative false would end below zero once all the
+       entries are applied (rule 4)
 
     Only then are the entries inserted and the balances updated.
 
