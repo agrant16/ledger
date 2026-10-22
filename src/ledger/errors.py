@@ -18,7 +18,7 @@ class LedgerInvariantError(Exception):
     Deliberately not a LedgerError. LedgerError subclasses are expected
     outcomes (bad input, insufficient funds, a busy database) that the API
     maps to a 4xx or 503. This one signals a defect, so the API returns a
-    500, the error is logged, and it is never retried. psycopg.IntegrityError
+    500, the error is logged, and it is never retried. psycopg.errors.IntegrityError
     also maps to LedgerInvariantError as they should not happen if database
     operations are written correctly.
 
@@ -36,11 +36,11 @@ class DuplicateAccountNameError(LedgerError):
 
     def __init__(self, account_name: str):
         self.account_name = account_name
-        super().__init__(f"Account with name'{self.account_name}' already exists")
+        super().__init__(f"Account with name '{self.account_name}' already exists")
 
 
 class InvalidRequestError(LedgerError):
-    """The request failed validation. Maps to 400, not FastAPI’s default 422."""
+    """The request failed validation. Maps to 400, not FastAPI's default 422."""
 
 
 class UnknownAccountError(LedgerError):
@@ -94,7 +94,7 @@ class ReversalOfReversalError(LedgerError):
 
 
 class ServiceBusyError(LedgerError):
-    """No pooled connection is free within pool timeout. Returns 503 and safe for retry"""
+    """No pooled connection is free within pool timeout. Returns 503 and safe for retry."""
 
 
 class UnbalancedEntriesError(LedgerInvariantError):
