@@ -20,13 +20,15 @@ class LedgerInvariantError(Exception):
     maps to a 4xx or 503. This one signals a defect, so the API returns a
     500, the error is logged, and it is never retried.
 
-    Example: the entries passed to post_transaction do not sum to zero per
-    currency (UnbalancedEntriesError).
+    Raised by our own code (for example UnbalancedEntriesError) and by
+    run_in_transaction when the database safety net rejects a write with an
+    IntegrityError (for example the constraint trigger that checks entries sum
+    to zero per currency).
     """
 
 
 class DuplicateAccountNameError(LedgerError):
-    """An account with this name already exists. Maps to 409."""
+    """An account with this name already exists."""
 
     def __init__(self, account_name: str):
         self.account_name = account_name
@@ -50,7 +52,7 @@ class CurrencyMismatchError(LedgerError):
 
 
 class InsufficientFundsError(LedgerError):
-    """A non-funding account would go negative (rule 4). Maps to 422.
+    """A non-funding account would go negative (rule 4).
 
     Args:
         account_id: The account id of the sender
@@ -85,7 +87,7 @@ class ReversalOfReversalError(LedgerError):
 
 
 class ServiceBusyError(LedgerError):
-    """No pooled connection is free within the pool timeout. Maps to a 503 and safe for retry."""
+    """No pooled connection is free within the pool timeout. This is safe for retry."""
 
 
 class UnbalancedEntriesError(LedgerInvariantError):

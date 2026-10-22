@@ -3,8 +3,10 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Entry:
-    """One side of a money movement. A sender entry has a negative amount_minor.
-    A receiver entry has a positive amount_minor.
+    """One side of a money movement.
+
+    A sender entry has a negative amount_minor and a receiver entry has a
+    positive one.
 
     Attributes:
         account_id (int): The account id associated with the entry.
