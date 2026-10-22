@@ -53,7 +53,8 @@ def run_in_transaction[T](
     The isolation level is the default, READ COMMITTED. With `read_only`, the transaction
     is set READ ONLY as its first statement, so any write in `work` fails.
 
-    Returns whatever `work` returns.
+    Returns:
+         Whatever the `work` callable returns.
 
     Raises:
         ServiceBusyError: no connection became free within the pool timeout.
