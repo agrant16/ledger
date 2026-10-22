@@ -3,8 +3,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Entry:
-    """One side of a money movement. A sender entry has a negative amount_minor (credit).
-     A receiver entry has a positive amount_minor (debit).
+    """One side of a money movement. A sender entry has a negative amount_minor.
+     A receiver entry has a positive amount_minor.
 
     Attributes:
         account_id (int): The account id associated with the entry.
@@ -37,9 +37,10 @@ class LockedAccount:
     records are locked for the balance table update.
 
     Attributes:
-        currency (str): The currency of the money movement.
+        currency (str): The currency of the account.
         allow_negative (bool): Whether the account is protected (allow_negative=False) or not.
-        balance_minor (int): The balance amount of the locked account."""
+        balance_minor (int): The balance amount of the locked account.
+    """
 
     currency: str
     allow_negative: bool
