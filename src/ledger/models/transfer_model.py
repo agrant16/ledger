@@ -21,13 +21,13 @@ class TransferEntry:
 
 @dataclass(frozen=True)
 class Transfer:
-    """The transfer and it's associated entries.
+    """The transfer and its associated entries.
 
     Attributes:
         id (int): The id of the transfer.
         reverses_transaction_id (int | None): The id of the transaction this transfer reversed.
         created_at (datetime): The date and time the transfer was created.
-        entries (list[TransferEntry]): The entries associated with this transfer.
+        entries (tuple[TransferEntry]): The entries associated with this transfer.
     """
 
     id: int

@@ -44,15 +44,16 @@ class InvalidRequestError(LedgerError):
 
 
 class UnknownAccountError(LedgerError):
-    """The account id given in the request cannot be found."""
+    pass
 
 
 class UnknownTransferError(LedgerError):
-    """The requested transfer ID cannot be found."""
+    pass
 
 
 class CurrencyMismatchError(LedgerError):
-    """A transfer or entry's currency differs from the account's currency."""
+    """A transfer or entry's currency differs from the account's currency.
+    Defends rule 6 from the design doc."""
 
 
 class InsufficientFundsError(LedgerError):
