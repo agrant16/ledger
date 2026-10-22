@@ -28,8 +28,8 @@ def install_log_record_factory():
 
 def configure_logging() -> None:
     """Configure logging for the service. It is safe to call twice. The configuration adds
-     the uvicorn duplicate filter to remove duplicate 500 logs. Reusable by scripts
-     """
+    the uvicorn duplicate filter to remove duplicate 500 logs. Reusable by scripts
+    """
 
     install_log_record_factory()
     logging.basicConfig(
