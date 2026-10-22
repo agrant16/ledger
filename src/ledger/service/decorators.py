@@ -16,6 +16,9 @@ def transactional_service_method[**P, R](func: Callable[P, R]) -> Callable[P, R]
     The connection is the `conn` keyword argument if given, otherwise the
     first positional argument, so every decorated function must take the
     connection first.
+
+    Raises:
+        LedgerInvariantError: A connection was not given or it is in autocommit mode.
     """
 
     @wraps(func)
