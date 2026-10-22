@@ -4,7 +4,7 @@ from datetime import datetime
 
 @dataclass(frozen=True)
 class TransferEntry:
-    """Represents one side of a transfer.
+    """One side of a transfer.
 
     Attributes:
         id (int): The id of the entry.
@@ -21,13 +21,14 @@ class TransferEntry:
 
 @dataclass(frozen=True)
 class Transfer:
-    """The transfer and its associated entries.
+    """A transfer and its entries, in the order they were written.
 
     Attributes:
-        id (int): The id of the transfer.
-        reverses_transaction_id (int | None): The id of the transaction this transfer reversed.
-        created_at (datetime): The date and time the transfer was created.
-        entries (tuple[TransferEntry, ...]): The entries associated with this transfer.
+        id (int): The id of the transaction.
+        reverses_transaction_id (int | None): The id of the transaction this one reverses,
+            or `None` for a normal transfer.
+        created_at (datetime): When the transaction was created.
+        entries (tuple[TransferEntry, ...]): The transfer's entries.
     """
 
     id: int

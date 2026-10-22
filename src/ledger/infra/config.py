@@ -42,13 +42,24 @@ class Settings(BaseSettings):
     concurrency_cap: PositiveInt = Field(default=CONCURRENCY_CAP, alias="CONCURRENCY_CAP")
 
     def get_startup_log_message(self) -> str:
-        """Returns a startup log message that lists public settings key/value pairs.
-        Ignores database urls and migration directories. If any non-public settings
-        are added going forward they will need to be added to the list.
+        """Returns the startup log line, `Starting app: name=value ...`, for the public settings.
+
+        Database URLs and migration directories are never included.
+
+        Returns:
+            The log message.
         """
         message = " ".join(f"{k}={v}" for k, v in self.model_dump().items() if k in PUBLIC_SETTINGS)
         return f"Starting app: {message}"
 
 
 def load_settings() -> Settings:
+    """Loads the service settings from the environment.
+
+    Returns:
+        The settings, with defaults for any variable that is not set.
+
+    Raises:
+        pydantic.ValidationError: A variable fails validation, such as a zero pool size.
+    """
     return Settings()

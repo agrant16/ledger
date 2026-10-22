@@ -17,17 +17,14 @@ class HistoryEntry:
 
 @dataclass(frozen=True)
 class EntryPage:
-    """One page of an account's entry history, newest first by entry id.
+    """One page of an account's entry history, newest first by entry id. (ADR 0014)
 
-    `entries` holds at most the requested `limit` entries. The service learns if
-    there are more entries by fetching `limit + 1` rows and trimming the extra one,
-    so it needs no count query. The API layer turns `has_more` into `next_cursor`,
-    encoding the id of the last entry on the page; the next request passes it back
-    as `before_id`.
+    `entries` holds at most the requested `limit` entries. The API layer turns
+    `has_more` into `next_cursor`.
 
     Attributes:
         entries (tuple[HistoryEntry, ...]): A page of entries.
-        has_more (bool): Says whether older entries exist beyond this page.
+        has_more (bool): Whether older entries exist beyond this page.
     """
 
     entries: tuple[HistoryEntry, ...]

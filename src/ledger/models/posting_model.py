@@ -5,8 +5,7 @@ from dataclasses import dataclass
 class Entry:
     """One side of a money movement.
 
-    A sender entry has a negative amount_minor and a receiver entry has a
-    positive one.
+    A sender entry has a negative `amount_minor` and a receiver entry has a positive one.
 
     Attributes:
         account_id (int): The account id associated with the entry.
@@ -21,12 +20,11 @@ class Entry:
 
 @dataclass(frozen=True)
 class Claim:
-    """Result of claiming an idempotency key. A replay is a transfer whose key has
-    already been claimed.
+    """The result of claiming an idempotency key.
 
     Attributes:
-        transaction_id (int): The transaction id associated with the claim.
-        replay (bool): Whether the claim is a replay or not.
+        transaction_id (int): The id of the transaction row for the key.
+        replay (bool): Whether the key was already claimed by an earlier identical request.
     """
 
     transaction_id: int
@@ -35,13 +33,12 @@ class Claim:
 
 @dataclass(frozen=True)
 class LockedAccount:
-    """A simple account model used to store balance information while the account
-    records are locked for the balance table update. (rule 4)
+    """An account's currency, protection flag and locked balance. (rule 4)
 
     Attributes:
         currency (str): The currency of the account.
-        allow_negative (bool): Whether the account is protected (allow_negative=False) or not.
-        balance_minor (int): The balance returned by the locking SELECT ... FOR UPDATE.
+        allow_negative (bool): Whether the account may go negative (a funding account).
+        balance_minor (int): The balance returned by the locking `SELECT ... FOR UPDATE`.
     """
 
     currency: str

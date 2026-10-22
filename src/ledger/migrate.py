@@ -21,7 +21,18 @@ def _get_integer_prefix(path: Path) -> int:
 
 
 def find_migrations(directory: Path) -> list[Path]:
-    """Return migration files in numeric-prefix order. Fails on a bad name or repeated number."""
+    """Finds the migration files in a directory.
+
+    Args:
+        directory: The folder of numbered `.sql` files.
+
+    Returns:
+        The migration files in numeric-prefix order. Empty if the folder does not exist.
+
+    Raises:
+        ValueError: A file name does not look like `001_create_x.sql`, or two files share
+            a number.
+    """
     if not directory.is_dir():
         return []
     files = list(directory.glob("*.sql"))
@@ -39,7 +50,22 @@ def find_migrations(directory: Path) -> list[Path]:
 
 
 def run_migrations(owner_url: str, directory: Path) -> list[str]:
-    """Apply every unapplied migration, each in its own transaction. Returns names applied."""
+    """Applies every unapplied migration, each in its own transaction.
+
+    Concurrent runs are serialized.
+
+    Args:
+        owner_url: The owner role's connection URL.
+        directory: The folder of numbered `.sql` files.
+
+    Returns:
+        The names of the migrations applied in this run.
+
+    Raises:
+        ValueError: A migration file name is invalid or repeated (see `find_migrations`).
+        psycopg.Error: A migration failed. Its transaction is rolled back and the
+            migrations applied before it stay applied.
+    """
     applied_now: list[str] = []
     files = find_migrations(directory)
     with psycopg.connect(owner_url, autocommit=True) as conn:
