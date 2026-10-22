@@ -40,23 +40,29 @@ def run_in_transaction[T](
 ) -> T:
     """Run `work` on one pooled connection as a single database transaction.
 
-    The connection is committed when `work` returns and rolled back if it raises, so
-    service functions never commit (the caller owns the transaction). `work` gets the
-    one connection for the whole request and must not take a second from the pool.
-    A retry should wrap the whole call, so the idempotency key claim and the posting
-    are retried together.
+    This is where a request's transaction starts and ends. Service functions take the
+    connection and never commit (the caller owns the transaction), so everything `work`
+    does either commits together when it returns or rolls back together when it raises.
 
-    With `read_only`, the transaction is set READ ONLY before `work` runs. The
-    isolation level is the default, READ COMMITTED.
+    `work` receives the one connection for the whole request. It must not commit or roll
+    back, and it must not take a second connection from the pool while holding this one
+    (with every connection held by a request waiting for another, the pool would
+    deadlock). A retry should wrap the whole call, not part of `work`, so the idempotency
+    key claim and the posting are retried together on a fresh transaction.
+
+    The isolation level is the default, READ COMMITTED. With `read_only`, the transaction
+    is set READ ONLY as its first statement, so any write in `work` fails.
 
     Returns whatever `work` returns.
 
     Raises:
         ServiceBusyError: no connection became free within the pool timeout.
-        LedgerInvariantError: the database rejected the write with an integrity
-            error (a constraint, such as a CHECK or foreign key, was violated). This
-            is a bug that the database safety net caught, not an expected failure,
-            so it is not a `LedgerError` and the API returns a logged 500.
+        LedgerInvariantError: the database raised an `IntegrityError` (a CHECK, foreign
+            key, unique or similar constraint), whether during `work` or when the
+            transaction commits. That is a bug the database safety net caught, so it is
+            not a `LedgerError` and the API returns a logged 500. An expected conflict,
+            such as a replayed idempotency key, must be handled inside `work` (for
+            example with `ON CONFLICT`) or it ends up here.
 
     Any other exception from `work`, including `LedgerError` subclasses, rolls the
     transaction back and propagates unchanged.
