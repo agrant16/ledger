@@ -17,10 +17,10 @@ class HistoryEntry:
 
 @dataclass(frozen=True)
 class EntryPage:
-    """One page of an account's entry history, newest first by entry id.
+    """One page of an account's entry history, newest first by entry id. (ADR 0014)
 
     `entries` holds at most the requested `limit` entries. The API layer turns
-    `has_more` into `next_cursor`. (ADR 0014)
+    `has_more` into `next_cursor`.
 
     Attributes:
         entries (tuple[HistoryEntry, ...]): A page of entries.

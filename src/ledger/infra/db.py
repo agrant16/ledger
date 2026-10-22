@@ -12,8 +12,7 @@ def create_pool(settings: Settings) -> ConnectionPool:
     """Creates a fixed-size pool of app-role connections that never grows.
 
     A request must use one connection for its whole transaction and never take a second
-    while holding the first: with every connection held by a request waiting for another,
-    the pool would deadlock.
+    while holding the first.
 
     Args:
         settings: The service settings (app-role URL, pool size and wait timeout).

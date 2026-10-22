@@ -54,4 +54,12 @@ class Settings(BaseSettings):
 
 
 def load_settings() -> Settings:
+    """Loads the service settings from the environment.
+
+    Returns:
+        The settings, with defaults for any variable that is not set.
+
+    Raises:
+        pydantic.ValidationError: A variable fails validation, such as a zero pool size.
+    """
     return Settings()
