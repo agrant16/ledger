@@ -9,6 +9,8 @@ _original_factory = logging.getLogRecordFactory()
 
 
 class DropUvicornDuplicate(logging.Filter):
+    """Filter class to remove uvicorn 500 logs as they duplicate service 500 logs."""
+
     def filter(self, record: logging.LogRecord) -> bool:
         return record.getMessage().strip() != UVICORN_DUPLICATE
 
@@ -24,6 +26,9 @@ def install_log_record_factory():
 
 
 def configure_logging() -> None:
+    """Configure logging for the service. Safe to call twice. Adds the uvicorn duplicate
+    filter to remove duplicate 500 logs."""
+
     install_log_record_factory()
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s [%(request_id)s] %(message)s"
