@@ -25,6 +25,9 @@ def create_account(
 def get_balance(conn: psycopg.Connection, account_id: int) -> Balance:
     """Return the cached balance of an account. (rule 3)
 
+    LedgerInvariantError should not happen here as create_account creates both
+    the account and initial balance row, but bubble up a bug if it does.
+
     Raises:
         UnknownAccountError: The account does not exist.
         LedgerInvariantError: The account exists but has no balance row.
@@ -64,7 +67,7 @@ def get_entry_history(
         limit: The page size.
 
     Returns:
-        EntryPage: At most limit entries and whether older ones exist.
+        At most limit entries and whether older ones exist.
 
     Raises:
         LedgerInvariantError: limit is outside the allowed range.
