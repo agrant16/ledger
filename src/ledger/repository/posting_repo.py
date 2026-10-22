@@ -109,7 +109,25 @@ def insert_claim(
 
 
 def find_claim(conn: psycopg.Connection, idempotency_key: str) -> tuple[int, str] | None:
-    """Return the transaction id and request hash stored for an idempotency key, or None."""
+    """Retrieves the stored transaction ID and request hash for a given idempotency key.
+
+    This function acts as a safety net against duplicate requests. It queries the
+    underlying ledger state to see if an operation with this exact key has already
+    been processed or claimed.
+
+    Args:
+        conn: An active, open PostgreSQL connection or transaction context.
+        idempotency_key: The unique string identifier sent by the client to track
+            the lifecycle of this specific request.
+
+    Returns:
+        A tuple containing ``(transaction_id, request_hash)`` if a matching claim is found.
+        Returns ``None`` if the idempotency key has never been seen before.
+
+    Raises:
+        psycopg.DatabaseError: If the execution of the query fails due to a network
+            interruption, permission issue, or database constraint violation.
+    """
     with conn.cursor() as cursor:
         cursor.execute(SELECT_CLAIM_SQL, (idempotency_key,))
         row = cursor.fetchone()
@@ -141,6 +159,11 @@ def lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int,
 
 def insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
     """Insert the entries of a transaction. (rules 1, 6)
+
+    Args:
+        conn: The request's connection, inside the caller's transaction.
+        transaction_id: The id of the transfer associated with the entries
+        entries: The entries to be inserted
 
     Raises:
         LedgerInvariantError: The database safety net rejected an entry.
@@ -180,7 +203,25 @@ def apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> se
 
 
 def find_transfer(conn: psycopg.Connection, id: int) -> Transfer | None:
-    """Return a transaction with its entries ordered by entry id, or None if it does not exist."""
+    """Retrieves a specific transfer record and its associated ledger entries.
+
+    This function performs a dual-query lookup to assemble a complete, immutable
+    ``Transfer`` domain object. It automatically materializes all child entries
+    and guarantees they are structured in sequential order.
+
+    Args:
+        conn: An active PostgreSQL database connection
+            or transaction context.
+        id: The unique identifier of the transfer to locate.
+
+    Returns:
+        A fully populated ``Transfer`` object with its ``entries`` ordered by their entry ID.
+        Returns ``None`` if no transfer matches the provided ID.
+
+    Raises:
+        psycopg.DatabaseError: If either database query fails or a connection
+            timeout occurs.
+    """
     with conn.cursor() as cursor:
         cursor.execute(SELECT_TRANSFER_SQL, (id,))
         transfer_row = cursor.fetchone()
