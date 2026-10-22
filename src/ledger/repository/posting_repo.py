@@ -152,8 +152,8 @@ def insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[
 
     Args:
         conn: An active, open PostgreSQL connection or transaction context.
-        transaction_id: The id of the transaction associated with the entries
-        entries: The entries to be inserted
+        transaction_id: The id of the transaction associated with the entries.
+        entries: The entries to be inserted.
 
     Raises:
         LedgerInvariantError: The database safety net rejected an entry.
@@ -174,7 +174,7 @@ def apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> se
 
     Args:
         conn: An active, open PostgreSQL connection or transaction context.
-        deltas: The balance deltas in the form {"account_id": net_change_delta}
+        deltas: The balance deltas in the form {"account_id": net_change_delta}.
 
     Returns:
         The ids of the accounts whose balance row was updated. A requested id

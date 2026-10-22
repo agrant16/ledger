@@ -93,7 +93,7 @@ def get_entry_history(
         An `EntryPage` of at most `limit` entries, with `has_more` set when older ones exist.
 
     Raises:
-        LedgerInvariantError: limit is outside the allowed range.
+        LedgerInvariantError: The limit is outside the allowed range.
         UnknownAccountError: The account does not exist.
     """
     if not 1 <= limit <= MAX_PAGE_SIZE:
