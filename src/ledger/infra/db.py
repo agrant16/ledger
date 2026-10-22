@@ -40,26 +40,26 @@ def run_in_transaction[T](
 ) -> T:
     """Run `work` on one pooled connection as a single database transaction.
 
-        The connection is committed when `work` returns and rolled back if it raises, so
-        service functions never commit (the caller owns the transaction). `work` gets the
-        one connection for the whole request and must not take a second from the pool.
-        A retry should wrap the whole call, so the idempotency key claim and the posting
-        are retried together.
+    The connection is committed when `work` returns and rolled back if it raises, so
+    service functions never commit (the caller owns the transaction). `work` gets the
+    one connection for the whole request and must not take a second from the pool.
+    A retry should wrap the whole call, so the idempotency key claim and the posting
+    are retried together.
 
-        With `read_only`, the transaction is set READ ONLY before `work` runs. The
-        isolation level is the default, READ COMMITTED.
+    With `read_only`, the transaction is set READ ONLY before `work` runs. The
+    isolation level is the default, READ COMMITTED.
 
-        Returns whatever `work` returns.
+    Returns whatever `work` returns.
 
-        Raises:
-            ServiceBusyError: no connection became free within the pool timeout.
-            LedgerInvariantError: the database rejected the write with an integrity
-                error (a constraint, such as a CHECK or foreign key, was violated). This
-                is a bug that the database safety net caught, not an expected failure,
-                so it is not a `LedgerError` and the API returns a logged 500.
+    Raises:
+        ServiceBusyError: no connection became free within the pool timeout.
+        LedgerInvariantError: the database rejected the write with an integrity
+            error (a constraint, such as a CHECK or foreign key, was violated). This
+            is a bug that the database safety net caught, not an expected failure,
+            so it is not a `LedgerError` and the API returns a logged 500.
 
-        Any other exception from `work`, including `LedgerError` subclasses, rolls the
-        transaction back and propagates unchanged.
+    Any other exception from `work`, including `LedgerError` subclasses, rolls the
+    transaction back and propagates unchanged.
     """
     try:
         with ExitStack() as stack:
