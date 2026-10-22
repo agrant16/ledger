@@ -41,11 +41,12 @@ def claim_transaction(
         reverses_transaction_id: The transaction this one reverses, if any.
 
     Returns:
-        Claim: The transaction id, and whether it is a replay.
+        The transaction id, and whether it is a replay.
 
     Raises:
         IdempotencyConflictError: The key was already used with a different request.
         LedgerInvariantError: The key conflicted but its row cannot be found.
+            Also, propagates repository level safety-net violations.
     """
     transaction_id = posting_repo.insert_claim(
         conn, idempotency_key, request_hash, reverses_transaction_id
@@ -71,15 +72,19 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
     """Validate and write the entries of a claimed transaction. (rules 1, 4, 6)
 
     The checks run in a fixed order and nothing is written until all of them
-    pass, so a rejected post leaves no entries and no balance change:
-    entries are present; they sum to zero per currency (rule 1); the entries
-    are netted into one delta per account; the accounts are locked in
-    ascending id order (ADR 0006) and each must exist; each entry's currency
-    matches its account (rule 6); no account with allow_negative false would
-    go below zero (rule 4). The overdraft check uses the balance returned by
-    the same statement that took the lock, so no other transaction can change
-    it before this one commits. Only then are the entries inserted and the
-    balances updated.
+    pass, so a rejected post leaves no entries and no balance change.
+
+    Checks:
+    1. entries are present
+    2. they sum to zero per currency (rule 1)
+    3. the entries are netted into one delta per account
+    4. the accounts are locked in ascending id order (ADR 0006) and each must exist
+    5. each entry's currency matches its account (rule 6)
+    6. no account with allow_negative false would go below zero (rule 4).
+    7. The overdraft check uses the balance returned by the same statement that took
+       the lock, so no other transaction can change it before this one commits.
+
+    Only then are the entries inserted and the balances updated.
 
     The caller owns the transaction. This function never commits, and on an
     error the caller's rollback also removes the claim. (ADR 0005)
@@ -91,6 +96,7 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
 
     Raises:
         LedgerInvariantError: There are no entries, or a balance row was not updated.
+            Also, propagates repository level safety-net violations.
         UnbalancedEntriesError: The entries do not sum to zero in some currency.
         UnknownAccountError: An entry names an account that does not exist.
         CurrencyMismatchError: An entry's currency differs from its account's.
@@ -168,7 +174,7 @@ def claim_and_post(
         amount_minor: The amount, in minor units.
 
     Returns:
-        Transfer: The transfer, newly posted or replayed, with its entries.
+        The transfer, newly posted or replayed, with its entries.
 
     Raises:
         IdempotencyConflictError: The key was already used with a different request.
