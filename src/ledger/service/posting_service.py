@@ -178,7 +178,10 @@ def claim_and_post(
 
     Raises:
         IdempotencyConflictError: The key was already used with a different request.
-        Exception: Anything post_transaction or get_transfer raises, which is not caught here.
+        UnknownAccountError: The debit or credit account does not exist.
+        CurrencyMismatchError: The transfer currency differs from an account's currency.
+        InsufficientFundsError: The debit account cannot cover the transfer amount.
+        LedgerInvariantError: A critical state check failed or a balance row was not updated.
     """
     claim = claim_transaction(conn, idempotency_key, request_hash)
     if not claim.replay:
