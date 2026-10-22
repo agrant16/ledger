@@ -22,14 +22,12 @@ def _factory(*args, **kwargs):
 
 
 def install_log_record_factory():
-    """Installs the log record factory used for creating logs"""
+    """Applies the request-id from context variables to the log record."""
     logging.setLogRecordFactory(_factory)
 
 
 def configure_logging() -> None:
-    """Configure logging for the service. It is safe to call twice. The configuration adds
-    the uvicorn duplicate filter to remove duplicate 500 logs. Reusable by scripts
-    """
+    """Adds the uvicorn duplicate filter to remove duplicate 500 logs. Safe to call twice."""
 
     install_log_record_factory()
     logging.basicConfig(

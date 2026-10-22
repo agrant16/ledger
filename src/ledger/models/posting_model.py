@@ -19,12 +19,11 @@ class Entry:
 
 @dataclass(frozen=True)
 class Claim:
-    """
-    A claim is the result of claiming a key for the transfer.
+    """A claim is the result of claiming a key for the transfer.
 
     Attributes:
         transaction_id (int): The transaction id associated with the claim.
-        replay (bool): Whether the claim is replay or not (the key has already been claimed).
+        replay (bool): Whether the claim is  a replay or not (the key has already been claimed).
     """
 
     transaction_id: int
@@ -34,7 +33,7 @@ class Claim:
 @dataclass(frozen=True)
 class LockedAccount:
     """A simple account model used to store balance information while the account
-    records are locked for the balance table update.
+    records are locked for the balance table update. rule 4
 
     Attributes:
         currency (str): The currency of the account.

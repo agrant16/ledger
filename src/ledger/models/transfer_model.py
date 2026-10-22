@@ -27,7 +27,7 @@ class Transfer:
         id (int): The id of the transfer.
         reverses_transaction_id (int | None): The id of the transaction this transfer reversed.
         created_at (datetime): The date and time the transfer was created.
-        entries (tuple[TransferEntry]): The entries associated with this transfer.
+        entries (tuple[TransferEntry, ...]): The entries associated with this transfer.
     """
 
     id: int

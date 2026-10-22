@@ -25,9 +25,8 @@ class LedgerInvariantError(Exception):
     Example: the entries passed to post_transaction do not sum to zero per
     currency (UnbalancedEntriesError).
 
-    Example: An account does not have a balance row. This violates a database constraint
-    as the account creation also writes a corresponding balances row. If it doesn't exist,
-    then something did not work correctly within the service.
+    Example: On commit the entries in the database do not sum to zero per currency.
+    Violates the constraint trigger on entries.
     """
 
 
@@ -52,8 +51,7 @@ class UnknownTransferError(LedgerError):
 
 
 class CurrencyMismatchError(LedgerError):
-    """A transfer or entry's currency differs from the account's currency.
-    Defends rule 6 from the design doc."""
+    """A transfer or entry's currency differs from the account's currency. (rule 6)"""
 
 
 class InsufficientFundsError(LedgerError):
@@ -80,9 +78,7 @@ class InsufficientFundsError(LedgerError):
 
 
 class IdempotencyConflictError(LedgerError):
-    """Existing Idempotency key reused with a different request. The request hash doesn't match.
-    Defends rule 5 from the design doc.
-    """
+    """Existing idempotency key reused with a different request (rule 5)."""
 
 
 class AlreadyReversedError(LedgerError):
@@ -94,9 +90,8 @@ class ReversalOfReversalError(LedgerError):
 
 
 class ServiceBusyError(LedgerError):
-    """No pooled connection is free within pool timeout. Returns 503 and safe for retry."""
+    """No pooled connection is free within pool timeout. Safe for retry."""
 
 
 class UnbalancedEntriesError(LedgerInvariantError):
-    """The sum of entries per currency in a transfer is not zero. A bug.
-    Defends rule 1 from the design doc."""
+    """The sum of entries per currency in a transfer is not zero (rule 1). A bug."""
