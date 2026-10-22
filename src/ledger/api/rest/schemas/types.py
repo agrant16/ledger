@@ -47,9 +47,15 @@ def _limit_param(value: object) -> int:
 
 
 def timestamp_converter(value: datetime):
-    """
-    Converts a datetime object to an ISO 8601 time string in UTC with a
-    trailing `Z` like 2026-10-13T10:11:12.123456Z
+    """Converts a datetime to an ISO 8601 string in UTC with a trailing `Z`.
+
+    An example result is `2026-10-13T10:11:12.123456Z`.
+
+    Args:
+        value: The timestamp to convert.
+
+    Returns:
+        The UTC string.
     """
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
