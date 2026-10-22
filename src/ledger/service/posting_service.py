@@ -131,6 +131,8 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
             )
 
     # check that from account has enough balance to cover transactions
+    # uses the same result from locking statement earlier which keeps
+    # rows from being updated by other transactions
     for account_id, delta in sorted(deltas.items()):
         account = locked_accounts[account_id]
         if not account.allow_negative and account.balance_minor + delta < 0:
