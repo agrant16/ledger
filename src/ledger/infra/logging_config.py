@@ -9,7 +9,11 @@ _original_factory = logging.getLogRecordFactory()
 
 
 class DropUvicornDuplicate(logging.Filter):
-    """Drops uvicorn’s ‘Exception in ASGI application’ record, which duplicates the service’s own 500 log."""
+    """Drops uvicorn's duplicate 500 log record.
+
+    Uvicorn logs "Exception in ASGI application" for an unhandled error, which
+    duplicates the service's own 500 log.
+    """
 
     def filter(self, record: logging.LogRecord) -> bool:
         return record.getMessage().strip() != UVICORN_DUPLICATE
