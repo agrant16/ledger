@@ -68,8 +68,8 @@ def run_in_transaction[T](
         The value returned by `work`.
 
     Raises:
-        ServiceBusyError: no connection became free within the pool timeout.
-        LedgerInvariantError: the database raised an `IntegrityError` (a CHECK, foreign
+        ServiceBusyError: No connection became free within the pool timeout.
+        LedgerInvariantError: The database raised an `IntegrityError` (a CHECK, foreign
             key, unique or similar constraint), whether during `work` or when the
             transaction commits. That is a bug the database safety net caught, so it is
             not a `LedgerError` and the API returns a logged 500. An expected conflict,
