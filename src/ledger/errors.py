@@ -18,20 +18,15 @@ class LedgerInvariantError(Exception):
     Deliberately not a LedgerError. LedgerError subclasses are expected
     outcomes (bad input, insufficient funds, a busy database) that the API
     maps to a 4xx or 503. This one signals a defect, so the API returns a
-    500, the error is logged, and it is never retried. psycopg.errors.IntegrityError
-    also maps to LedgerInvariantError as they should not happen if database
-    operations are written correctly.
+    500, the error is logged, and it is never retried.
 
     Example: the entries passed to post_transaction do not sum to zero per
     currency (UnbalancedEntriesError).
-
-    Example: On commit the entries in the database do not sum to zero per currency.
-    Violates the constraint trigger on entries.
     """
 
 
 class DuplicateAccountNameError(LedgerError):
-    """An account with the desired name already exists in the database."""
+    """An account with this name already exists. Maps to 409."""
 
     def __init__(self, account_name: str):
         self.account_name = account_name
@@ -90,7 +85,7 @@ class ReversalOfReversalError(LedgerError):
 
 
 class ServiceBusyError(LedgerError):
-    """No pooled connection is free within pool timeout. Safe for retry."""
+    """No pooled connection is free within the pool timeout. Maps to a 503 and safe for retry."""
 
 
 class UnbalancedEntriesError(LedgerInvariantError):
