@@ -82,6 +82,21 @@ def insert_claim(
     request_hash: str,
     reverses_transaction_id: int | None = None,
 ) -> int | None:
+    """Insert the transactions row that claims an idempotency key. (rule 5)
+
+    Args:
+        conn: The request's connection, inside the caller's transaction.
+        idempotency_key: The client's Idempotency-Key.
+        request_hash: The canonical hash of the request.
+        reverses_transaction_id: The transaction this one reverses, if any.
+
+    Returns:
+        The new transaction id, or None if the key already existed, in which
+        case nothing is written.
+
+    Raises:
+        LedgerInvariantError: The database safety net rejected the insert.
+    """
     try:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -94,6 +109,7 @@ def insert_claim(
 
 
 def find_claim(conn: psycopg.Connection, idempotency_key: str) -> tuple[int, str] | None:
+    """Return the transaction id and request hash stored for an idempotency key, or None."""
     with conn.cursor() as cursor:
         cursor.execute(SELECT_CLAIM_SQL, (idempotency_key,))
         row = cursor.fetchone()
@@ -101,6 +117,22 @@ def find_claim(conn: psycopg.Connection, idempotency_key: str) -> tuple[int, str
 
 
 def lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int, LockedAccount]:
+    """Lock the balance rows of the given accounts and read them. (rule 4)
+
+    The rows stay locked until the caller's transaction ends. The locks are taken
+    in ascending account id, which keeps concurrent transfers from deadlocking.
+    (ADR 0006)
+
+    Args:
+        conn: The request's connection, inside the caller's transaction.
+        account_ids: The accounts to lock.
+
+    Returns:
+        The locked accounts keyed by account id, in ascending id order. Each holds
+        the account's currency, its allow_negative flag and its balance. An unknown
+        account id is absent. Overdraft must be checked against these balances,
+        not a separate read.
+    """
     with conn.cursor() as cursor:
         cursor.execute(LOCK_ACCOUNTS_SQL, (account_ids,))
         rows = cursor.fetchall()
@@ -108,6 +140,11 @@ def lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int,
 
 
 def insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
+    """Insert the entries of a transaction. (rules 1, 6)
+
+    Raises:
+        LedgerInvariantError: The database safety net rejected an entry.
+    """
     try:
         with conn.cursor() as cursor:
             params = [
@@ -120,6 +157,15 @@ def insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[
 
 
 def apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> set[int]:
+    """Add each delta to its account's cached balance. (rule 3)
+
+    Returns:
+        The ids of the accounts whose balance row was updated. A requested id
+        missing from the result has no balance row.
+
+    Raises:
+        LedgerInvariantError: The database safety net rejected an update.
+    """
     try:
         with conn.cursor() as cursor:
             updated_accounts = set()
@@ -134,6 +180,7 @@ def apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> se
 
 
 def find_transfer(conn: psycopg.Connection, id: int) -> Transfer | None:
+    """Return a transaction with its entries ordered by entry id, or None if it does not exist."""
     with conn.cursor() as cursor:
         cursor.execute(SELECT_TRANSFER_SQL, (id,))
         transfer_row = cursor.fetchone()

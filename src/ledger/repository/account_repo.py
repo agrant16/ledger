@@ -69,6 +69,22 @@ FIND_ENTRIES_SQL = """
 def insert_account(
     conn: psycopg.Connection, account_name: str, currency: str, allow_negative: bool
 ) -> Account:
+    """Insert an account row. (ADR 0013)
+
+    Args:
+        conn: The request's connection, inside the caller's transaction.
+        account_name: The account's unique name.
+        currency: The account's currency code.
+        allow_negative: Whether the account may go below zero.
+
+    Returns:
+        The stored account.
+
+    Raises:
+        DuplicateAccountNameError: An account with this name already exists.
+        LedgerInvariantError: The database safety net rejected the insert for any
+            other reason.
+    """
     with conn.cursor() as cursor:
         try:
             cursor.execute(INSERT_ACCOUNTS_SQL, (account_name, currency, allow_negative))
@@ -84,6 +100,11 @@ def insert_account(
 
 
 def insert_balance(conn: psycopg.Connection, account_id: int, allow_negative: bool) -> None:
+    """Insert an account's zero balance row. (rule 3)
+
+    Raises:
+        LedgerInvariantError: The database safety net rejected the insert.
+    """
     with conn.cursor() as cursor:
         try:
             cursor.execute(INSERT_BALANCES_SQL, (account_id, allow_negative))
@@ -94,6 +115,10 @@ def insert_balance(conn: psycopg.Connection, account_id: int, allow_negative: bo
 
 
 def find_balance(conn: psycopg.Connection, account_id: int) -> Balance | None:
+    """Return the cached balance of an account, or None if the account does not exist.
+
+    Its balance_minor is None if the account has no balance row.
+    """
     with conn.cursor() as cursor:
         cursor.execute(GET_BALANCE_SQL, (account_id,))
         row = cursor.fetchone()
@@ -119,6 +144,11 @@ def account_exists(conn: psycopg.Connection, account_id: int) -> bool:
 def find_entries(
     conn: psycopg.Connection, account_id: int, before_id: int | None, limit: int
 ) -> list[HistoryEntry]:
+    """Return up to limit entries of an account, newest first.
+
+    Only entries with an id below before_id are returned. A before_id of None
+    starts from the newest entry. (ADR 0014)
+    """
     with conn.cursor() as cursor:
         cursor.execute(FIND_ENTRIES_SQL, (account_id, before_id, limit))
         rows = cursor.fetchall()
