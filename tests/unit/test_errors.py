@@ -43,3 +43,10 @@ def test_the_two_reversal_conflicts_are_separate_errors() -> None:
     assert errors.AlreadyReversedError is not errors.ReversalOfReversalError
     assert not issubclass(errors.AlreadyReversedError, errors.ReversalOfReversalError)
     assert not issubclass(errors.ReversalOfReversalError, errors.AlreadyReversedError)
+
+
+def test_duplicate_account_name_error_message_names_the_account() -> None:
+    """The message is the `detail` of the 409 response, so clients see this exact wording."""
+    error = errors.DuplicateAccountNameError("customer:alice")
+    assert error.account_name == "customer:alice"
+    assert str(error) == "Account with name 'customer:alice' already exists"

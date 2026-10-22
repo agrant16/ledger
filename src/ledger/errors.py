@@ -13,26 +13,30 @@ class LedgerError(Exception):
 
 
 class LedgerInvariantError(Exception):
-    """A ledger invariant was violated by our own code, which means a bug.
+    """A ledger invariant was violated, which means a bug.
 
     Deliberately not a LedgerError. LedgerError subclasses are expected
     outcomes (bad input, insufficient funds, a busy database) that the API
     maps to a 4xx or 503. This one signals a defect, so the API returns a
     500, the error is logged, and it is never retried.
 
-    Example: the entries passed to post_transaction do not sum to zero per
-    currency (UnbalancedEntriesError).
+    Raised by our own code (for example UnbalancedEntriesError) and by
+    run_in_transaction when the database safety net rejects a write with an
+    IntegrityError (for example the constraint trigger that checks entries sum
+    to zero per currency).
     """
 
 
 class DuplicateAccountNameError(LedgerError):
+    """An account with this name already exists."""
+
     def __init__(self, account_name: str):
         self.account_name = account_name
-        super().__init__(f"Account with '{self.account_name}' already exists")
+        super().__init__(f"Account with name '{self.account_name}' already exists")
 
 
 class InvalidRequestError(LedgerError):
-    pass
+    """The request failed validation. Maps to 400, not FastAPI's default 422."""
 
 
 class UnknownAccountError(LedgerError):
@@ -44,11 +48,23 @@ class UnknownTransferError(LedgerError):
 
 
 class CurrencyMismatchError(LedgerError):
-    pass
+    """A transfer or entry's currency differs from the account's currency. (rule 6)"""
 
 
 class InsufficientFundsError(LedgerError):
-    def __init__(self, account_id, balance_minor, net_change_minor):
+    """A non-funding account would go negative (rule 4).
+
+    Args:
+        account_id: The account id of the sender
+        balance_minor: The current balance of the sender
+        net_change_minor: The net change that would be applied to the sender balance
+
+    Example: Non-funding account A transfers 5000 to non-funding account B. A's
+    current balance is 4000. The net change is -5000 which results in a new balance of
+    -1000. This raises an InsufficientFundsError.
+    """
+
+    def __init__(self, account_id: int, balance_minor: int, net_change_minor: int):
         self.account_id = account_id
         self.balance_minor = balance_minor
         self.net_change_minor = net_change_minor
@@ -59,20 +75,20 @@ class InsufficientFundsError(LedgerError):
 
 
 class IdempotencyConflictError(LedgerError):
-    pass
+    """Existing idempotency key reused with a different request (rule 5)."""
 
 
 class AlreadyReversedError(LedgerError):
-    pass
+    """A reversal is requested on a transfer that has already been reversed."""
 
 
 class ReversalOfReversalError(LedgerError):
-    pass
+    """The transfer to be reversed is itself a reversal."""
 
 
 class ServiceBusyError(LedgerError):
-    pass
+    """No pooled connection is free within the pool timeout. This is safe for retry."""
 
 
 class UnbalancedEntriesError(LedgerInvariantError):
-    pass
+    """The sum of entries per currency in a transfer is not zero (rule 1). A bug."""

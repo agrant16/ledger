@@ -13,6 +13,17 @@ CONCURRENCY_CAP = 40
 
 
 class Settings(BaseSettings):
+    """Service configuration, read from environment variables.
+
+    Each field is read from the environment variable named in its alias (for example
+    `POOL_SIZE`). Names are case sensitive, unknown variables are ignored, and an
+    instance is frozen. A field with no variable set falls back to a default that
+    matches `compose.yaml`: dev-only passwords, with Postgres on 127.0.0.1:5432. A
+    value that fails validation (for example a zero pool size) raises a pydantic
+    `ValidationError` when `Settings()` is built, so a bad configuration stops
+    startup.
+    """
+
     model_config = SettingsConfigDict(extra="ignore", frozen=True, case_sensitive=True)
 
     # The owner role runs migrations (and test fixtures). The service never connects as it.
