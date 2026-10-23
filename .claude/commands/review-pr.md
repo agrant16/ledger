@@ -83,7 +83,7 @@ Group findings under these headings, each with a file and line reference where p
 - **Questions for me:** anything ambiguous that I need to decide.
 - **Could not verify:** what you could not check and why.
 - **Issue tasks:** For any attached issue verify the listed items are actually done.
-
+- **Non-Issue changes:** For any changes that aren't in the attached issue but are minor related changes, call them out but they should be allowed with a comment added to the issue to note they were rolled in. e.g. docstring changes in the same module, type hints added in the same module
 Finish with up to five questions I should be able to answer about the code in the "I write
 myself" areas, as if an interviewer asked. Then draft, but do not post, text for the PR's review
 notes section.
