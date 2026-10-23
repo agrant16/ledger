@@ -7,6 +7,11 @@ from ledger.models.transfer_model import Transfer
 
 
 class TransferRequest(BaseModel):
+    """A request to move money from one account to another.
+
+    The two accounts must be different.
+    """
+
     model_config = ConfigDict(extra="forbid")
     from_account_id: AccountId
     to_account_id: AccountId
@@ -35,6 +40,14 @@ class TransferResponse(BaseModel):
 
     @classmethod
     def from_model(cls, transfer: Transfer) -> Self:
+        """Builds the response from a transfer.
+
+        Args:
+            transfer: The transfer, with its entries.
+
+        Returns:
+            The response, with the timestamp as an ISO 8601 UTC string.
+        """
         return cls(
             id=transfer.id,
             reverses_transaction_id=transfer.reverses_transaction_id,

@@ -26,6 +26,18 @@ def _not_padded(value: str) -> str:
 
 
 def _canonical_digits_to_int(value: object) -> int:
+    """Converts a string of plain decimal digits to an int.
+
+    Args:
+        value: The raw value. It must be a string of at most 19 digits, without a sign, a
+            leading zero or whitespace.
+
+    Returns:
+        The integer.
+
+    Raises:
+        ValueError: The value is not such a string.
+    """
     if not isinstance(value, str) or len(value) > 19 or not _CANONICAL_ID.fullmatch(value):
         raise ValueError("must be written as plain decimal digits, without a sign or leading zero")
     return int(value)

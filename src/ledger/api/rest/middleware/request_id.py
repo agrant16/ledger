@@ -6,10 +6,32 @@ from ledger.infra.logging_config import request_id_ctx_var
 
 
 class RequestIDMiddleware:
+    """ASGI middleware that gives every HTTP request an id and returns it. (ADR 0009)
+
+    The id is a UUID4 string. It is stored as `request.state.request_id` and in the logging
+    context, and every response carries it in the `X-Request-Id` header. Other scopes, such as
+    lifespan, pass through.
+
+    Attributes:
+        app: The wrapped application.
+    """
+
     def __init__(self, app: ASGIApp) -> None:
+        """Initializes the middleware.
+
+        Args:
+            app: The application to wrap.
+        """
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Assigns the request id and passes the request on.
+
+        Args:
+            scope: The ASGI connection scope.
+            receive: The ASGI receive channel.
+            send: The ASGI send channel.
+        """
         # not http: pass through. http: make the id, store it, wrap `send`
         # so the "http.response.start" message gets the X-Request-ID header
         if scope["type"] != "http":

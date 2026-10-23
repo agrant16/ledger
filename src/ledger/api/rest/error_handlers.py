@@ -33,16 +33,34 @@ ERROR_LOC_MAPPING: dict[str, str] = {
 
 
 def _escape_pointer_tokens(pointer_tokens: Sequence[Any]) -> list[str]:
+    """Escapes `~` and `/` in JSON Pointer tokens (RFC 6901), so each stays one path segment."""
     return [str(token).replace("~", "~0").replace("/", "~1") for token in pointer_tokens]
 
 
-# check for status codes that don't allow bodies.
 def is_body_allowed(status_code: int) -> bool:
+    """Returns whether a response with this status may have a body.
+
+    Informational (1xx), 204, 205 and 304 responses may not.
+
+    Args:
+        status_code: The HTTP status code.
+
+    Returns:
+        `True` when a body is allowed.
+    """
     return not (100 <= status_code < 200 or status_code in (204, 205, 304))
 
 
 def _locator(error: dict[str, Any]) -> dict[str, str]:
-    """Where in the request the error is: a pointer, a parameter, or nothing."""
+    """Returns where in the request a Pydantic error is: a pointer, a parameter, or nothing.
+
+    Args:
+        error: One item of a Pydantic error list.
+
+    Returns:
+        `{"pointer": ...}` for the body (a JSON Pointer, empty when the body is not valid JSON),
+        `{"parameter": ...}` for a header, query, path or cookie parameter, otherwise `{}`.
+    """
     if error.get("type") == "json_invalid":
         return {"pointer": ""}
     loc = error.get("loc", [])
@@ -58,9 +76,14 @@ def _locator(error: dict[str, Any]) -> dict[str, str]:
 
 
 def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """
-    Converts Pydantic errors into the items of the RFC 9457 errors
-    extension: detail plus a pointer or parameter
+    """Converts Pydantic errors into the items of the `errors` problem extension. (ADR 0009)
+
+    Args:
+        errors: The error list of a `RequestValidationError`.
+
+    Returns:
+        One item per error: its `detail` message plus a `pointer` or `parameter` when the
+        location is known.
     """
     return [{"detail": error.get("msg", ""), **_locator(error)} for error in errors]
 
@@ -74,6 +97,24 @@ def problem_response(
     headers: dict[str, str] | None = None,
     extensions: Mapping[str, Any] | None = None,
 ) -> JSONResponse:
+    """Builds an RFC 9457 problem response. (ADR 0009)
+
+    The body has `title`, `type`, `detail`, `status` and `instance`, which is
+    `urn:uuid:<request id>`, plus the extension members. The media type is
+    `application/problem+json`.
+
+    Args:
+        request: The request being answered. Its `state.request_id` must be set.
+        status: The HTTP status code.
+        type_: The problem `type` URI.
+        title: The short problem title.
+        detail: The explanation specific to this occurrence.
+        headers: Extra response headers.
+        extensions: Extra members for the problem body.
+
+    Returns:
+        The response.
+    """
     body = {
         "title": title,
         "type": type_,
@@ -88,6 +129,23 @@ def problem_response(
 
 
 async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONResponse:
+    """Turns a `LedgerError` into its problem response. (ADR 0007, ADR 0009)
+
+    The status, `type` and `title` come from the error class's `ProblemSpec`. The `detail` is
+    the error's message. The members the spec lists as extensions, such as `account_id` for an
+    insufficient-funds error, are copied from the error into the body. A 503 also carries a
+    `Retry-After` header.
+
+    Args:
+        request: The request being answered.
+        exc: The error raised by the handler or the services.
+
+    Returns:
+        The problem response.
+
+    Raises:
+        LookupError: The error class has no `ProblemSpec`, which is a bug.
+    """
     problem_spec = problem_for(exc.__class__)
     headers = None
     extensions = {name: getattr(exc, name) for name in problem_spec.extensions}
@@ -106,6 +164,17 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
 
 
 async def validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Turns a request validation failure into a 400 problem response. (ADR 0009)
+
+    The body lists each failure, with its location, in the `errors` member.
+
+    Args:
+        request: The request being answered.
+        exc: The validation error raised by FastAPI.
+
+    Returns:
+        The 400 problem response.
+    """
     spec = problem_for(InvalidRequestError)
     return problem_response(
         request,
@@ -121,6 +190,18 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 async def http_error_handler(
     request: Request, exc: StarletteHTTPException
 ) -> JSONResponse | Response:
+    """Turns a framework HTTP error, such as a 404 or 405, into a problem response. (ADR 0009)
+
+    The `type` is `about:blank`, the `title` is the standard phrase for the status, and the
+    exception's headers are kept. A status that may not have a body gets an empty response.
+
+    Args:
+        request: The request being answered.
+        exc: The HTTP error raised by Starlette.
+
+    Returns:
+        The problem response, or an empty response when the status allows no body.
+    """
     try:
         title = HTTPStatus(exc.status_code).phrase
     except ValueError:
@@ -143,6 +224,19 @@ async def http_error_handler(
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Turns a bug into a generic 500 problem response and logs it. (ADR 0007, ADR 0009)
+
+    The body has a fixed message that reveals nothing about the error. The request id is in
+    `instance` and in the `X-Request-Id` header, and the error is logged with its traceback
+    under that id. A request that has no id yet is given one.
+
+    Args:
+        request: The request being answered.
+        exc: The unexpected exception.
+
+    Returns:
+        The 500 problem response.
+    """
     request_id = getattr(request.state, "request_id", None)
     if not request_id:
         request_id = str(uuid.uuid4())
@@ -160,6 +254,17 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 
 def install_error_handling(app: FastAPI, concurrency_cap: int = CONCURRENCY_CAP) -> None:
+    """Installs the request id and concurrency cap middleware and the error handlers. (ADR 0009)
+
+    Every response, including the cap's 503, carries an `X-Request-Id` header. The handlers
+    cover `LedgerError` (its mapped status), `RequestValidationError` (400), Starlette's
+    `HTTPException` (its own status) and any other `Exception` (500).
+
+    Args:
+        app: The application to install them on.
+        concurrency_cap: The number of HTTP requests allowed in flight at once; a request over
+            the cap gets a 503.
+    """
     install_log_record_factory()
     # ConcurrencyCapMiddleware must be added before RequestIDMiddleware so
     # RequestIDMiddleware remains the outer scope. This allows the response from

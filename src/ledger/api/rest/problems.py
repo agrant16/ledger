@@ -17,6 +17,16 @@ from ledger.errors import (
 
 @dataclass(frozen=True)
 class ProblemSpec:
+    """How a `LedgerError` is reported: the fixed fields of the problem body. (ADR 0009)
+
+    Attributes:
+        status (int): The HTTP status code.
+        type (str): The problem `type` URI, such as `urn:ledger:error:unknown-account`.
+        title (str): The short, fixed problem title.
+        extensions (tuple[str, ...]): The names of the exception attributes copied into the
+            problem body as extra members.
+    """
+
     status: int
     type: str
     title: str
@@ -56,6 +66,19 @@ PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
 
 
 def problem_for(error_class: type[Exception]) -> ProblemSpec:
+    """Returns the problem spec for an error class.
+
+    The class's own entry is used, otherwise the entry of its nearest mapped base class.
+
+    Args:
+        error_class: The exception class to look up.
+
+    Returns:
+        The spec of the class or of its nearest mapped base class.
+
+    Raises:
+        LookupError: Neither the class nor any of its bases is mapped.
+    """
     for cls in error_class.__mro__:
         if cls in PROBLEMS:
             return PROBLEMS[cls]
