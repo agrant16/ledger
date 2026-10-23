@@ -24,7 +24,7 @@ def claim_transaction(
     request_hash: str,
     reverses_transaction_id: int | None = None,
 ) -> Claim:
-    """Claim an idempotency key, or recognise a repeat of an earlier claim. (rule 5)
+    """Claims an idempotency key, or recognizes a repeat of an earlier claim. (rule 5)
 
     A new key inserts the transactions row and returns its id with
     replay=False. If the key already exists, the stored request hash decides:
@@ -45,7 +45,8 @@ def claim_transaction(
     Raises:
         IdempotencyConflictError: The key was already used with a different request.
         LedgerInvariantError: The key conflicted but its row cannot be found.
-            Also, propagates repository level safety-net violations.
+
+    Propagates repository level safety-net violations.
     """
     transaction_id = posting_repo.insert_claim(
         conn, idempotency_key, request_hash, reverses_transaction_id
@@ -68,7 +69,7 @@ def claim_transaction(
 
 @transactional_service_method
 def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
-    """Validate and write the entries of a claimed transaction. (rules 1, 4, 6)
+    """Validates and writes the entries of a claimed transaction. (rules 1, 4, 6)
 
     The checks run in a fixed order and nothing is written until all of them
     pass, so a rejected post leaves no entries and no balance change. An account
@@ -95,11 +96,12 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
 
     Raises:
         LedgerInvariantError: There are no entries, or a balance row was not updated.
-            Also, propagates repository level safety-net violations.
         UnbalancedEntriesError: The entries do not sum to zero in some currency.
         UnknownAccountError: An entry names an account that does not exist.
         CurrencyMismatchError: An entry's currency differs from its account's.
         InsufficientFundsError: An account that may not go negative would.
+
+    Propagates repository level safety-net violations.
     """
     if not entries:
         raise LedgerInvariantError(f"No entries for transaction {transaction_id}")
@@ -158,7 +160,7 @@ def claim_and_post(
     currency: str,
     amount_minor: int,
 ) -> Transfer:
-    """Claim the key and post a two-entry transfer in the caller's transaction. (rule 5)
+    """Claims the key and posts a two-entry transfer in the caller's transaction. (rule 5)
 
     On a replay the post is skipped, so the money moves once, and the stored
     transfer is returned. The claim and the posting share the one connection
@@ -182,7 +184,7 @@ def claim_and_post(
         UnknownAccountError: The debit or credit account does not exist.
         CurrencyMismatchError: The transfer currency differs from an account's currency.
         InsufficientFundsError: The debit account cannot cover the transfer amount.
-        LedgerInvariantError: A critical state check failed or a balance row was not updated.
+        LedgerInvariantError: Propagates from called functions.
     """
     claim = claim_transaction(conn, idempotency_key, request_hash)
     if not claim.replay:

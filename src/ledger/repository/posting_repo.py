@@ -82,7 +82,7 @@ def insert_claim(
     request_hash: str,
     reverses_transaction_id: int | None = None,
 ) -> int | None:
-    """Insert the transactions row that claims an idempotency key. (rule 5)
+    """Inserts the transactions row that claims an idempotency key. (rule 5)
 
     Args:
         conn: An active, open PostgreSQL connection or transaction context.
@@ -109,16 +109,14 @@ def insert_claim(
 
 
 def find_claim(conn: psycopg.Connection, idempotency_key: str) -> tuple[int, str] | None:
-    """Retrieves the stored transaction ID and request hash for a given idempotency key.
+    """Finds the claim for an idempotency key.
 
     Args:
         conn: An active, open PostgreSQL connection or transaction context.
-        idempotency_key: The unique string identifier sent by the client to track
-            the lifecycle of this specific request.
+        idempotency_key: The client's Idempotency-Key.
 
     Returns:
-        A tuple containing ``(transaction_id, request_hash)`` if a matching claim is found.
-        Returns ``None`` if the idempotency key has never been seen before.
+        `(transaction_id, request_hash)`, or None if the key has not been used.
     """
     with conn.cursor() as cursor:
         cursor.execute(SELECT_CLAIM_SQL, (idempotency_key,))
@@ -127,7 +125,7 @@ def find_claim(conn: psycopg.Connection, idempotency_key: str) -> tuple[int, str
 
 
 def lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int, LockedAccount]:
-    """Lock the balance rows of the given accounts and read them. (rule 4)
+    """Locks the balance rows of the given accounts and reads them. (rule 4)
 
     The rows stay locked until the caller's transaction ends. The locks are taken
     in ascending account id, which keeps concurrent transfers from deadlocking.
@@ -150,12 +148,12 @@ def lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int,
 
 
 def insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
-    """Insert the entries of a transaction. (rules 1, 6)
+    """Inserts the entries of a transaction. (rules 1, 6)
 
     Args:
         conn: An active, open PostgreSQL connection or transaction context.
-        transaction_id: The id of the transaction associated with the entries
-        entries: The entries to be inserted
+        transaction_id: The id of the transaction associated with the entries.
+        entries: The entries to be inserted.
 
     Raises:
         LedgerInvariantError: The database safety net rejected an entry.
@@ -172,11 +170,11 @@ def insert_entries(conn: psycopg.Connection, transaction_id: int, entries: list[
 
 
 def apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> set[int]:
-    """Add each delta to its account's cached balance. (rule 3)
+    """Adds each delta to its account's cached balance. (rule 3)
 
     Args:
         conn: An active, open PostgreSQL connection or transaction context.
-        deltas: The balance deltas in the form {"account_id": net_change_delta}
+        deltas: The balance deltas in the form {"account_id": net_change_delta}.
 
     Returns:
         The ids of the accounts whose balance row was updated. A requested id
@@ -199,15 +197,15 @@ def apply_balance_deltas(conn: psycopg.Connection, deltas: dict[int, int]) -> se
 
 
 def find_transfer(conn: psycopg.Connection, id: int) -> Transfer | None:
-    """Retrieves a specific transfer record and its associated ledger entries.
+    """Finds a transfer and its entries.
 
     Args:
         conn: An active, open PostgreSQL connection or transaction context.
-        id: The unique identifier of the transfer to locate.
+        id: The transaction id.
 
     Returns:
-        A fully populated ``Transfer`` object with its ``entries`` ordered by their entry ID.
-        Returns ``None`` if no transfer matches the provided ID.
+        The transfer, with its entries ordered by entry id, or None if there is no such
+        transfer.
     """
     with conn.cursor() as cursor:
         cursor.execute(SELECT_TRANSFER_SQL, (id,))
