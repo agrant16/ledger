@@ -44,10 +44,11 @@ class TransferPayload:
     Attributes:
         from_account_id: The account id being debited.
         to_account_id: The account id being credited.
-        currency: The currency of the money movement.
         amount_minor: The amount of the money movement, in minor units.
-        """
+        currency: The currency of the money movement.
+    """
+
     from_account_id: int
     to_account_id: int
-    currency: str
     amount_minor: int
+    currency: str

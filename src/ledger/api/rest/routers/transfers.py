@@ -18,6 +18,7 @@ from ledger.errors import (
     UnknownTransferError,
 )
 from ledger.infra.db import run_in_transaction
+from ledger.models.transfer_model import TransferPayload
 from ledger.service.posting_service import claim_and_post
 from ledger.service.transfer_service import get_transfer
 
@@ -67,10 +68,12 @@ def create_transfer(
             conn,
             idempotency_key,
             request_hash(request.method, request.url.path, body),
-            body.from_account_id,
-            body.to_account_id,
-            body.currency,
-            body.amount_minor,
+            TransferPayload(
+                from_account_id=body.from_account_id,
+                to_account_id=body.to_account_id,
+                currency=body.currency,
+                amount_minor=body.amount_minor,
+            ),
         ),
     )
     return TransferResponse.from_model(transfer)
