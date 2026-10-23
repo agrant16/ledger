@@ -7,16 +7,16 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class ConcurrencyCapMiddleware:
-    """ASGI middleware that rejects requests above the concurrency cap.
+    """ASGI middleware that rejects requests above the concurrency cap. (ADR 0004, ADR 0009)
 
     A request that arrives while `cap` HTTP requests are in flight gets a 503 problem
     response with a `Retry-After` header, and the wrapped app never sees it. Other scopes,
     such as lifespan, pass through.
 
     Attributes:
-        app (ASGIApp): The wrapped application.
-        cap (int): The allowed number of concurrent HTTP requests.
-        request_count (int): The number of HTTP requests currently being handled.
+        app: The wrapped application.
+        cap: The allowed number of concurrent HTTP requests.
+        request_count: The number of HTTP requests currently being handled.
     """
 
     def __init__(self, app: ASGIApp, cap: int):
