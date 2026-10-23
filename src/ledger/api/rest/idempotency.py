@@ -5,9 +5,9 @@ from pydantic import BaseModel
 
 
 def request_hash(method: str, path: str, body: BaseModel | None) -> str:
-    """Returns the hash that tells a retry of a request from a reuse of its idempotency key.
+    """Returns the hash that tells a retry from a reuse of an idempotency key. (rule 5, ADR 0012)
 
-    The form is a contract (rule 5, ADR 0012). A stored hash is compared with every new one, so
+    The form is a contract. A stored hash is compared with every new one, so
     any change to the form makes stored keys look like conflicts and needs a migration plan and
     a new ADR.
 

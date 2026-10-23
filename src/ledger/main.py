@@ -43,6 +43,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     Yields:
         Nothing, while the application is running.
+
+    Raises:
+        PoolTimeout: The pool did not get its connections in time. The pool is closed first.
     """
     configure_logging()
     settings = app.state.settings

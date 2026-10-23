@@ -9,7 +9,7 @@ once: existing accounts are reused.
 
 Exit codes:
     0: Success.
-    1: Failure. Nothing is committed and no file is written.
+    1: Failure. No file is written. Nothing is committed unless the failure was writing the file.
     2: Usage error.
 """
 
