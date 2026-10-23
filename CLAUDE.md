@@ -22,6 +22,20 @@ The stack below is decided and pre-approved. Don't substitute alternatives.
 - Service functions take the request's connection and never commit; the caller owns the database transaction, so a retry wraps the key claim and the posting together.
 - Expected failures are `LedgerError` subclasses in `ledger/errors.py`, and the API layer maps each to an HTTP status. Bugs (`LedgerInvariantError`, database safety-net violations) are not `LedgerError`s and return a logged 500.
 
+### Docstrings
+
+Reasons and the full list are in #141. Rule numbers are those in the `docs/design.md` invariants list. Applies to implementation docstrings (`src/`). Testing docstrings are exempt, e.g. lazy import docstrings.
+
+- Google style, descriptive mood ("Returns", not "Return"). Single backticks for code names. `Args` and `Raises` entries are capitalised sentences ending in a period.
+- Sections: `Args:`, `Returns:`, `Raises:` (no types, the signature has them), plus `Yields:` for generators and context managers. `Attributes:` for every class with public attributes (dataclasses, exceptions that store fields, plain classes such as middleware): `name: description` when the attribute has a type hint, `name (type): description` only when it has none.
+- The class docstring documents construction: `Args:` for the constructor's arguments, `Attributes:` for the fields, with an argument that is also a field in both (for example `ConcurrencyCapMiddleware`: `app` and `cap` in both, `request_count` only in `Attributes:`). `__init__` usually has no docstring; if it has one, it is one line with no `Args:`.
+- Public pydantic models (those in OpenAPI) get no `Attributes:` block, because the class docstring becomes the published schema description. Write it as client-facing text.
+- Entry points (`main.py`, `seed.py`, `migrate`) have a module docstring with usage and exit codes. Other modules need one only if their purpose is not clear from the name.
+- Contract only: what callers can rely on, what they raise, which rules and constraints apply. Cite rules and ADRs in parentheses after the summary line, on the same line: `(rule 5, ADR 0012)`. No implementation reasoning, worked examples, maintainer notes or filler, and no inline comments for removed reasoning.
+- A function called from outside its own module has `Args`, `Returns` and `Raises`, as far as it has them; short functions get shorter text but still list them. A private function needs no full sections, but a docstring it has follows the same rules. A function whose name and signature say everything may have none.
+- `Raises:` lists every error the function raises or lets through, with full causes only for the errors it raises itself; a propagated error is listed without its full causes, as they are listed in the function that raises it. Database errors never propagate as such: the repository translates them (ADR 0013), and a repository-level safety-net violation reaches callers as `LedgerInvariantError`. A function that raises or lets through `LedgerInvariantError` lists it once, with its own causes and a general cause for anything underneath; an orchestrator that only calls other functions describes the cause generally. There is no standalone "Propagates…" line. Examples are in #141.
+- `conn`: "The request's connection, inside the caller's transaction." in services; "An active, open PostgreSQL connection or transaction context." in repositories.
+
 ## How we split the work
 
 This project has to demonstrate my own skills, so the division matters.
@@ -66,7 +80,7 @@ Write tests against these properties, not against whatever the current code happ
 - Make small, focused commits with clear messages. Don't bundle unrelated changes.
 - Stage files by explicit path, and only the ones the change is about. Never run `git add -A`, `git add .`, `git add -u` or `git commit -a`: they sweep in work in progress that I haven't asked to commit (this happened on PR 83, where my uncommitted implementation files went into a commit that Claude co-authored). Check `git status` before committing, and stage again after a hook or formatter rewrites a file.
 - Before writing code for a non-trivial feature, briefly state the approach and any tradeoffs so I can weigh in (step 1 of the workflow below).
-- Explain any non-obvious design choice in plain terms, so I can explain and defend my decisions.
+- Explain any non-obvious design choice in plain terms, in chat or an ADR (not in docstrings), so I can explain and defend my decisions.
 - Record the larger design decisions as architecture decision records in `docs/adr/`, using `docs/adr/template.md`. An ADR goes in the same pull request as the code it describes, like the design doc update, starts as `Draft`, is marked `Accepted` in the PR that merges it, and gets a row in the index at `docs/adr/README.md`. One ADR can cover a group of related decisions, so group them by theme and date, not one per decision. Claude drafts them from our discussions and the code, and I review them.
 - An `Accepted` ADR's decision is not rewritten. Formatting, typos, comments and links may be fixed, and the Status line and index row may change (for example `Accepted (partly implemented)` to `Accepted`, or `Superseded by ADR NNNN`). Any other change is recorded one of two ways: a dated note under the section it affects (`*Note (YYYY-MM-DD): ...*`, naming the issue or PR that prompted it), for a correction or update that does not reverse the decision; or a new ADR that supersedes the old one, for a reversed or replaced decision, with the old ADR's Status and the index row updated. A `Draft` ADR is edited freely within its PR. The design doc is still updated in place, because it is the source of truth and not a decision log.
 - Dependencies beyond the stack above, schema changes, and changes to the public API need my approval first. Adding the pre-approved stack's own packages during scaffolding is fine.
