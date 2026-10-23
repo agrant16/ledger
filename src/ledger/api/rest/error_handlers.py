@@ -1,6 +1,6 @@
 import logging
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from http import HTTPStatus
 from typing import Any
 
@@ -11,7 +11,7 @@ from starlette.responses import JSONResponse, Response
 
 from ledger.api.rest.middleware.concurrency_cap import ConcurrencyCapMiddleware
 from ledger.api.rest.middleware.request_id import RequestIDMiddleware
-from ledger.api.rest.problems import problem_for
+from ledger.api.rest.problems import ProblemOccurrence, ProblemSpec, problem_for
 from ledger.errors import InvalidRequestError, LedgerError
 from ledger.infra.config import CONCURRENCY_CAP
 from ledger.infra.logging_config import install_log_record_factory, request_id_ctx_var
@@ -89,13 +89,7 @@ def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def problem_response(
-    request: Request,
-    status: int,
-    type_: str,
-    title: str,
-    detail: str,
-    headers: dict[str, str] | None = None,
-    extensions: Mapping[str, Any] | None = None,
+    request: Request, spec: ProblemSpec, occurrence: ProblemOccurrence
 ) -> JSONResponse:
     """Builds an RFC 9457 problem response. (ADR 0009)
 
@@ -105,26 +99,25 @@ def problem_response(
 
     Args:
         request: The request being answered. Its `state.request_id` must be set.
-        status: The HTTP status code.
-        type_: The problem `type` URI.
-        title: The short problem title.
-        detail: The explanation specific to this occurrence.
-        headers: Extra response headers.
-        extensions: Extra members for the problem body.
+        spec: The problem status, type, and title.
+        occurrence: The detail, headers, and extension members for this response.
 
     Returns:
         The response.
     """
     body = {
-        "title": title,
-        "type": type_,
-        "detail": detail,
-        "status": status,
+        "title": spec.title,
+        "type": spec.type,
+        "detail": occurrence.detail,
+        "status": spec.status,
         "instance": f"urn:uuid:{request.state.request_id}",
-        **(extensions or {}),
+        **(occurrence.extensions or {}),
     }
     return JSONResponse(
-        body, status_code=status, headers=headers, media_type="application/problem+json"
+        body,
+        status_code=spec.status,
+        headers=occurrence.headers,
+        media_type="application/problem+json",
     )
 
 
@@ -154,12 +147,8 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
         logger.warning("Service was busy: %s", exc.__cause__ or exc)
     return problem_response(
         request,
-        problem_spec.status,
-        problem_spec.type,
-        problem_spec.title,
-        str(exc),
-        headers,
-        extensions,
+        problem_spec,
+        ProblemOccurrence(detail=str(exc), headers=headers, extensions=extensions),
     )
 
 
@@ -175,15 +164,14 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
     Returns:
         The 400 problem response.
     """
-    spec = problem_for(InvalidRequestError)
+    problem_spec = problem_for(InvalidRequestError)
     return problem_response(
         request,
-        spec.status,
-        spec.type,
-        spec.title,
-        "The request is not valid.",  # a fixed sentence; the specifics are in `errors`
-        headers=None,
-        extensions={"errors": validation_errors(exc.errors())},
+        problem_spec,
+        ProblemOccurrence(
+            detail="The request is not valid.",
+            extensions={"errors": validation_errors(exc.errors())},
+        ),
     )
 
 
@@ -215,11 +203,10 @@ async def http_error_handler(
     else:
         return problem_response(
             request,
-            exc.status_code,
-            "about:blank",
-            title,
-            str(exc.detail),
-            dict(exc.headers) if exc.headers else None,
+            ProblemSpec(status=exc.status_code, type="about:blank", title=title),
+            ProblemOccurrence(
+                detail=str(exc.detail), headers=dict(exc.headers) if exc.headers else None
+            ),
         )
 
 
@@ -245,11 +232,12 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     logger.error("unhandled exception", exc_info=exc)
     return problem_response(
         request,
-        500,
-        "about:blank",
-        "Internal Server Error",
-        GENERIC_500_DETAIL,
-        headers={"X-Request-Id": str(request_id)},
+        ProblemSpec(
+            status=HTTPStatus.INTERNAL_SERVER_ERROR,
+            type="about:blank",
+            title="Internal Server Error",
+        ),
+        ProblemOccurrence(detail=GENERIC_500_DETAIL, headers={"X-Request-Id": str(request_id)}),
     )
 
 

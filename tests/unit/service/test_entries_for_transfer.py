@@ -1,11 +1,11 @@
 """entries_for_transfer (ledger/service/transfer_service.py; docs/design.md, Transfer request).
 
-    entries_for_transfer(from_account_id, to_account_id, amount_minor, currency) -> list[Entry]
+    entries_for_transfer(payload: TransferPayload) -> list[Entry]
 
 Builds the two entries of an ordinary transfer, separately from posting them: the `from` account
 gets an entry of -amount_minor and the `to` account gets +amount_minor, both in the given currency,
-`from` first. It is a pure function of plain values, so the entries it returns always sum to zero.
-The tests for unbalanced postings change its output and hand that to post_transaction.
+`from` first. It is a pure function of its `TransferPayload`, so the entries it returns always sum
+to zero. The tests for unbalanced postings change its output and hand that to post_transaction.
 
 It lives in the service layer, not the API layer: building the entries is a ledger rule, and the
 service flow that claims the key, builds the entries and posts them uses it. The API layer hands
@@ -19,20 +19,29 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from ledger.models.posting_model import Entry
-from ledger.service.transfer_service import entries_for_transfer as build
+from ledger.models.transfer_model import TransferPayload
+from ledger.service.transfer_service import entries_for_transfer
 
 BIGINT_MAX = 9_223_372_036_854_775_807
 MAX_AMOUNT = 99_900_000_000
 
 
+def build(
+    from_account_id: int, to_account_id: int, amount_minor: int, currency: str
+) -> list[Entry]:
+    """Calls `entries_for_transfer` with a payload made of these values."""
+    return entries_for_transfer(
+        TransferPayload(
+            from_account_id=from_account_id,
+            to_account_id=to_account_id,
+            currency=currency,
+            amount_minor=amount_minor,
+        )
+    )
+
+
 def test_the_sender_is_debited_and_the_receiver_credited() -> None:
     assert build(12, 34, 2500, "USD") == [Entry(12, -2500, "USD"), Entry(34, 2500, "USD")]
-
-
-def test_the_arguments_can_be_given_by_name() -> None:
-    entries = build(from_account_id=12, to_account_id=34, amount_minor=2500, currency="USD")
-
-    assert entries == [Entry(12, -2500, "USD"), Entry(34, 2500, "USD")]
 
 
 def test_the_currency_and_the_amount_come_from_the_arguments() -> None:

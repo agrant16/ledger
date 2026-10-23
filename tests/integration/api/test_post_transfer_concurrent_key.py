@@ -36,6 +36,7 @@ from ledger.api.rest.error_handlers import install_error_handling
 from ledger.api.rest.idempotency import request_hash
 from ledger.api.rest.router import router
 from ledger.api.rest.schemas.transfer_schema import TransferRequest
+from ledger.models.transfer_model import TransferPayload
 from ledger.service.posting_service import claim_transaction, post_transaction
 from ledger.service.transfer_service import entries_for_transfer
 from tests.db_helpers import commit_accounts, commit_transfer, reset_database
@@ -150,7 +151,14 @@ def second_request_behind_an_open_claim(
         post_transaction(
             first,
             claim.transaction_id,
-            entries_for_transfer(alice.id, bob.id, first_amount, "USD"),
+            entries_for_transfer(
+                TransferPayload(
+                    from_account_id=alice.id,
+                    to_account_id=bob.id,
+                    currency="USD",
+                    amount_minor=first_amount,
+                )
+            ),
         )
         second = executor.submit(post, client, accounts, second_amount)
         wait_until_a_backend_is_blocked(owner_conn, first.info.backend_pid, second)

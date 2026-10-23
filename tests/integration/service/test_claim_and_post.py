@@ -1,8 +1,7 @@
 """claim_and_post (ledger/service/posting_service.py; docs/design.md, Error behavior, Correctness
 rules 1 to 6; ADR 0012 and ADR 0013).
 
-    claim_and_post(conn, idempotency_key, request_hash, from_account_id, to_account_id, currency,
-                   amount_minor) -> Transfer
+    claim_and_post(conn, idempotency_key, request_hash, payload: TransferPayload) -> Transfer
 
 This is the whole body of POST /transfers inside the request's transaction: claim the key, post
 the two entries unless the claim is a replay, and return the stored transfer, read back with
@@ -37,7 +36,7 @@ from ledger.errors import (
 )
 from ledger.infra.config import Settings
 from ledger.infra.db import run_in_transaction
-from ledger.models.transfer_model import Transfer
+from ledger.models.transfer_model import Transfer, TransferPayload
 from ledger.service.posting_service import claim_and_post
 from ledger.service.transfer_service import get_transfer
 from tests.db_helpers import commit_accounts, commit_transfer, hash_for, reset_database
@@ -69,10 +68,12 @@ def run(
             conn,
             idempotency_key=key,
             request_hash=request_hash or hash_for(key),
-            from_account_id=from_account_id,
-            to_account_id=to_account_id,
-            currency=currency,
-            amount_minor=amount_minor,
+            payload=TransferPayload(
+                from_account_id=from_account_id,
+                to_account_id=to_account_id,
+                currency=currency,
+                amount_minor=amount_minor,
+            ),
         ),
     )
 
@@ -353,10 +354,12 @@ def test_it_refuses_an_autocommit_connection(
                 conn,
                 idempotency_key="k1",
                 request_hash=hash_for("k1"),
-                from_account_id=alice.id,
-                to_account_id=bob.id,
-                currency="USD",
-                amount_minor=300,
+                payload=TransferPayload(
+                    from_account_id=alice.id,
+                    to_account_id=bob.id,
+                    currency="USD",
+                    amount_minor=300,
+                ),
             )
 
     assert stored(owner_conn) == before

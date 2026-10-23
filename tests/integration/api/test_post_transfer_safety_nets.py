@@ -32,6 +32,7 @@ from ledger.api.rest.error_handlers import install_error_handling
 from ledger.api.rest.router import router
 from ledger.errors import LedgerInvariantError, UnbalancedEntriesError
 from ledger.models.posting_model import Entry
+from ledger.models.transfer_model import TransferPayload
 from ledger.repository import posting_repo
 from tests.db_helpers import commit_accounts, commit_transfer, reset_database
 
@@ -104,11 +105,11 @@ def break_the_entries(monkeypatch: pytest.MonkeyPatch) -> list:
     """Build entries that do not sum to zero, so post_transaction raises UnbalancedEntriesError."""
     calls: list = []
 
-    def unbalanced(from_account_id: int, to_account_id: int, amount_minor: int, currency: str):
+    def unbalanced(payload: TransferPayload):
         calls.append(1)
         return [
-            Entry(from_account_id, -amount_minor, currency),
-            Entry(to_account_id, amount_minor + 1, currency),
+            Entry(payload.from_account_id, -payload.amount_minor, payload.currency),
+            Entry(payload.to_account_id, payload.amount_minor + 1, payload.currency),
         ]
 
     monkeypatch.setattr(posting_service, "entries_for_transfer", unbalanced)

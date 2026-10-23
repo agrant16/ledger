@@ -11,7 +11,7 @@ from ledger.errors import (
     UnknownAccountError,
 )
 from ledger.models.posting_model import Claim, Entry
-from ledger.models.transfer_model import Transfer
+from ledger.models.transfer_model import Transfer, TransferPayload
 from ledger.repository import posting_repo
 from ledger.service.decorators import transactional_service_method
 from ledger.service.transfer_service import entries_for_transfer, get_transfer
@@ -152,13 +152,7 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
 
 @transactional_service_method
 def claim_and_post(
-    conn: psycopg.Connection,
-    idempotency_key: str,
-    request_hash: str,
-    from_account_id: int,
-    to_account_id: int,
-    currency: str,
-    amount_minor: int,
+    conn: psycopg.Connection, idempotency_key: str, request_hash: str, payload: TransferPayload
 ) -> Transfer:
     """Claims the key and posts a two-entry transfer in the caller's transaction. (rule 5)
 
@@ -171,10 +165,7 @@ def claim_and_post(
         conn: The request's connection, inside the caller's transaction.
         idempotency_key: The client's Idempotency-Key.
         request_hash: The canonical hash of the request.
-        from_account_id: The account debited.
-        to_account_id: The account credited.
-        currency: The currency of the transfer.
-        amount_minor: The amount, in minor units.
+        payload: The transfer information.
 
     Returns:
         The transfer, newly posted or replayed, with its entries.
@@ -191,6 +182,6 @@ def claim_and_post(
         post_transaction(
             conn,
             claim.transaction_id,
-            entries_for_transfer(from_account_id, to_account_id, amount_minor, currency),
+            entries_for_transfer(payload),
         )
     return get_transfer(conn, claim.transaction_id)
