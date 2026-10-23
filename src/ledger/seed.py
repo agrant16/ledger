@@ -1,3 +1,18 @@
+"""Seeds the database with funding accounts.
+
+Usage:
+    python -m ledger.seed --output PATH [--currency CODE ...] [--per-currency N]
+
+Creates `funding:<CURRENCY>` accounts (further ones `:2`, `:3`, ...) with `allow_negative` true
+and writes their ids to the `--output` file as JSON. It is safe to run again, and to run twice at
+once: existing accounts are reused.
+
+Exit codes:
+    0: Success.
+    1: Failure. Nothing is committed and no file is written.
+    2: Usage error.
+"""
+
 import argparse
 import json
 import re
@@ -19,11 +34,11 @@ DEFAULT_CURRENCIES = [
 
 
 class SeedError(Exception):
-    """The seed run cannot continue: the existing data isn't what the script needs."""
+    """Raised when an existing account does not match what the seed would have created."""
 
 
 def _currency_validator(value: str) -> str:
-    """Validates that the value for --currency is an uppercase string of three letters."""
+    """Validates that the value for `--currency` is three uppercase letters."""
     if not re.fullmatch(r"[A-Z]{3}", value):
         raise argparse.ArgumentTypeError(
             f"'{value}' is not a valid format. Must be 3 uppercase letters, e.g. 'USD' or 'EUR'."
@@ -32,9 +47,7 @@ def _currency_validator(value: str) -> str:
 
 
 def _per_currency_validator(value: str) -> int:
-    """
-    Validates the value for --per-currency argument is 1 <= N <= 500.
-    """
+    """Validates that the value for `--per-currency` is an integer from 1 to 500."""
     if not re.fullmatch(r"[1-9][0-9]*", value):
         raise argparse.ArgumentTypeError("--per-currency must be positive integer.")
     integer = int(value)
@@ -71,11 +84,18 @@ def _set_up_parser() -> argparse.ArgumentParser:
 def _create_or_find(
     conn: psycopg.Connection, account_name: str, currency: str
 ) -> tuple[Account, bool]:
-    """Create the funding account, or return the one another run committed first.
+    """Creates the funding account, or returns the one another run committed first.
 
-    The insert runs in a savepoint: if another run commits the same name first, the unique
-    violation would otherwise abort the whole database transaction. After it, the name is looked
-    up again. The bool is whether this call created the account.
+    Args:
+        conn: An open connection, inside the caller's transaction.
+        account_name: The name of the account.
+        currency: The currency of the account.
+
+    Returns:
+        The account, and whether this call created it.
+
+    Raises:
+        LedgerInvariantError: The name was a duplicate but no account has it.
     """
     try:
         with conn.transaction():
@@ -93,9 +113,21 @@ def _create_or_find(
 def _ensure_funding_account(
     conn: psycopg.Connection, account_name: str, currency: str
 ) -> tuple[Account, bool]:
-    """The funding account with this name and whether this call created it.
+    """Returns the funding account with this name, creating it if it does not exist.
 
-    An existing account is accepted only if it is what we would have created.
+    An existing account is accepted only if it has the given currency and `allow_negative` true.
+
+    Args:
+        conn: An open connection, inside the caller's transaction.
+        account_name: The name of the account.
+        currency: The currency the account must have.
+
+    Returns:
+        The account, and whether this call created it.
+
+    Raises:
+        SeedError: The account exists with another currency, or with `allow_negative` false.
+        LedgerInvariantError: See `_create_or_find`.
     """
     account = find_account_by_name(conn, account_name)
     if account is not None:
@@ -115,7 +147,24 @@ def _ensure_funding_account(
 def _create_accounts(
     conn: psycopg.Connection, currencies: list[str], n: int
 ) -> tuple[dict[str, dict[str, list[int]]], list[str]]:
-    """The ids file content and one report line per account."""
+    """Creates or finds the funding accounts of every currency.
+
+    The accounts are created in sorted currency order, so two runs that name the same currencies
+    in opposite orders cannot deadlock.
+
+    Args:
+        conn: An open connection, inside the caller's transaction.
+        currencies: The currencies, without repeats.
+        n: The number of accounts per currency.
+
+    Returns:
+        The content of the ids file, with the currencies in the order given and the ids in index
+        order, and one report line per account.
+
+    Raises:
+        SeedError: See `_ensure_funding_account`.
+        LedgerInvariantError: See `_ensure_funding_account`.
+    """
     ids: dict[str, list[int]] = {currency: [] for currency in currencies}
     report: list[str] = []
     for currency in sorted(currencies):
@@ -128,7 +177,18 @@ def _create_accounts(
 
 
 def _write_file(accounts: dict[str, dict[str, list[int]]], target_path: str) -> None:
-    """Writes the resulting accounts to a file at target_path."""
+    """Writes the accounts as JSON to the target path, replacing any file there.
+
+    The content goes to a temporary file in the same directory and is then renamed, so the target
+    holds either its old content or the complete new content.
+
+    Args:
+        accounts: The content of the ids file.
+        target_path: The path of the file to write.
+
+    Raises:
+        OSError: The file cannot be written. The temporary file is removed.
+    """
     target = Path(target_path)
     tmp_file = tempfile.NamedTemporaryFile(
         dir=target.resolve().parent, delete=False, mode="w", encoding="utf-8"
@@ -146,6 +206,22 @@ def _write_file(accounts: dict[str, dict[str, list[int]]], target_path: str) -> 
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Runs the seed script.
+
+    All accounts are created in one database transaction. The ids file is written only after
+    that transaction has committed, so a failed run writes no file.
+
+    Args:
+        argv: The command-line arguments. `None` reads `sys.argv`.
+
+    Returns:
+        The exit code: 0 on success, 1 when the seed fails because an existing account does not
+        match, the database cannot be reached, or the file cannot be written.
+
+    Raises:
+        SystemExit: The arguments are invalid. The exit code is 2.
+        LedgerInvariantError: See `_ensure_funding_account`.
+    """
     args = _set_up_parser().parse_args(argv)  # None reads sys.argv; a usage error exits with 2
     # dict.fromkeys drops repeated currencies and keeps the order they were given in.
     currencies = list(dict.fromkeys(args.currency or DEFAULT_CURRENCIES))

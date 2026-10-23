@@ -33,6 +33,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Sets up logging and the connection pool at startup and closes the pool at shutdown.
+
+    The pool is available as `app.state.pool` while the app runs (ADR 0004). Startup waits until
+    the pool has its connections, so a database that cannot be reached stops the app starting.
+
+    Args:
+        app: The application. Its `state.settings` must be set.
+
+    Yields:
+        Nothing, while the application is running.
+    """
     configure_logging()
     settings = app.state.settings
     logger.info(settings.get_startup_log_message())

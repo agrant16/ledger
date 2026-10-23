@@ -59,6 +59,15 @@ class EntryPageResponse(BaseModel):
 
     @classmethod
     def from_model(cls, entry_page: EntryPage) -> Self:
+        """Builds the response from a page of entries. (ADR 0014)
+
+        Args:
+            entry_page: The page, in the order the repository returned it.
+
+        Returns:
+            The response. `next_cursor` is `None` when there are no more entries, otherwise the
+            cursor for the entry after the last one in the page.
+        """
         cursor = encode_cursor(entry_page.entries[-1].id) if entry_page.has_more else None
         return cls(
             entries=[
