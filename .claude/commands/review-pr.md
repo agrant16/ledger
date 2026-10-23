@@ -70,6 +70,7 @@ import-direction test still passes.
   ticked only if the item is fully done?
 - If an ADR is involved: Draft status, a row in `docs/adr/README.md`, and it matches the code.
 - Do the README and the OpenAPI descriptions still match the behavior?
+- Do new or changed docstrings follow the "Docstrings" conventions in `CLAUDE.md`? Do not flag anything those conventions allow (for example a short function with brief text, no `__init__` docstring, or no docstring on a function whose name and signature say everything). Do not ask for implementation reasoning in docstrings.
 
 ## 7. Report
 
