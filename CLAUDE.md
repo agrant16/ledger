@@ -24,7 +24,7 @@ The stack below is decided and pre-approved. Don't substitute alternatives.
 
 ### Docstrings
 
-Reasons and the full list are in #141. Rule numbers are those in the `docs/design.md` invariants list.
+Reasons and the full list are in #141. Rule numbers are those in the `docs/design.md` invariants list. Applies to implementation docstrings (`src/`). Testing docstrings are exempt, e.g. lazy import docstrings.
 
 - Google style, descriptive mood ("Returns", not "Return"). Single backticks for code names. `Args` and `Raises` entries are capitalised sentences ending in a period.
 - Sections: `Args:`, `Returns:`, `Raises:` (no types, the signature has them), plus `Yields:` for generators and context managers. `Attributes:` for every class with public attributes (dataclasses, exceptions that store fields, plain classes such as middleware): `name: description` when the attribute has a type hint, `name (type): description` only when it has none.
@@ -33,7 +33,7 @@ Reasons and the full list are in #141. Rule numbers are those in the `docs/desig
 - Entry points (`main.py`, `seed.py`, `migrate`) have a module docstring with usage and exit codes. Other modules need one only if their purpose is not clear from the name.
 - Contract only: what callers can rely on, what they raise, which rules and constraints apply. Cite rules and ADRs in parentheses after the summary line, on the same line: `(rule 5, ADR 0012)`. No implementation reasoning, worked examples, maintainer notes or filler, and no inline comments for removed reasoning.
 - A function called from outside its own module has `Args`, `Returns` and `Raises`, as far as it has them; short functions get shorter text but still list them. A private function needs no full sections, but a docstring it has follows the same rules. A function whose name and signature say everything may have none.
-- `Raises:` lists every error the function raises or lets through, with full causes only for the errors it raises itself; a propagated error is listed without its causes. Repository-level safety-net violations are summarised in one standalone line after `Raises`: "Propagates repository level safety-net violations."
+- `Raises:` lists every error the function raises or lets through, with full causes only for the errors it raises itself; a propagated error is listed without its full causes, as they are listed in the function that raises it. Database errors never propagate as such: the repository translates them (ADR 0013), and a repository-level safety-net violation reaches callers as `LedgerInvariantError`. A function that raises or lets through `LedgerInvariantError` lists it once, with its own causes and a general cause for anything underneath; an orchestrator that only calls other functions describes the cause generally. There is no standalone "Propagates…" line. Examples are in #141.
 - `conn`: "The request's connection, inside the caller's transaction." in services; "An active, open PostgreSQL connection or transaction context." in repositories.
 
 ## How we split the work
