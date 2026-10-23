@@ -35,3 +35,12 @@ class Transfer:
     reverses_transaction_id: int | None
     created_at: datetime
     entries: tuple[TransferEntry, ...]
+
+
+@dataclass(frozen=True)
+class TransferPayload:
+
+    from_account_id: int
+    to_account_id: int
+    currency: str
+    amount_minor: int
