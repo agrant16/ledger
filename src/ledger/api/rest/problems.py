@@ -1,4 +1,6 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Any
 
 from ledger.errors import (
     AlreadyReversedError,
@@ -20,10 +22,10 @@ class ProblemSpec:
     """How a `LedgerError` is reported: the fixed fields of the problem body. (ADR 0009)
 
     Attributes:
-        status (int): The HTTP status code.
-        type (str): The problem `type` URI, such as `urn:ledger:error:unknown-account`.
-        title (str): The short, fixed problem title.
-        extensions (tuple[str, ...]): The names of the exception attributes copied into the
+        status: The HTTP status code.
+        type: The problem `type` URI, such as `urn:ledger:error:unknown-account`.
+        title: The short, fixed problem title.
+        extensions: The names of the exception attributes copied into the
             problem body as extra members.
     """
 
@@ -31,6 +33,21 @@ class ProblemSpec:
     type: str
     title: str
     extensions: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ProblemOccurrence:
+    """The parts of a problem response that vary between occurrences. (ADR 0009)
+
+    Attributes:
+        detail: The details of the problem occurrence.
+        headers: The headers to return with the problem response.
+        extensions: The extension attributes associated with the problem occurrence.
+    """
+
+    detail: str
+    headers: dict[str, str] | None = None
+    extensions: Mapping[str, Any] | None = None
 
 
 PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
