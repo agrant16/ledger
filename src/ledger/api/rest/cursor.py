@@ -17,17 +17,23 @@ def _validate_encoded_str(encoded_str: str) -> None:
 
 
 def _in_bounds(entry_id: int) -> bool:
-    """Entry ids must be integers between 1 and 9223372036854775807"""
     return 0 < entry_id <= POSTGRES_BIG_INT
 
 
 def encode_cursor(entry_id: int) -> str:
-    """
-    Encodes an integer as a base64 encoded string and strips padding.
+    """Encodes an entry id as an opaque cursor. (ADR 0014)
 
-    Raises a LedgerInvariantError instead of InvalidRequestError. encode_cursor is directly
-    called within the application to encode an entry id from the entries database. if the
-    value is outside the allowed range it is a bug and not a bad request.
+    The cursor is the id's decimal text in base64url, without `=` padding.
+
+    Args:
+        entry_id: The id of the last entry on the page.
+
+    Returns:
+        The cursor.
+
+    Raises:
+        LedgerInvariantError: The id is outside 1 to 9223372036854775807, which is a bug
+            and not a bad request.
     """
     if not _in_bounds(entry_id):
         raise LedgerInvariantError("Critical error: entry_id is out of range")
@@ -35,13 +41,18 @@ def encode_cursor(entry_id: int) -> str:
 
 
 def decode_cursor(encoded_str: str) -> int:
-    """
-    Decodes a base64 encoded string back to an integer value.
+    """Decodes a cursor back to the entry id it holds. (ADR 0014)
 
-    Raises an InvalidRequestError on any error. ValueError is caught as
-    it allows the specific InvalidRequestErrors to be raised and passthrough.
-    It catches the other possible errors (binascii.Error, UnicodeDecodeError, and int() failures)
-    and converts to an InvalidRequestError.
+    Args:
+        encoded_str: The cursor from the client.
+
+    Returns:
+        The entry id.
+
+    Raises:
+        InvalidRequestError: The cursor is not base64url, does not hold a decimal integer,
+            holds an id outside 1 to 9223372036854775807, or is not the exact text
+            `encode_cursor` produces for that id.
     """
     _validate_encoded_str(encoded_str)
 

@@ -29,8 +29,17 @@ RETRY_AFTER_HEADER = {
 
 
 def problem_responses(*error_classes: type[LedgerError]) -> dict[int | str, dict[str, Any]]:
-    """The `responses=` entries for the given errors, plus the generic 500 every route can
-    return. Errors that share a status share one entry that names each of their `type`s."""
+    """Builds the `responses=` entries for a route's documented errors.
+
+    Adds the generic 500 every route can return. Errors that share a status share one
+    entry that names each of their `type`s.
+
+    Args:
+        *error_classes: The `LedgerError` subclasses the route documents.
+
+    Returns:
+        The entries keyed by status code. A 503 entry declares the `Retry-After` header.
+    """
     lines_by_status: dict[int, list[str]] = {}
     for error_class in error_classes:
         spec = problem_for(error_class)
@@ -72,7 +81,11 @@ def _fix_document(document: dict[str, Any]) -> None:
 
 
 def install_openapi(app: FastAPI) -> None:
-    """Make `app.openapi()` return the cleaned-up document."""
+    """Makes `app.openapi()` return the cleaned-up document.
+
+    Args:
+        app: The application to change.
+    """
     generate = app.openapi
 
     def openapi() -> dict[str, Any]:

@@ -2,8 +2,11 @@ from pydantic import BaseModel
 
 
 class ProblemFieldError(BaseModel):
-    """One problem found while validating a request: a body problem has a `pointer`, a path,
-    query or header problem has a `parameter`."""
+    """A problem found while validating a request.
+
+    A problem in the request body has a `pointer`. A problem in the path, a query parameter
+    or a header has a `parameter`.
+    """
 
     detail: str
     pointer: str | None = None
@@ -11,11 +14,9 @@ class ProblemFieldError(BaseModel):
 
 
 class ProblemDetails(BaseModel):
-    """The RFC 9457 body of every error response (`application/problem+json`).
+    """The RFC 9457 body of an error response (`application/problem+json`).
 
-    Documentation only: the error handlers build the body themselves, and nothing validates
-    against this model. It is what `/openapi.json` shows clients. The extension members are
-    present only on the errors that carry them.
+    Members other than the standard ones appear only on the errors that carry them.
     """
 
     type: str

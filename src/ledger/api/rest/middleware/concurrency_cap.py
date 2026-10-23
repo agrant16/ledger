@@ -7,27 +7,37 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 
 class ConcurrencyCapMiddleware:
-    """An ASGI Middleware class that handles concurrency cap failures.
+    """ASGI middleware that rejects requests above the concurrency cap. (ADR 0004, ADR 0009)
 
-    This middleware class counts incoming HTTP requests and checks when the
-    concurrency cap is reached. If the cap is reached any incoming HTTP requests
-    will return a 503 response with a Retry-After header. This will happen until
-    ongoing HTTP requests finish and the count is decremented.
+    A request that arrives while `cap` HTTP requests are in flight gets a 503 problem
+    response with a `Retry-After` header, and the wrapped app never sees it. Other scopes,
+    such as lifespan, pass through.
 
     Attributes:
-        app: The inner application service being run
-        cap: The allowed number of concurrent requests
-        request_count: The current number of incoming HTTP requests being handled
+        app: The wrapped application.
+        cap: The allowed number of concurrent HTTP requests.
+        request_count: The number of HTTP requests currently being handled.
     """
 
     def __init__(self, app: ASGIApp, cap: int):
-        """Initialize an instance of the ConcurrencyCapMiddleware class"""
+        """Initializes the middleware.
+
+        Args:
+            app: The application to wrap.
+            cap: The allowed number of concurrent HTTP requests.
+        """
         self.app = app
         self.cap = cap
         self.request_count = 0
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        """Handles incoming messages and checks if we've hit the concurrency cap."""
+        """Passes the request on, or rejects it with a 503 when the cap is reached.
+
+        Args:
+            scope: The ASGI connection scope.
+            receive: The ASGI receive channel.
+            send: The ASGI send channel.
+        """
         # any non-http requests (lifespan, etc.) get passed through
         if scope["type"] != "http":
             await self.app(scope, receive, send)
@@ -50,7 +60,7 @@ class ConcurrencyCapMiddleware:
             self.request_count -= 1
 
     async def _send_503_response(self, scope: Scope, send: Send) -> None:
-        """Builds a 503 response to deal with the concurrency cap"""
+        """Sends the 503 problem response with a `Retry-After` header."""
         body = json.dumps(
             {
                 "title": "Service busy",
