@@ -17,7 +17,7 @@ relates to. Then run `gh pr view`, `gh pr diff` and `gh pr checks` for the PR.
 ## 2. Scope and process
 
 - Does the PR address one milestone checkbox (or a clearly stated half of one)? Flag bundled,
-  unrelated changes.
+  unrelated changes. 
 - Is it on its own branch, with small focused commits, and are both CI checks (`lint-and-test`,
   `compose-smoke`) passing? Intermediate red commits are fine; the final state must be green.
 - Does the PR description have all three parts (scope, tests, review notes), and does it match
@@ -83,6 +83,7 @@ Group findings under these headings, each with a file and line reference where p
 - **Questions for me:** anything ambiguous that I need to decide.
 - **Could not verify:** what you could not check and why.
 - **Issue tasks:** For any attached issue verify the listed items are actually done.
+- **Non-Issue tasks:** Any changes not explicitl from the issue should be flagged. If the change is minor and related to the current work it is fine to include with a comment on the issue saying it was rolled in. e.g. adding type hints to a function in the same module or adjusting a docstring in the same module. For any other changes a decision needs to be made. 
 
 Finish with up to five questions I should be able to answer about the code in the "I write
 myself" areas, as if an interviewer asked. Then draft, but do not post, text for the PR's review
