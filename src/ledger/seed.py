@@ -46,9 +46,9 @@ def _currency_validator(value: str) -> str:
 
 
 def _per_currency_validator(value: str) -> int:
-    """Validates that 1 <= value <= ACCOUNT_PER_CURRENCY_MAX."""
+    """Validates value is an integer between 1 and 500."""
     if not re.fullmatch(r"[1-9][0-9]*", value):
-        raise argparse.ArgumentTypeError("--per-currency must be positive integer.")
+        raise argparse.ArgumentTypeError("--per-currency must be a positive integer.")
     integer = int(value)
     if integer > ACCOUNT_PER_CURRENCY_MAX:
         raise argparse.ArgumentTypeError(
@@ -72,7 +72,7 @@ def _set_up_parser() -> argparse.ArgumentParser:
         "--per-currency",
         type=_per_currency_validator,
         default=1,
-        help=f"Number of records (N) to generate per currency. "
+        help="Number of records (N) to generate per currency. "
         f"Must be 1 <= N <= {ACCOUNT_PER_CURRENCY_MAX}",
     )
 
@@ -192,7 +192,7 @@ def _write_file(accounts: dict[str, dict[str, list[int]]], target_path: str) -> 
         OSError: The file cannot be written. The temporary file is removed.
     """
     target = Path(target_path)
-    tmp_file = tempfile.NamedTemporaryFile(  # noqa SIM115
+    tmp_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
         dir=target.resolve().parent, delete=False, mode="w", encoding="utf-8"
     )
     tmp_path = Path(tmp_file.name)
