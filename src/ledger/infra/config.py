@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     pool_timeout_seconds: float = Field(
         default=2.0, alias="POOL_TIMEOUT_SECONDS", gt=0, allow_inf_nan=False
     )
-    # Max concurrent handler threads (anyio’s default is 40)
+    # Max concurrent handler threads (anyio's default is 40)
     handler_thread_limit: PositiveInt = Field(default=20, alias="HANDLER_THREAD_LIMIT")
     # Max concurrent HTTP requests before a 503 is returned
     concurrency_cap: PositiveInt = Field(default=CONCURRENCY_CAP, alias="CONCURRENCY_CAP")
