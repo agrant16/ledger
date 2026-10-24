@@ -46,7 +46,7 @@ def _currency_validator(value: str) -> str:
 
 
 def _per_currency_validator(value: str) -> int:
-    """Validates value is an integer between 1 and 500."""
+    """Validates the --per-currency value is an integer between 1 and 500."""
     if not re.fullmatch(r"[1-9][0-9]*", value):
         raise argparse.ArgumentTypeError("--per-currency must be a positive integer.")
     integer = int(value)
@@ -192,16 +192,22 @@ def _write_file(accounts: dict[str, dict[str, list[int]]], target_path: str) -> 
         OSError: The file cannot be written. The temporary file is removed.
     """
     target = Path(target_path)
-    tmp_file = tempfile.NamedTemporaryFile(  # noqa: SIM115
+
+    with tempfile.NamedTemporaryFile(
         dir=target.resolve().parent, delete=False, mode="w", encoding="utf-8"
-    )
-    tmp_path = Path(tmp_file.name)
-    # file is opened outside try. This is fine here because if either json.dump or replace
-    # fail the with tmp_file context block has already closed the file and cleanup is done.
-    try:
-        with tmp_file:
+    ) as tmp_file:
+        tmp_path = Path(tmp_file.name)
+        try:
             json.dump(accounts, tmp_file)
-        tmp_path.replace(target_path)
+            # Flush data to disk before closing/renaming
+            tmp_file.flush()
+        except OSError:
+            tmp_path.unlink(missing_ok=True)
+            raise
+
+    # The file is guaranteed closed here, making the rename safe across all OS platforms
+    try:
+        tmp_path.replace(target)
     except OSError:
         tmp_path.unlink(missing_ok=True)
         raise
@@ -229,9 +235,10 @@ def main(argv: list[str] | None = None) -> int:
     currencies = list(dict.fromkeys(args.currency or DEFAULT_CURRENCIES))
 
     try:
-        with ExitStack() as stack:
-            conn = psycopg.connect(load_settings().app_url, connect_timeout=20)
-            stack.enter_context(conn.transaction())
+        with (
+            psycopg.connect(load_settings().app_url, connect_timeout=20) as conn,
+            conn.transaction(),
+        ):
             accounts, report = _create_accounts(conn, currencies, args.per_currency)
         for line in report:
             print(line)

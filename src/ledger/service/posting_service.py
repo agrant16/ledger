@@ -89,9 +89,9 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
         UnknownAccountError: An entry names an account that does not exist.
         CurrencyMismatchError: An entry's currency differs from its account's.
         InsufficientFundsError: An account that may not go negative would.
-        LedgerInvariantError: The entry list is malformed, when the database fails
-            to update every target account balance, or a repository-level data integrity
-            constraint is violated.
+        LedgerInvariantError: The entry list is empty, the database fails to update every
+            target account balance, or a repository-level data integrity constraint is
+            violated.
     """
     if not entries:
         raise LedgerInvariantError(f"No entries for transaction {transaction_id}")
