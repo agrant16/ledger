@@ -18,6 +18,7 @@ import json
 import re
 import sys
 import tempfile
+from contextlib import ExitStack
 from pathlib import Path
 
 import psycopg
@@ -27,10 +28,8 @@ from ledger.infra.config import load_settings
 from ledger.models.account_model import Account
 from ledger.service.account_service import create_account, find_account_by_name
 
-DEFAULT_CURRENCIES = [
-    "USD",
-    "EUR",
-]
+DEFAULT_CURRENCIES = ("USD", "EUR")
+ACCOUNT_PER_CURRENCY_MAX = 500
 
 
 class SeedError(Exception):
@@ -47,12 +46,14 @@ def _currency_validator(value: str) -> str:
 
 
 def _per_currency_validator(value: str) -> int:
-    """Validates that the value for `--per-currency` is an integer from 1 to 500."""
+    """Validates that 1 <= value <= ACCOUNT_PER_CURRENCY_MAX."""
     if not re.fullmatch(r"[1-9][0-9]*", value):
         raise argparse.ArgumentTypeError("--per-currency must be positive integer.")
     integer = int(value)
-    if integer > 500:
-        raise argparse.ArgumentTypeError("--per-currency must be a positive integer <= 500.")
+    if integer > ACCOUNT_PER_CURRENCY_MAX:
+        raise argparse.ArgumentTypeError(
+            f"--per-currency must be a positive integer <= {ACCOUNT_PER_CURRENCY_MAX}."
+        )
     return integer
 
 
@@ -71,7 +72,8 @@ def _set_up_parser() -> argparse.ArgumentParser:
         "--per-currency",
         type=_per_currency_validator,
         default=1,
-        help="Number of records (N) to generate per currency. Must be 1 <= N <= 500",
+        help=f"Number of records (N) to generate per currency. "
+        f"Must be 1 <= N <= {ACCOUNT_PER_CURRENCY_MAX}",
     )
 
     # --output is 100% required
@@ -190,7 +192,7 @@ def _write_file(accounts: dict[str, dict[str, list[int]]], target_path: str) -> 
         OSError: The file cannot be written. The temporary file is removed.
     """
     target = Path(target_path)
-    tmp_file = tempfile.NamedTemporaryFile(
+    tmp_file = tempfile.NamedTemporaryFile(  # noqa SIM115
         dir=target.resolve().parent, delete=False, mode="w", encoding="utf-8"
     )
     tmp_path = Path(tmp_file.name)
@@ -227,9 +229,10 @@ def main(argv: list[str] | None = None) -> int:
     currencies = list(dict.fromkeys(args.currency or DEFAULT_CURRENCIES))
 
     try:
-        with psycopg.connect(load_settings().app_url, connect_timeout=20) as conn:
-            with conn.transaction():
-                accounts, report = _create_accounts(conn, currencies, args.per_currency)
+        with ExitStack() as stack:
+            conn = psycopg.connect(load_settings().app_url, connect_timeout=20)
+            stack.enter_context(conn.transaction())
+            accounts, report = _create_accounts(conn, currencies, args.per_currency)
         for line in report:
             print(line)
         _write_file(accounts, args.output)
