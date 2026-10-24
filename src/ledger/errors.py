@@ -22,7 +22,7 @@ class DuplicateAccountNameError(LedgerError):
         account_name (str): The name that is already taken.
     """
 
-    def __init__(self, account_name: str):
+    def __init__(self, account_name: str) -> None:
         self.account_name = account_name
         super().__init__(f"Account with name '{self.account_name}' already exists")
 
@@ -32,11 +32,11 @@ class InvalidRequestError(LedgerError):
 
 
 class UnknownAccountError(LedgerError):
-    pass
+    """The account ID provided was not found in the database."""
 
 
 class UnknownTransferError(LedgerError):
-    pass
+    """The transfer ID provided was not found in the database."""
 
 
 class CurrencyMismatchError(LedgerError):
@@ -52,7 +52,7 @@ class InsufficientFundsError(LedgerError):
         net_change_minor (int): The net change the transfer would make to that balance.
     """
 
-    def __init__(self, account_id: int, balance_minor: int, net_change_minor: int):
+    def __init__(self, account_id: int, balance_minor: int, net_change_minor: int) -> None:
         self.account_id = account_id
         self.balance_minor = balance_minor
         self.net_change_minor = net_change_minor

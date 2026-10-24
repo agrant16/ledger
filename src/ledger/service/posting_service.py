@@ -24,14 +24,11 @@ def claim_transaction(
     request_hash: str,
     reverses_transaction_id: int | None = None,
 ) -> Claim:
-    """Claims an idempotency key, or recognizes a repeat of an earlier claim. (rule 5)
+    """Claims an idempotency key, or recognizes a repeat of an earlier claim. (rule 5, ADR 0012)
 
-    A new key inserts the transactions row and returns its id with
-    replay=False. If the key already exists, the stored request hash decides:
-    the same hash is a replay of the original request and returns the original
-    id with replay=True, and nothing is written. A different hash means the key
-    was reused for another request and raises IdempotencyConflictError.
-    (ADR 0012)
+    A new key inserts the transactions row and returns its id with `replay=False`.
+    A key that already exists returns the original id with `replay=True` when the
+    request hash matches, and writes nothing.
 
     Args:
         conn: The request's connection, inside the caller's transaction.
@@ -44,9 +41,8 @@ def claim_transaction(
 
     Raises:
         IdempotencyConflictError: The key was already used with a different request.
-        LedgerInvariantError: The key conflicted but its row cannot be found.
-
-    Propagates repository level safety-net violations.
+        LedgerInvariantError: The key conflicted but its row cannot be found or a
+            repository-level data integrity constraint is violated.
     """
     transaction_id = posting_repo.insert_claim(
         conn, idempotency_key, request_hash, reverses_transaction_id
@@ -60,48 +56,41 @@ def claim_transaction(
         existing_id, existing_hash = existing_record
         if request_hash == existing_hash:
             return Claim(transaction_id=existing_id, replay=True)
-        else:
-            raise IdempotencyConflictError(
-                "Idempotency key was already used with a different request"
-            )
+        raise IdempotencyConflictError("Idempotency key was already used with a different request")
     return Claim(transaction_id=transaction_id, replay=False)
 
 
 @transactional_service_method
 def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
-    """Validates and writes the entries of a claimed transaction. (rules 1, 4, 6)
+    """
+    Validates and writes the entries of a claimed transaction. (rules 1, 4, 6, ADR 0005, ADR 0006)
 
-    The checks run in a fixed order and nothing is written until all of them
-    pass, so a rejected post leaves no entries and no balance change. An account
-    that may not go negative stays at or above zero under concurrent posts.
-    (ADR 0006)
+    Nothing is written unless every check passes, so a rejected post leaves no
+    entries and no balance change. An account that may not go negative stays at
+    or above zero under concurrent posts. This function never commits; on an
+    error the caller's rollback also removes the claim.
 
-    Checks:
+    Checks, in order:
     1. entries are present
     2. they sum to zero per currency (rule 1)
     3. every account named exists
     4. each entry's currency matches its account (rule 6)
-    5. no account with allow_negative false would end below zero once all the
+    5. no account with `allow_negative` false would end below zero once all the
        entries are applied (rule 4)
-
-    Only then are the entries inserted and the balances updated.
-
-    The caller owns the transaction. This function never commits, and on an
-    error the caller's rollback also removes the claim. (ADR 0005)
 
     Args:
         conn: The request's connection, inside the caller's transaction.
-        transaction_id: The id returned by claim_transaction.
+        transaction_id: The id returned by `claim_transaction`.
         entries: The entries to write; negative amounts debit, positive credit.
 
     Raises:
-        LedgerInvariantError: There are no entries, or a balance row was not updated.
         UnbalancedEntriesError: The entries do not sum to zero in some currency.
         UnknownAccountError: An entry names an account that does not exist.
         CurrencyMismatchError: An entry's currency differs from its account's.
         InsufficientFundsError: An account that may not go negative would.
-
-    Propagates repository level safety-net violations.
+        LedgerInvariantError: The entry list is empty, the database fails to update every
+            target account balance, or a repository-level data integrity constraint is
+            violated.
     """
     if not entries:
         raise LedgerInvariantError(f"No entries for transaction {transaction_id}")
@@ -154,12 +143,11 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
 def claim_and_post(
     conn: psycopg.Connection, idempotency_key: str, request_hash: str, payload: TransferPayload
 ) -> Transfer:
-    """Claims the key and posts a two-entry transfer in the caller's transaction. (rule 5)
+    """Claims the key and posts a two-entry transfer. (rule 5, ADR 0005)
 
-    On a replay the post is skipped, so the money moves once, and the stored
-    transfer is returned. The claim and the posting share the one connection
-    and so one database transaction: if the post fails, rolling back removes
-    the claim too and the key is not used up. (ADR 0005)
+    On a replay the post is skipped and the stored transfer is returned, so the
+    money moves once. The claim and the posting share the request's transaction:
+    if the post fails, the rollback removes the claim too and the key is not used up.
 
     Args:
         conn: The request's connection, inside the caller's transaction.
@@ -175,7 +163,8 @@ def claim_and_post(
         UnknownAccountError: The debit or credit account does not exist.
         CurrencyMismatchError: The transfer currency differs from an account's currency.
         InsufficientFundsError: The debit account cannot cover the transfer amount.
-        LedgerInvariantError: Propagates from called functions.
+        LedgerInvariantError: Any structural invariant or data integrity safety net fails
+            during the transaction workflow.
     """
     claim = claim_transaction(conn, idempotency_key, request_hash)
     if not claim.replay:

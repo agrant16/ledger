@@ -1,5 +1,6 @@
 import logging
 from contextvars import ContextVar
+from typing import Any
 
 UVICORN_DUPLICATE = "Exception in ASGI application"
 
@@ -19,13 +20,13 @@ class DropUvicornDuplicate(logging.Filter):
         return record.getMessage().strip() != UVICORN_DUPLICATE
 
 
-def _factory(*args, **kwargs):
+def _factory(*args: Any, **kwargs: Any) -> logging.LogRecord:
     record = _original_factory(*args, **kwargs)
     record.request_id = request_id_ctx_var.get()  # "-" outside a request
     return record
 
 
-def install_log_record_factory():
+def install_log_record_factory() -> None:
     """Sets the log record factory so every record carries the current `request_id`.
 
     Outside a request the `request_id` is `-`.

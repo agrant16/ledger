@@ -27,10 +27,8 @@ from ledger.infra.config import load_settings
 from ledger.models.account_model import Account
 from ledger.service.account_service import create_account, find_account_by_name
 
-DEFAULT_CURRENCIES = [
-    "USD",
-    "EUR",
-]
+DEFAULT_CURRENCIES = ("USD", "EUR")
+ACCOUNT_PER_CURRENCY_MAX = 500
 
 
 class SeedError(Exception):
@@ -47,12 +45,14 @@ def _currency_validator(value: str) -> str:
 
 
 def _per_currency_validator(value: str) -> int:
-    """Validates that the value for `--per-currency` is an integer from 1 to 500."""
+    """Validates the `--per-currency` value is an integer between 1 and 500."""
     if not re.fullmatch(r"[1-9][0-9]*", value):
-        raise argparse.ArgumentTypeError("--per-currency must be positive integer.")
+        raise argparse.ArgumentTypeError("--per-currency must be a positive integer.")
     integer = int(value)
-    if integer > 500:
-        raise argparse.ArgumentTypeError("--per-currency must be a positive integer <= 500.")
+    if integer > ACCOUNT_PER_CURRENCY_MAX:
+        raise argparse.ArgumentTypeError(
+            f"--per-currency must be a positive integer <= {ACCOUNT_PER_CURRENCY_MAX}."
+        )
     return integer
 
 
@@ -65,13 +65,14 @@ def _set_up_parser() -> argparse.ArgumentParser:
         action="append",
         type=_currency_validator,
         help="Currency code to include (e.g., --currency USD --currency EUR). "
-        f"Can be repeated. Defaults to {DEFAULT_CURRENCIES}.",
+        f"Can be repeated. Defaults to {', '.join(DEFAULT_CURRENCIES)}.",
     )
     parser.add_argument(
         "--per-currency",
         type=_per_currency_validator,
         default=1,
-        help="Number of records (N) to generate per currency. Must be 1 <= N <= 500",
+        help="Number of records (N) to generate per currency. "
+        f"Must be 1 <= N <= {ACCOUNT_PER_CURRENCY_MAX}",
     )
 
     # --output is 100% required
@@ -190,18 +191,17 @@ def _write_file(accounts: dict[str, dict[str, list[int]]], target_path: str) -> 
         OSError: The file cannot be written. The temporary file is removed.
     """
     target = Path(target_path)
-    tmp_file = tempfile.NamedTemporaryFile(
-        dir=target.resolve().parent, delete=False, mode="w", encoding="utf-8"
-    )
-    tmp_path = Path(tmp_file.name)
-    # file is opened outside try. This is fine here because if either json.dump or replace
-    # fail the with tmp_file context block has already closed the file and cleanup is done.
+    tmp_path: Path | None = None
     try:
-        with tmp_file:
+        with tempfile.NamedTemporaryFile(
+            dir=target.resolve().parent, delete=False, mode="w", encoding="utf-8"
+        ) as tmp_file:
+            tmp_path = Path(tmp_file.name)
             json.dump(accounts, tmp_file)
-        tmp_path.replace(target_path)
+        tmp_path.replace(target)
     except OSError:
-        tmp_path.unlink(missing_ok=True)
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
         raise
 
 
@@ -227,9 +227,11 @@ def main(argv: list[str] | None = None) -> int:
     currencies = list(dict.fromkeys(args.currency or DEFAULT_CURRENCIES))
 
     try:
-        with psycopg.connect(load_settings().app_url, connect_timeout=20) as conn:
-            with conn.transaction():
-                accounts, report = _create_accounts(conn, currencies, args.per_currency)
+        with (
+            psycopg.connect(load_settings().app_url, connect_timeout=20) as conn,
+            conn.transaction(),
+        ):
+            accounts, report = _create_accounts(conn, currencies, args.per_currency)
         for line in report:
             print(line)
         _write_file(accounts, args.output)

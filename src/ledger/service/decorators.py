@@ -26,7 +26,7 @@ def transactional_service_method[**P, R](func: Callable[P, R]) -> Callable[P, R]
     """
 
     @wraps(func)
-    def require_transaction(*args, **kwargs):
+    def require_transaction(*args: P.args, **kwargs: P.kwargs) -> R:
         conn = kwargs["conn"] if "conn" in kwargs else (args[0] if args else None)
         if conn is None or conn.autocommit:
             raise LedgerInvariantError(
