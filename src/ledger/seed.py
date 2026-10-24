@@ -65,7 +65,7 @@ def _set_up_parser() -> argparse.ArgumentParser:
         action="append",
         type=_currency_validator,
         help="Currency code to include (e.g., --currency USD --currency EUR). "
-        f"Can be repeated. Defaults to {DEFAULT_CURRENCIES}.",
+        f"Can be repeated. Defaults to {', '.join(DEFAULT_CURRENCIES)}.",
     )
     parser.add_argument(
         "--per-currency",
