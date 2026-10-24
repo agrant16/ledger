@@ -119,9 +119,7 @@ def find_claim(conn: psycopg.Connection, idempotency_key: str) -> tuple[int, str
         `(transaction_id, request_hash)`, or None if the key has not been used.
     """
     with conn.cursor() as cursor:
-        cursor.execute(SELECT_CLAIM_SQL, (idempotency_key,))
-        row = cursor.fetchone()
-        return row
+        return cursor.execute(SELECT_CLAIM_SQL, (idempotency_key,)).fetchone()
 
 
 def lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int, LockedAccount]:
