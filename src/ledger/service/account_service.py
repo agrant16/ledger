@@ -24,8 +24,7 @@ def create_account(
 
     Raises:
         DuplicateAccountNameError: The account name is already taken.
-        LedgerInvariantError: The account exists but has no balance row or a repository-level
-            data integrity constraint is violated.
+        LedgerInvariantError: A repository-level data integrity constraint is violated.
     """
     account = account_repo.insert_account(conn, account_name, currency, allow_negative)
     account_repo.insert_balance(conn, account.id, account.allow_negative)
