@@ -45,7 +45,7 @@ def _currency_validator(value: str) -> str:
 
 
 def _per_currency_validator(value: str) -> int:
-    """Validates the --per-currency value is an integer between 1 and 500."""
+    """Validates the `--per-currency` value is an integer between 1 and 500."""
     if not re.fullmatch(r"[1-9][0-9]*", value):
         raise argparse.ArgumentTypeError("--per-currency must be a positive integer.")
     integer = int(value)
@@ -191,24 +191,17 @@ def _write_file(accounts: dict[str, dict[str, list[int]]], target_path: str) -> 
         OSError: The file cannot be written. The temporary file is removed.
     """
     target = Path(target_path)
-
-    with tempfile.NamedTemporaryFile(
-        dir=target.resolve().parent, delete=False, mode="w", encoding="utf-8"
-    ) as tmp_file:
-        tmp_path = Path(tmp_file.name)
-        try:
-            json.dump(accounts, tmp_file)
-            # Flush data to disk before closing/renaming
-            tmp_file.flush()
-        except OSError:
-            tmp_path.unlink(missing_ok=True)
-            raise
-
-    # The file is guaranteed closed here, making the rename safe across all OS platforms
+    tmp_path: Path | None = None
     try:
+        with tempfile.NamedTemporaryFile(
+            dir=target.resolve().parent, delete=False, mode="w", encoding="utf-8"
+        ) as tmp_file:
+            tmp_path = Path(tmp_file.name)
+            json.dump(accounts, tmp_file)
         tmp_path.replace(target)
     except OSError:
-        tmp_path.unlink(missing_ok=True)
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
         raise
 
 
