@@ -60,9 +60,7 @@ def claim_transaction(
         existing_id, existing_hash = existing_record
         if request_hash == existing_hash:
             return Claim(transaction_id=existing_id, replay=True)
-        raise IdempotencyConflictError(
-            "Idempotency key was already used with a different request"
-        )
+        raise IdempotencyConflictError("Idempotency key was already used with a different request")
     return Claim(transaction_id=transaction_id, replay=False)
 
 
