@@ -41,9 +41,8 @@ def claim_transaction(
 
     Raises:
         IdempotencyConflictError: The key was already used with a different request.
-        LedgerInvariantError: The key conflicted but its row cannot be found, any
-            structural invariant is violated, or a repository-level data integrity
-            constraint is violated.
+        LedgerInvariantError: The key conflicted but its row cannot be found or a
+            repository-level data integrity constraint is violated.
     """
     transaction_id = posting_repo.insert_claim(
         conn, idempotency_key, request_hash, reverses_transaction_id
