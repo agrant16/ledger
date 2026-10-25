@@ -7,11 +7,10 @@ from ledger.repository import posting_repo
 from ledger.service.decorators import transactional_service_method
 from ledger.service.posting_service import claim_transaction, post_transaction
 
+
 def _empty_entries_check(transfer: Transfer) -> None:
     if not transfer.entries:
-        raise LedgerInvariantError(
-            f"Critical error: transfer {claim.transaction_id} has no entries."
-        )
+        raise LedgerInvariantError(f"Critical error: transfer {transfer.id} has no entries.")
 
 
 def entries_for_transfer(payload: TransferPayload) -> list[Entry]:
