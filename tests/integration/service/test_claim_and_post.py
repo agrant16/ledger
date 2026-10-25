@@ -38,7 +38,6 @@ from ledger.errors import (
     LedgerError,
     LedgerInvariantError,
     UnknownAccountError,
-    UnknownTransferError,
 )
 from ledger.infra.config import Settings
 from ledger.infra.db import run_in_transaction
@@ -379,7 +378,7 @@ def test_a_missing_transfer_after_the_claim_is_a_bug_and_not_an_unknown_transfer
     with pytest.raises(LedgerInvariantError) as failure:
         run(app_pool, "k1", alice.id, bob.id, 300)
 
-    assert not isinstance(failure.value, (LedgerError, UnknownTransferError))
+    assert not isinstance(failure.value, LedgerError)
     assert failure.value.__cause__ is None  # raised as the bug it is, not translated from a 404
     assert len(asked_for) == 1
     assert str(asked_for[0]) in str(failure.value)  # names the transaction id

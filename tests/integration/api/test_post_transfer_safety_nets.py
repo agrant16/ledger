@@ -167,6 +167,7 @@ def break_the_no_entries(monkeypatch: pytest.MonkeyPatch) -> list:
         calls.append(1)
 
     def a_transfer_with_one_entry(conn: psycopg.Connection, transfer_id: int) -> Transfer:
+        # Placeholder values: the read-back only checks that the entries are not empty.
         return Transfer(
             id=transfer_id,
             reverses_transaction_id=None,
