@@ -47,8 +47,8 @@ class Settings(BaseSettings):
     # Max concurrent HTTP requests before a 503 is returned
     concurrency_cap: PositiveInt = Field(default=CONCURRENCY_CAP, alias="CONCURRENCY_CAP")
     # health checks have their own timeout
-    health_timeout_seconds: PositiveInt = Field(
-        default=2, alias="HEALTH_TIMEOUT_SECONDS", allow_inf_nan=False
+    health_timeout_seconds: float = Field(
+        default=2.0, alias="HEALTH_TIMEOUT_SECONDS", allow_inf_nan=False
     )
 
     def get_startup_log_message(self) -> str:
@@ -59,7 +59,7 @@ class Settings(BaseSettings):
         Returns:
             The log message.
         """
-        message = " ".join(f"{k}={v}" for k, v in self.model_dump().items() if k in PUBLIC_SETTINGS)
+        message = " ".join(f"{k}={v}" for k, v in sorted(self.model_dump().items()) if k in PUBLIC_SETTINGS)
         return f"Starting app: {message}"
 
 
