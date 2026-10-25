@@ -92,6 +92,12 @@ MOVED_NAMES = {
     "models/posting_model.py": ("models/transfer_model.py", {"Transfer", "TransferEntry"}),
 }
 
+# Imports between modules of one layer that must only go one way (issue #162): transfer_service
+# builds on posting_service, never the reverse. Maps a module to the modules it must not import.
+FORBIDDEN_MODULE_IMPORTS = {
+    "ledger.service.posting_service": {"ledger.service.transfer_service"},
+}
+
 # The API layer lives in the rest package and nothing else sits directly under api/.
 API_ROOT_MODULES = {"__init__"}
 API_PACKAGES = {"rest"}
@@ -146,6 +152,17 @@ def move_violations(root: Path, moves: dict[str, tuple[str, set[str]]]) -> list[
     return problems
 
 
+def module_import_violations(root: Path) -> list[str]:
+    """Imports that `FORBIDDEN_MODULE_IMPORTS` rules out for the importing module."""
+    problems: list[str] = []
+    for path in sorted(root.rglob("*.py")):
+        name = module_name(root, path)
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for imported in sorted(imported_names(tree) & FORBIDDEN_MODULE_IMPORTS.get(name, set())):
+            problems.append(f"{name} imports {imported}: the dependency goes the other way")
+    return problems
+
+
 def sql_violations(root: Path) -> list[str]:
     """Database access outside the repository: a call to execute, executemany or cursor, or a string
     that starts like an SQL statement, in a service, API or model module."""
@@ -183,6 +200,10 @@ def test_sql_lives_only_in_the_repository() -> None:
 
 def test_moved_names_are_defined_only_in_their_new_module() -> None:
     assert move_violations(SRC, MOVED_NAMES) == []
+
+
+def test_posting_service_does_not_import_transfer_service() -> None:
+    assert module_import_violations(SRC) == []
 
 
 def test_the_root_of_the_package_holds_only_entry_points_and_the_modules_still_to_split() -> None:
@@ -294,6 +315,39 @@ def test_an_import_inside_a_function_or_a_type_checking_block_is_caught(tmp_path
 
     flagged = {message.split(" ")[0] for message in import_violations(root)}
     assert flagged == {"ledger.service.a", "ledger.service.b"}
+
+
+# --- the one-way module rule: it must catch the reverse import ---------------------------------
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from ledger.service import transfer_service\n",
+        "from ledger.service.transfer_service import get_transfer\n",
+        "import ledger.service.transfer_service\n",
+    ],
+)
+def test_a_reverse_import_between_service_modules_is_caught(tmp_path: Path, source: str) -> None:
+    root = build_tree(
+        tmp_path, {"service/posting_service.py": source, "service/transfer_service.py": ""}
+    )
+
+    assert module_import_violations(root) != []
+
+
+def test_the_allowed_direction_between_service_modules_is_not_flagged(tmp_path: Path) -> None:
+    root = build_tree(
+        tmp_path,
+        {
+            "service/posting_service.py": "",
+            "service/transfer_service.py": (
+                "from ledger.service.posting_service import claim_transaction\n"
+            ),
+        },
+    )
+
+    assert module_import_violations(root) == []
 
 
 # --- the move rule: it must catch a copy left behind -------------------------------------------
