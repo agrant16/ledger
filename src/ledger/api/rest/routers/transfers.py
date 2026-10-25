@@ -19,8 +19,7 @@ from ledger.errors import (
 )
 from ledger.infra.db import run_in_transaction
 from ledger.models.transfer_model import TransferPayload
-from ledger.service.posting_service import claim_and_post
-from ledger.service.transfer_service import get_transfer
+from ledger.service.transfer_service import claim_and_post, get_transfer
 
 router = APIRouter()
 
