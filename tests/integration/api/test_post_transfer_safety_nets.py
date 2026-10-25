@@ -10,6 +10,9 @@ the same Idempotency-Key can be used again. Two kinds of failure are covered:
 - each of the four safety nets, reached by breaking exactly one thing inside the service layer:
   unbalanced entries (`UnbalancedEntriesError`), the `balances` CHECK, the zero-sum trigger and the
   no-entries trigger. The two triggers are deferred, so they fire when the transaction commits.
+  A fifth, raised by the service itself, is the stored transfer missing when it is read back after
+  the claim and the post (`LedgerInvariantError`, issue #161): a bug, so a 500 and never the 404
+  that `GET /transfers/{id}` gives for an unknown id.
 
 Each one must return a generic 500 `about:blank` problem that leaks nothing from the database, log
 one ERROR record with the exception, persist nothing, leave the key reusable, not be retried (the
@@ -20,6 +23,7 @@ the control: it is a 422, not a 500.
 
 import dataclasses
 import logging
+from datetime import UTC, datetime
 
 import psycopg
 import pytest
@@ -32,7 +36,7 @@ from ledger.api.rest.error_handlers import install_error_handling
 from ledger.api.rest.router import router
 from ledger.errors import LedgerInvariantError, UnbalancedEntriesError
 from ledger.models.posting_model import Entry
-from ledger.models.transfer_model import TransferPayload
+from ledger.models.transfer_model import Transfer, TransferEntry, TransferPayload
 from ledger.repository import posting_repo
 from tests.db_helpers import commit_accounts, commit_transfer, reset_database
 
@@ -162,18 +166,42 @@ def break_the_no_entries(monkeypatch: pytest.MonkeyPatch) -> list:
     def write_nothing(conn: psycopg.Connection, transaction_id: int, entries: list[Entry]) -> None:
         calls.append(1)
 
+    def a_transfer_with_one_entry(conn: psycopg.Connection, transfer_id: int) -> Transfer:
+        # Placeholder values: the read-back only checks that the entries are not empty.
+        return Transfer(
+            id=transfer_id,
+            reverses_transaction_id=None,
+            created_at=datetime.now(UTC),
+            entries=(TransferEntry(id=0, account_id=0, amount_minor=0, currency="USD"),),
+        )
+
     monkeypatch.setattr(posting_repo, "insert_entries", write_nothing)
     # Deliberate order: claim_and_post reads the stored transfer before the commit. Stubbed, that
     # read does not raise, so the failure comes from the trigger at commit (the test asserts the
     # cause, so a reordering that let the read raise first would fail it).
-    monkeypatch.setattr(posting_service, "get_transfer", lambda conn, transfer_id: None)
+    monkeypatch.setattr(posting_repo, "find_transfer", a_transfer_with_one_entry)
+    return calls
+
+
+def break_the_read_back(monkeypatch: pytest.MonkeyPatch) -> list:
+    """Make the read of the stored transfer find nothing, as if the row just written were gone.
+    The database keeps this from happening for real (the claim row exists), so the service is the
+    only thing left to report it, as a bug and not as a 404."""
+    calls: list = []
+
+    def find_nothing(conn: psycopg.Connection, transfer_id: int) -> None:
+        calls.append(1)
+
+    monkeypatch.setattr(posting_repo, "find_transfer", find_nothing)
     return calls
 
 
 # net -> (how to break it, amount to send, logged exception type, database cause or None). The cause
 # is (psycopg error type, text its constraint name or message must contain): it proves the failure
 # came from the database safety net and not from an earlier check in the service. All three
-# database nets raise check_violation, so the type alone cannot tell them apart.
+# database nets raise check_violation, so the type alone cannot tell them apart. The read-back net
+# is raised by the service itself, so it has no cause: a cause would mean it was translated from
+# another error (such as UnknownTransferError, a 404) and not raised as the bug it is.
 NETS = {
     "unbalanced-entries": (break_the_entries, NORMAL_AMOUNT, UnbalancedEntriesError, None),
     "balances-check": (
@@ -193,6 +221,12 @@ NETS = {
         NORMAL_AMOUNT,
         LedgerInvariantError,
         (psycopg.errors.CheckViolation, "at least one record in entries"),
+    ),
+    "missing-transfer-after-post": (
+        break_the_read_back,
+        NORMAL_AMOUNT,
+        LedgerInvariantError,
+        None,
     ),
 }
 

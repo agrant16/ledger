@@ -51,5 +51,5 @@ def get_transfer(conn: psycopg.Connection, transfer_id: int) -> Transfer:
     if transfer is None:
         raise UnknownTransferError(f"Transfer {transfer_id} not found")
     if not transfer.entries:
-        raise LedgerInvariantError(f"Critical error: transfer {transfer_id} has no entry records")
+        raise LedgerInvariantError(f"Critical error: transfer {transfer_id} has no entries.")
     return transfer
