@@ -177,7 +177,7 @@ def claim_and_post(
     transfer = posting_repo.find_transfer(conn, claim.transaction_id)
     if transfer is None:
         raise LedgerInvariantError(
-            f"Critical error: transfer {claim.transaction_id} cannot be found"
+            f"Critical error: transfer {claim.transaction_id} cannot be found."
         )
     if not transfer.entries:
         raise LedgerInvariantError(
