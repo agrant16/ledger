@@ -80,3 +80,6 @@ class ServiceBusyError(LedgerError):
 
 class UnbalancedEntriesError(LedgerInvariantError):
     """The sum of entries per currency in a transfer is not zero (rule 1). A bug."""
+
+class NotReadyError(LedgerError):
+    """The service is not ready."""
