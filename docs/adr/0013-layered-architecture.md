@@ -22,6 +22,8 @@
 
   *Note (2026-10-20): the table above is the plan; milestone 3 added files to it. `models/` also holds `entry_history_model.py` (`EntryPage`, `HistoryEntry`, `MAX_PAGE_SIZE`). `infra/db.py` also holds `check_database`. `api/rest/` also holds `cursor.py` (the entries cursor, ADR 0014), `openapi.py` (the documented error responses), `dependencies.py`, `middleware/concurrency_cap.py` and `routers/health.py`. The layers and import directions are unchanged.*
 
+  *Note (2026-10-24, #162): `claim_and_post` moved from `posting_service.py` to `transfer_service.py`, because it builds and reads back a transfer. `posting_service.py` keeps `claim_transaction` and `post_transaction`, and `transfer_service.py` now imports from it. The import directions are unchanged.*
+
 - **The API layer is the transaction boundary,** as ADR 0011 says. A route calls `run_in_transaction(pool, lambda conn: some_service_function(conn, ...))` once, and the service layer is always handed an open connection. ADR 0011 is unchanged.
 - **Services check the connection with a decorator,** `@transactional_service_method`, which refuses a connection in autocommit mode with a `LedgerInvariantError` naming the function. It replaces the `require_transaction(conn, name)` call at the top of each function.
 - **SQL lives only in the repository layer.** The rules stay in the service. For example, the claim becomes two repository functions ("insert the claim if the key is free" and "look up the key") and a service function that decides between a replay and a conflict. `post_transaction`'s checks stay in the service, and the locking `SELECT ... FOR UPDATE`, the entry insert and the balance update become repository functions whose contracts are unchanged (ADR 0006).
