@@ -25,7 +25,6 @@ from ledger.api.rest.error_handlers import RETRY_AFTER_SECONDS
 pytestmark = pytest.mark.usefixtures("migrated_database")
 
 READ = ("GET", "/accounts/1/balance", None)
-HEALTH = ("GET", "/health", None)
 WRITE_BODY = {"account_name": "customer:busy", "currency": "USD"}
 WRITE = ("POST", "/accounts", WRITE_BODY)
 
@@ -38,9 +37,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
         yield client
 
 
-@pytest.mark.parametrize(
-    "method, path, body", [READ, WRITE, HEALTH], ids=["read", "write", "health"]
-)
+@pytest.mark.parametrize("method, path, body", [READ, WRITE], ids=["read", "write"])
 def test_an_exhausted_pool_gives_a_503_with_retry_after(
     client: TestClient,
     caplog: pytest.LogCaptureFixture,
@@ -67,6 +64,21 @@ def test_an_exhausted_pool_gives_a_503_with_retry_after(
     assert len(warnings) == 1
     assert "get a connection" in warnings[0].getMessage()  # the pool's own timeout message
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def test_an_exhausted_pool_does_not_make_health_fail(
+    client: TestClient, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The readiness check uses its own connection (issue #155), so a pool with every connection in
+    use is reported as saturated and is still ready."""
+    caplog.set_level(logging.DEBUG)
+
+    with client.app.state.pool.connection():  # the only connection is in use
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "pool": "saturated"}
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
 
 
 def test_the_request_waits_the_configured_time_before_the_503(client: TestClient) -> None:

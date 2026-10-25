@@ -46,5 +46,5 @@ def test_health_still_works_and_carries_a_request_id() -> None:
         response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "ok", "pool": "ok"}
     uuid.UUID(response.headers["X-Request-ID"])

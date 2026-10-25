@@ -1,22 +1,29 @@
-"""GET /health (ledger/api/rest/routers/health.py; docs/design.md, API; ADR 0013).
+"""GET /health (ledger/api/rest/routers/health.py; docs/design.md, API; ADR 0004, ADR 0013).
 
 Contract these tests expect:
 
 - ledger/api/rest/routers/health.py has an `APIRouter` called `router` with the route.
-- The route is a synchronous function that calls `check_database(request.app.state.pool)`, imported
-  by that name from ledger.infra.db so a test can replace it. It runs no SQL itself.
-- 200 with {"status": "ok"} when the check returns, with the request id header like every other
-  response. It is left out of the OpenAPI document: it is for the platform, not for clients.
-- It is a readiness check. When the check raises a ServiceBusyError (a pool wait timeout), the
-  response is the same 503 `service-busy` problem with Retry-After as on any other route, logged at
-  WARNING. When it raises anything else, the failure is not hidden: the response is the generic 500
-  problem and the exception is logged once.
+- The route is a synchronous function that calls `check_readiness(settings.app_url,
+  settings.health_timeout_seconds)` and `pool_state(pool)`, both imported by those names from
+  ledger.infra.readiness so a test can replace them, with the settings in `app.state.settings` and
+  the pool in `app.state.pool`. It runs no SQL itself.
+- It is a readiness check (issue #155). When the check is ready the response is 200 with
+  {"status": "ok", "pool": "ok"}, or "pool": "saturated" when every pool connection is in use: a
+  busy pool is information, not a failure. The request id header is there like on every other
+  response. The route is left out of the OpenAPI document: it is for the platform, not for clients.
+- When the check is not ready the route raises `NotReadyError(...) from result.cause`: a 503
+  `not-ready` problem with no Retry-After (a probe ignores it) and a generic detail with nothing
+  from the database. It is logged once at WARNING, naming the failed check and carrying the cause.
+- When the check itself raises, that is a bug: the response is the generic 500 problem and the
+  exception is logged once.
 
+The real check against the database is tested in tests/integration/db/test_check_readiness.py.
 The real app answering on /health is tested in test_real_app_error_handling.py and the compose
 smoke job.
 """
 
 import logging
+from collections.abc import Iterator
 
 import psycopg
 import pytest
@@ -24,18 +31,39 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
 
-from ledger.api.rest.error_handlers import RETRY_AFTER_SECONDS, install_error_handling
+from ledger.api.rest.error_handlers import install_error_handling
 from ledger.api.rest.routers.health import router
-from ledger.errors import ServiceBusyError
+from ledger.infra.config import Settings
 
 
 @pytest.fixture
-def app(app_pool: ConnectionPool) -> FastAPI:
+def readiness():
+    """The module under test. Imported lazily so these tests fail one by one while the module does
+    not exist yet."""
+    from ledger.infra import readiness as module  # noqa: PLC0415
+
+    return module
+
+
+@pytest.fixture
+def pool_of_one(settings: Settings) -> Iterator[ConnectionPool]:
+    with ConnectionPool(settings.app_url, min_size=1, max_size=1, timeout=0.5, open=True) as pool:
+        pool.wait()
+        yield pool
+
+
+def build_app(settings: Settings, pool: ConnectionPool) -> FastAPI:
     application = FastAPI()
     install_error_handling(application)
     application.include_router(router)
-    application.state.pool = app_pool
+    application.state.pool = pool
+    application.state.settings = settings
     return application
+
+
+@pytest.fixture
+def app(settings: Settings, app_pool: ConnectionPool) -> FastAPI:
+    return build_app(settings, app_pool)
 
 
 @pytest.fixture
@@ -43,38 +71,104 @@ def client(app: FastAPI) -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
-def test_health_is_ok_when_the_database_answers(client: TestClient) -> None:
+def test_health_is_ok_when_the_database_is_ready(client: TestClient) -> None:
     response = client.get("/health")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {"status": "ok", "pool": "ok"}
     assert response.headers["X-Request-ID"]
 
 
-def test_health_asks_the_check_about_the_apps_pool(
-    client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch
+def test_health_asks_the_check_about_the_apps_settings_and_pool(
+    client: TestClient, app: FastAPI, readiness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    asked = []
-    monkeypatch.setattr(
-        "ledger.api.rest.routers.health.check_database", lambda pool: asked.append(pool)
-    )
+    checked = []
+    asked_about = []
+
+    def check(app_url, timeout_seconds):
+        checked.append((app_url, timeout_seconds))
+        return readiness.ReadinessResult(failed_check=None, cause=None)
+
+    def state(pool):
+        asked_about.append(pool)
+        return "ok"
+
+    monkeypatch.setattr("ledger.api.rest.routers.health.check_readiness", check)
+    monkeypatch.setattr("ledger.api.rest.routers.health.pool_state", state)
 
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert asked == [app.state.pool]
+    settings = app.state.settings
+    assert checked == [(settings.app_url, settings.health_timeout_seconds)]
+    assert asked_about == [app.state.pool]
 
 
-def test_a_failing_check_is_a_logged_500_and_not_a_healthy_answer(
+def test_a_saturated_pool_is_still_ready_and_is_reported(
+    settings: Settings, pool_of_one: ConnectionPool, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The check does not use the request pool, so a pool with every connection in use does not make
+    the service unready: the concurrency cap and Retry-After deal with that, request by request."""
+    client = TestClient(build_app(settings, pool_of_one), raise_server_exceptions=False)
+    caplog.set_level(logging.DEBUG)
+
+    with pool_of_one.connection():  # the only connection is in use
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "pool": "saturated"}
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+
+
+@pytest.mark.parametrize("failed_check", ["database", "writable", "tables"])
+def test_a_check_that_is_not_ready_is_a_503_not_ready_problem_without_retry_after(
+    client: TestClient,
+    readiness,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    failed_check: str,
+) -> None:
+    cause = psycopg.OperationalError('password authentication failed for user "ledger_app"')
+    monkeypatch.setattr(
+        "ledger.api.rest.routers.health.check_readiness",
+        lambda app_url, timeout_seconds: readiness.ReadinessResult(
+            failed_check=failed_check, cause=cause
+        ),
+    )
+    caplog.set_level(logging.DEBUG)
+
+    response = client.get("/health")
+
+    assert response.status_code == 503
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert "Retry-After" not in response.headers
+    problem = response.json()
+    assert (problem["type"], problem["title"], problem["status"]) == (
+        "urn:ledger:error:not-ready",
+        "Not ready",
+        503,
+    )
+    assert problem["instance"] == f"urn:uuid:{response.headers['X-Request-ID']}"
+    assert isinstance(problem["detail"], str)
+    assert "password" not in response.text
+    assert "ledger_app" not in response.text
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1, "a not-ready answer is logged once, at WARNING"
+    assert failed_check in warnings[0].getMessage()
+    assert "password authentication failed" in warnings[0].getMessage()  # the cause
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def test_a_bug_in_the_check_is_a_logged_500_and_not_a_not_ready_answer(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    failure = psycopg.OperationalError("connection refused")
+    failure = RuntimeError("a bug in the check")
 
-    def refuse(pool):
+    def broken(app_url, timeout_seconds):
         raise failure
 
-    monkeypatch.setattr("ledger.api.rest.routers.health.check_database", refuse)
+    monkeypatch.setattr("ledger.api.rest.routers.health.check_readiness", broken)
     caplog.set_level(logging.DEBUG)
 
     response = client.get("/health")
@@ -82,28 +176,9 @@ def test_a_failing_check_is_a_logged_500_and_not_a_healthy_answer(
     assert response.status_code == 500
     assert response.headers["content-type"].startswith("application/problem+json")
     assert response.json()["type"] == "about:blank"
-    assert "refused" not in response.text
+    assert "a bug" not in response.text
     errors = [r for r in caplog.records if r.levelno >= logging.ERROR and r.exc_info]
     assert [r.exc_info[1] for r in errors] == [failure]
-
-
-def test_a_busy_pool_is_a_503_with_retry_after_and_not_an_error(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    def busy(pool):
-        raise ServiceBusyError("Connection timeout")
-
-    monkeypatch.setattr("ledger.api.rest.routers.health.check_database", busy)
-    caplog.set_level(logging.DEBUG)
-
-    response = client.get("/health")
-
-    assert response.status_code == 503
-    assert response.headers["content-type"].startswith("application/problem+json")
-    assert response.headers["Retry-After"] == str(RETRY_AFTER_SECONDS)
-    assert response.json()["type"] == "urn:ledger:error:service-busy"
-    assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 1
-    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
 
 def test_health_is_not_in_the_openapi_document(client: TestClient) -> None:

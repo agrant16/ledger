@@ -11,7 +11,8 @@ held requests are `GET /accounts/1/balance` calls whose service function waits t
 function then runs for real, so a released request ends as an ordinary 404. Every wait has its own
 timeout, so a hang fails the test and not the suite.
 
-The cap counts every HTTP request, `/health` included.
+The cap counts every HTTP request except the readiness probe, `/health` (issue #155): a probe that
+the cap turned away would take the pod out of rotation exactly when it is busy.
 """
 
 import logging
@@ -96,9 +97,8 @@ def saturated(
     [
         ("GET", READ, None),
         ("POST", "/accounts", {"account_name": "customer:capped", "currency": "USD"}),
-        ("GET", "/health", None),
     ],
-    ids=["read", "write", "health"],
+    ids=["read", "write"],
 )
 def test_the_request_over_the_cap_gets_a_503_with_retry_after(
     saturated: Saturated,
@@ -124,6 +124,16 @@ def test_the_request_over_the_cap_gets_a_503_with_retry_after(
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1, "a rejection is logged once, at WARNING"
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def test_the_readiness_probe_is_not_rejected_at_the_cap_and_is_not_counted(
+    saturated: Saturated,
+) -> None:
+    probe = saturated.client.get("/health")
+
+    assert probe.status_code == 200
+    assert saturated.client.get(READ).status_code == 503, "the cap is still full for other routes"
+    assert saturated.hold.calls == CAP
 
 
 def test_the_rejected_request_never_reaches_the_route_and_the_held_ones_finish(
