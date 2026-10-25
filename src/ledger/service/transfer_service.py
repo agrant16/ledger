@@ -8,11 +8,6 @@ from ledger.service.decorators import transactional_service_method
 from ledger.service.posting_service import claim_transaction, post_transaction
 
 
-def _empty_entries_check(transfer: Transfer) -> None:
-    if not transfer.entries:
-        raise LedgerInvariantError(f"Critical error: transfer {transfer.id} has no entries.")
-
-
 def entries_for_transfer(payload: TransferPayload) -> list[Entry]:
     """Builds the two entries of a transfer: a debit on the sender, a credit on the receiver.
 
@@ -56,7 +51,7 @@ def get_transfer(conn: psycopg.Connection, transfer_id: int) -> Transfer:
     transfer = posting_repo.find_transfer(conn, transfer_id)
     if transfer is None:
         raise UnknownTransferError(f"Transfer {transfer_id} not found")
-    _empty_entries_check(transfer)
+    _raise_if_no_entries(transfer)
     return transfer
 
 
@@ -100,5 +95,10 @@ def claim_and_post(
         raise LedgerInvariantError(
             f"Critical error: transfer {claim.transaction_id} cannot be found."
         )
-    _empty_entries_check(transfer)
+    _raise_if_no_entries(transfer)
     return transfer
+
+
+def _raise_if_no_entries(transfer: Transfer) -> None:
+    if not transfer.entries:
+        raise LedgerInvariantError(f"Critical error: transfer {transfer.id} has no entries.")
