@@ -59,7 +59,9 @@ class Settings(BaseSettings):
         Returns:
             The log message.
         """
-        message = " ".join(f"{k}={v}" for k, v in sorted(self.model_dump().items()) if k in PUBLIC_SETTINGS)
+        message = " ".join(
+            f"{k}={v}" for k, v in sorted(self.model_dump().items()) if k in PUBLIC_SETTINGS
+        )
         return f"Starting app: {message}"
 
 

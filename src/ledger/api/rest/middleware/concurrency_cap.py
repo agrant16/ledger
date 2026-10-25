@@ -43,6 +43,10 @@ class ConcurrencyCapMiddleware:
             await self.app(scope, receive, send)
             return
 
+        if scope["path"] == "/health":
+            await self.app(scope, receive, send)
+            return
+
         if self.request_count >= self.cap:
             # if the concurrency cap is reached log a warning and return a 503
             logger.warning(
