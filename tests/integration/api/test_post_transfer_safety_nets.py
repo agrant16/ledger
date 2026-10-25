@@ -31,13 +31,13 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
 
-import ledger.service.posting_service as posting_service
 from ledger.api.rest.error_handlers import install_error_handling
 from ledger.api.rest.router import router
 from ledger.errors import LedgerInvariantError, UnbalancedEntriesError
 from ledger.models.posting_model import Entry
 from ledger.models.transfer_model import Transfer, TransferEntry, TransferPayload
 from ledger.repository import posting_repo
+from ledger.service import transfer_service
 from tests.db_helpers import commit_accounts, commit_transfer, reset_database
 
 KEY = "net-key"
@@ -116,7 +116,7 @@ def break_the_entries(monkeypatch: pytest.MonkeyPatch) -> list:
             Entry(payload.to_account_id, payload.amount_minor + 1, payload.currency),
         ]
 
-    monkeypatch.setattr(posting_service, "entries_for_transfer", unbalanced)
+    monkeypatch.setattr(transfer_service, "entries_for_transfer", unbalanced)
     return calls
 
 

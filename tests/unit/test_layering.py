@@ -87,7 +87,7 @@ REQUIRED_MODULES = [
 MOVED_NAMES = {
     "service/posting_service.py": (
         "service/transfer_service.py",
-        {"get_transfer", "entries_for_transfer"},
+        {"get_transfer", "entries_for_transfer", "claim_and_post"},
     ),
     "models/posting_model.py": ("models/transfer_model.py", {"Transfer", "TransferEntry"}),
 }
