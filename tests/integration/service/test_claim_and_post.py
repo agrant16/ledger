@@ -4,11 +4,13 @@ rules 1 to 6; ADR 0012 and ADR 0013).
     claim_and_post(conn, idempotency_key, request_hash, payload: TransferPayload) -> Transfer
 
 This is the whole body of POST /transfers inside the request's transaction: claim the key, post
-the two entries unless the claim is a replay, and return the stored transfer, read back with
-`get_transfer`. The tests call it with keyword arguments, so the parameter order is free. It takes
-the request's connection, never commits, and refuses an autocommit connection like the functions
-it calls (`claim_transaction` and `post_transaction` stay separate, because the reversal in
-milestone 5 calls them with different entries).
+the two entries unless the claim is a replay, and return the stored transfer, read back from the
+repository (`posting_repo.find_transfer`). A transfer that is missing or has no entries at that
+point is a bug (LedgerInvariantError), not an UnknownTransferError. The tests call it with keyword
+arguments, so the parameter order is free. It takes the request's connection, never commits, and
+refuses an autocommit connection like the functions it calls (`claim_transaction` and
+`post_transaction` stay separate, because the reversal in milestone 5 calls them with different
+entries).
 
 The fixed order of checks (design doc, Error behavior), seen from the service:
 
@@ -23,6 +25,8 @@ does, so a failed call rolls back and a successful one commits for real. The dat
 before and after each test.
 """
 
+from datetime import UTC, datetime
+
 import psycopg
 import pytest
 from psycopg_pool import ConnectionPool
@@ -31,12 +35,15 @@ from ledger.errors import (
     CurrencyMismatchError,
     IdempotencyConflictError,
     InsufficientFundsError,
+    LedgerError,
     LedgerInvariantError,
     UnknownAccountError,
+    UnknownTransferError,
 )
 from ledger.infra.config import Settings
 from ledger.infra.db import run_in_transaction
 from ledger.models.transfer_model import Transfer, TransferPayload
+from ledger.repository import posting_repo
 from ledger.service.posting_service import claim_and_post
 from ledger.service.transfer_service import get_transfer
 from tests.db_helpers import commit_accounts, commit_transfer, hash_for, reset_database
@@ -336,6 +343,75 @@ def test_a_request_that_failed_for_funds_succeeds_once_the_account_is_funded(
 
     assert [e.amount_minor for e in transfer.entries] == [-1500, 1500]
     assert balance(owner_conn, alice.id) == 500
+
+
+# --- the read-back (issue #161) -----------------------------------------------------------------
+# After the claim and the post, the transfer is read back from the repository. The database keeps a
+# missing or empty transfer from happening for real, so these tests make `find_transfer` report
+# it. Either way it is a bug in the service, never a client error such as UnknownTransferError.
+
+
+@pytest.fixture(params=["new", "replay"])
+def path(request: pytest.FixtureRequest, app_pool: ConnectionPool, world) -> str:
+    """The two ways to reach the read-back: a new claim, or a replay of a committed one."""
+    if request.param == "replay":
+        _, alice, bob = world
+        run(app_pool, "k1", alice.id, bob.id, 300)
+    return request.param
+
+
+def test_a_missing_transfer_after_the_claim_is_a_bug_and_not_an_unknown_transfer(
+    app_pool: ConnectionPool,
+    owner_conn: psycopg.Connection,
+    world,
+    path: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, alice, bob = world
+    before = stored(owner_conn)
+    asked_for: list[int] = []
+
+    def find_nothing(conn: psycopg.Connection, transfer_id: int) -> None:
+        asked_for.append(transfer_id)
+
+    monkeypatch.setattr(posting_repo, "find_transfer", find_nothing)
+
+    with pytest.raises(LedgerInvariantError) as failure:
+        run(app_pool, "k1", alice.id, bob.id, 300)
+
+    assert not isinstance(failure.value, (LedgerError, UnknownTransferError))
+    assert failure.value.__cause__ is None  # raised as the bug it is, not translated from a 404
+    assert len(asked_for) == 1
+    assert str(asked_for[0]) in str(failure.value)  # names the transaction id
+    assert stored(owner_conn) == before  # a new claim is rolled back; a replay changed nothing
+
+
+def test_a_transfer_without_entries_after_the_claim_is_still_a_bug(
+    app_pool: ConnectionPool,
+    owner_conn: psycopg.Connection,
+    world,
+    path: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The check `get_transfer` makes must still be made on this path."""
+    _, alice, bob = world
+    before = stored(owner_conn)
+
+    def find_without_entries(conn: psycopg.Connection, transfer_id: int) -> Transfer:
+        return Transfer(
+            id=transfer_id,
+            reverses_transaction_id=None,
+            created_at=datetime.now(UTC),
+            entries=(),
+        )
+
+    monkeypatch.setattr(posting_repo, "find_transfer", find_without_entries)
+
+    with pytest.raises(LedgerInvariantError) as failure:
+        run(app_pool, "k1", alice.id, bob.id, 300)
+
+    assert not isinstance(failure.value, LedgerError)
+    assert stored(owner_conn) == before
 
 
 # --- the connection ----------------------------------------------------------------------------
