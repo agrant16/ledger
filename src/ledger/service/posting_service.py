@@ -14,7 +14,7 @@ from ledger.models.posting_model import Claim, Entry
 from ledger.models.transfer_model import Transfer, TransferPayload
 from ledger.repository import posting_repo
 from ledger.service.decorators import transactional_service_method
-from ledger.service.transfer_service import entries_for_transfer, get_transfer
+from ledger.service.transfer_service import entries_for_transfer
 
 
 @transactional_service_method
@@ -163,8 +163,9 @@ def claim_and_post(
         UnknownAccountError: The debit or credit account does not exist.
         CurrencyMismatchError: The transfer currency differs from an account's currency.
         InsufficientFundsError: The debit account cannot cover the transfer amount.
-        LedgerInvariantError: Any structural invariant or data integrity safety net fails
-            during the transaction workflow.
+        LedgerInvariantError: The created transfer or entries cannot be found, an underlying
+            structural invariant is violated, or a repository-level data integrity constraint
+            is violated.
     """
     claim = claim_transaction(conn, idempotency_key, request_hash)
     if not claim.replay:
@@ -173,4 +174,13 @@ def claim_and_post(
             claim.transaction_id,
             entries_for_transfer(payload),
         )
-    return get_transfer(conn, claim.transaction_id)
+    transfer = posting_repo.find_transfer(conn, claim.transaction_id)
+    if transfer is None:
+        raise LedgerInvariantError(
+            f"Critical error: transfer {claim.transaction_id} cannot be found"
+        )
+    if not transfer.entries:
+        raise LedgerInvariantError(
+            f"Critical error: transfer {claim.transaction_id} has no entries."
+        )
+    return transfer
