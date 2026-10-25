@@ -1,4 +1,4 @@
-"""claim_and_post (ledger/service/posting_service.py; docs/design.md, Error behavior, Correctness
+"""claim_and_post (ledger/service/transfer_service.py; docs/design.md, Error behavior, Correctness
 rules 1 to 6; ADR 0012 and ADR 0013).
 
     claim_and_post(conn, idempotency_key, request_hash, payload: TransferPayload) -> Transfer
@@ -43,8 +43,7 @@ from ledger.infra.config import Settings
 from ledger.infra.db import run_in_transaction
 from ledger.models.transfer_model import Transfer, TransferPayload
 from ledger.repository import posting_repo
-from ledger.service.posting_service import claim_and_post
-from ledger.service.transfer_service import get_transfer
+from ledger.service.transfer_service import claim_and_post, get_transfer
 from tests.db_helpers import commit_accounts, commit_transfer, hash_for, reset_database
 
 

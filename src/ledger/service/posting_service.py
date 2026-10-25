@@ -11,10 +11,8 @@ from ledger.errors import (
     UnknownAccountError,
 )
 from ledger.models.posting_model import Claim, Entry
-from ledger.models.transfer_model import Transfer, TransferPayload
 from ledger.repository import posting_repo
 from ledger.service.decorators import transactional_service_method
-from ledger.service.transfer_service import entries_for_transfer
 
 
 @transactional_service_method
@@ -137,50 +135,3 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
         raise LedgerInvariantError(
             f"Critical error: Not all balances were updated for account {missing_id}"
         )
-
-
-@transactional_service_method
-def claim_and_post(
-    conn: psycopg.Connection, idempotency_key: str, request_hash: str, payload: TransferPayload
-) -> Transfer:
-    """Claims the key and posts a two-entry transfer. (rule 5, ADR 0005)
-
-    On a replay the post is skipped and the stored transfer is returned, so the
-    money moves once. The claim and the posting share the request's transaction:
-    if the post fails, the rollback removes the claim too and the key is not used up.
-
-    Args:
-        conn: The request's connection, inside the caller's transaction.
-        idempotency_key: The client's Idempotency-Key.
-        request_hash: The canonical hash of the request.
-        payload: The transfer information.
-
-    Returns:
-        The transfer, newly posted or replayed, with its entries.
-
-    Raises:
-        IdempotencyConflictError: The key was already used with a different request.
-        UnknownAccountError: The debit or credit account does not exist.
-        CurrencyMismatchError: The transfer currency differs from an account's currency.
-        InsufficientFundsError: The debit account cannot cover the transfer amount.
-        LedgerInvariantError: The created transfer or entries cannot be found, an underlying
-            structural invariant is violated, or a repository-level data integrity constraint
-            is violated.
-    """
-    claim = claim_transaction(conn, idempotency_key, request_hash)
-    if not claim.replay:
-        post_transaction(
-            conn,
-            claim.transaction_id,
-            entries_for_transfer(payload),
-        )
-    transfer = posting_repo.find_transfer(conn, claim.transaction_id)
-    if transfer is None:
-        raise LedgerInvariantError(
-            f"Critical error: transfer {claim.transaction_id} cannot be found."
-        )
-    if not transfer.entries:
-        raise LedgerInvariantError(
-            f"Critical error: transfer {claim.transaction_id} has no entries."
-        )
-    return transfer
