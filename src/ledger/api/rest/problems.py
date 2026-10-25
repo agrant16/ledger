@@ -13,7 +13,7 @@ from ledger.errors import (
     ReversalOfReversalError,
     ServiceBusyError,
     UnknownAccountError,
-    UnknownTransferError,
+    UnknownTransferError, NotReadyError,
 )
 
 
@@ -79,6 +79,7 @@ PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
         extensions=("account_name",),
     ),
     ServiceBusyError: ProblemSpec(503, "urn:ledger:error:service-busy", "Service busy"),
+    NotReadyError: ProblemSpec(503, "urn:ledger:error:not-ready", "Not ready"),
 }
 
 
