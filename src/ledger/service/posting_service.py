@@ -93,7 +93,7 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
             violated.
     """
     if not entries:
-        raise LedgerInvariantError(f"No entries for transaction {transaction_id}")
+        raise LedgerInvariantError(f"Critical error: transfer {transaction_id} has no entries.")
 
     # check that entries for each currency sum to 0
     totals: dict[str, int] = defaultdict(int)
@@ -135,7 +135,7 @@ def post_transaction(conn: psycopg.Connection, transaction_id: int, entries: lis
     if len(updated_accounts) != len(deltas.keys()):
         missing_id = sorted(deltas.keys() - updated_accounts)
         raise LedgerInvariantError(
-            f"Critical Error: Not all balances were updated for account {missing_id}"
+            f"Critical error: Not all balances were updated for account {missing_id}"
         )
 
 
