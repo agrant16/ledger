@@ -48,7 +48,7 @@ class Settings(BaseSettings):
     concurrency_cap: PositiveInt = Field(default=CONCURRENCY_CAP, alias="CONCURRENCY_CAP")
     # health checks have their own timeout
     health_timeout_seconds: float = Field(
-        default=2.0, alias="HEALTH_TIMEOUT_SECONDS", allow_inf_nan=False
+        default=2.0, alias="HEALTH_TIMEOUT_SECONDS", gt=0, allow_inf_nan=False
     )
 
     def get_startup_log_message(self) -> str:
