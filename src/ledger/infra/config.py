@@ -14,7 +14,9 @@ PUBLIC_SETTINGS = (
     "handler_thread_limit",
     "concurrency_cap",
     "health_timeout_seconds",
+    "health_concurrency",
 )
+
 CONCURRENCY_CAP = 40
 
 
@@ -50,6 +52,8 @@ class Settings(BaseSettings):
     health_timeout_seconds: float = Field(
         default=2.0, alias="HEALTH_TIMEOUT_SECONDS", gt=0, allow_inf_nan=False
     )
+    # health checks have their own thread limit
+    health_concurrency: PositiveInt = Field(default=2, alias="HEALTH_CONCURRENCY", gt=0)
 
     def get_startup_log_message(self) -> str:
         """Returns the startup log line, `Starting app: name=value ...`, for the public settings.
