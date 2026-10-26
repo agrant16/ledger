@@ -78,10 +78,19 @@ class ServiceBusyError(LedgerError):
     """No pooled connection is free within the pool timeout. This is safe for retry."""
 
 
+class NotReadyError(LedgerError):
+    """The service cannot do its job.
+
+    Attributes:
+        details: The details of the readiness check.
+        failed_check: The check that failed.
+    """
+
+    def __init__(self, details: str, failed_check: str) -> None:
+        self.details = details
+        self.failed_check = failed_check
+        super().__init__(f"Not Ready: {self.details}")
+
+
 class UnbalancedEntriesError(LedgerInvariantError):
     """The sum of entries per currency in a transfer is not zero (rule 1). A bug."""
-
-
-class NotReadyError(LedgerError):
-    """The service cannot do its job: the database is unreachable or read-only, or a
-    required table or privilege is missing."""
