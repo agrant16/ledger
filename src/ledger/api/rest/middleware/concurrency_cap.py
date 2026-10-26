@@ -11,7 +11,7 @@ class ConcurrencyCapMiddleware:
 
     A request that arrives while `cap` HTTP requests are in flight gets a 503 problem
     response with a `Retry-After` header, and the wrapped app never sees it. Other scopes,
-    such as lifespan, pass through.
+    such as lifespan, pass through. Calls to `/health` are passed through.
 
     Attributes:
         app: The wrapped application.
@@ -40,6 +40,11 @@ class ConcurrencyCapMiddleware:
         """
         # any non-http requests (lifespan, etc.) get passed through
         if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        # health calls are passed through as they have their own limiter
+        if scope["path"] == "/health":
             await self.app(scope, receive, send)
             return
 

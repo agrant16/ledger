@@ -12,7 +12,7 @@ from starlette.responses import JSONResponse, Response
 from ledger.api.rest.middleware.concurrency_cap import ConcurrencyCapMiddleware
 from ledger.api.rest.middleware.request_id import RequestIDMiddleware
 from ledger.api.rest.problems import ProblemOccurrence, ProblemSpec, problem_for
-from ledger.errors import InvalidRequestError, LedgerError
+from ledger.errors import InvalidRequestError, LedgerError, NotReadyError, ServiceBusyError
 from ledger.infra.config import CONCURRENCY_CAP
 from ledger.infra.logging_config import install_log_record_factory, request_id_ctx_var
 
@@ -127,7 +127,8 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
     The status, `type` and `title` come from the error class's `ProblemSpec`. The `detail` is
     the error's message. The members the spec lists as extensions, such as `account_id` for an
     insufficient-funds error, are copied from the error into the body. A 503 also carries a
-    `Retry-After` header.
+    `Retry-After` header if it is a `Service busy` error. If it is a 503 `Not ready` error the
+    `Retry-After` is not sent.
 
     Args:
         request: The request being answered.
@@ -142,9 +143,13 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
     problem_spec = problem_for(exc.__class__)
     headers = None
     extensions = {name: getattr(exc, name) for name in problem_spec.extensions}
-    if problem_spec.status == 503:
+    if isinstance(exc, ServiceBusyError):
         headers = {"Retry-After": str(RETRY_AFTER_SECONDS)}
         logger.warning("Service was busy: %s", exc.__cause__ or exc)
+    if isinstance(exc, NotReadyError):
+        logger.warning(
+            "Not ready: failed_check=%s caused by %s", exc.failed_check, exc.__cause__ or exc
+        )
     return problem_response(
         request,
         problem_spec,

@@ -11,7 +11,8 @@ held requests are `GET /accounts/1/balance` calls whose service function waits t
 function then runs for real, so a released request ends as an ordinary 404. Every wait has its own
 timeout, so a hang fails the test and not the suite.
 
-The cap counts every HTTP request, `/health` included.
+The cap counts every HTTP request except the readiness probe, `/health` (issue #155): a probe that
+the cap turned away would take the pod out of rotation exactly when it is busy.
 """
 
 import logging
@@ -27,6 +28,7 @@ from fastapi.testclient import TestClient
 
 from ledger.api.rest.error_handlers import RETRY_AFTER_SECONDS
 from ledger.api.rest.routers import accounts as accounts_router
+from ledger.infra.readiness import ReadinessResult
 from tests.db_helpers import reset_database
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
@@ -96,9 +98,8 @@ def saturated(
     [
         ("GET", READ, None),
         ("POST", "/accounts", {"account_name": "customer:capped", "currency": "USD"}),
-        ("GET", "/health", None),
     ],
-    ids=["read", "write", "health"],
+    ids=["read", "write"],
 )
 def test_the_request_over_the_cap_gets_a_503_with_retry_after(
     saturated: Saturated,
@@ -124,6 +125,46 @@ def test_the_request_over_the_cap_gets_a_503_with_retry_after(
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1, "a rejection is logged once, at WARNING"
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def test_the_readiness_probe_is_not_rejected_at_the_cap_and_is_not_counted(
+    saturated: Saturated,
+) -> None:
+    probe = saturated.client.get("/health")
+
+    assert probe.status_code == 200
+    assert saturated.client.get(READ).status_code == 503, "the cap is still full for other routes"
+    assert saturated.hold.calls == CAP
+
+
+def test_probes_in_flight_do_not_use_up_the_cap(
+    fresh_app: Callable[..., FastAPI], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other half of the exemption: a probe being handled is not counted, so with a cap of 1
+    and a probe held inside its check, an ordinary request still gets through."""
+    release = threading.Event()
+    entered = threading.Event()
+
+    def held_check(app_url, timeout_seconds):
+        entered.set()
+        assert release.wait(WAIT_SECONDS), "the test never released the probe"
+        return ReadinessResult(failed_check=None, cause=None)
+
+    monkeypatch.setattr("ledger.api.rest.routers.health.check_readiness", held_check)
+    app = fresh_app(CONCURRENCY_CAP="1")
+    with (
+        TestClient(app, raise_server_exceptions=False) as client,
+        ThreadPoolExecutor(1) as executor,
+    ):
+        probe = executor.submit(client.get, "/health")
+        try:
+            assert entered.wait(WAIT_SECONDS), "the probe never reached its check"
+            response = client.get(READ)
+        finally:
+            release.set()
+        assert probe.result(timeout=WAIT_SECONDS).status_code == 200
+
+    assert response.status_code == 404, "not a 503: the probe holds no place under the cap"
 
 
 def test_the_rejected_request_never_reaches_the_route_and_the_held_ones_finish(

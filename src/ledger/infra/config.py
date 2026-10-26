@@ -8,7 +8,14 @@ DEFAULT_OWNER_URL = "postgresql://ledger_owner:owner-dev-only@127.0.0.1:5432/led
 DEFAULT_APP_URL = "postgresql://ledger_app:app-dev-only@127.0.0.1:5432/ledger"
 DEFAULT_MIGRATIONS_DIR = Path(__file__).resolve().parents[3] / "migrations"
 
-PUBLIC_SETTINGS = ["pool_size", "pool_timeout_seconds", "handler_thread_limit", "concurrency_cap"]
+PUBLIC_SETTINGS = (
+    "pool_size",
+    "pool_timeout_seconds",
+    "handler_thread_limit",
+    "concurrency_cap",
+    "health_timeout_seconds",
+    "health_concurrency",
+)
 CONCURRENCY_CAP = 40
 
 
@@ -40,6 +47,12 @@ class Settings(BaseSettings):
     handler_thread_limit: PositiveInt = Field(default=20, alias="HANDLER_THREAD_LIMIT")
     # Max concurrent HTTP requests before a 503 is returned
     concurrency_cap: PositiveInt = Field(default=CONCURRENCY_CAP, alias="CONCURRENCY_CAP")
+    # health checks have their own timeout
+    health_timeout_seconds: float = Field(
+        default=2.0, alias="HEALTH_TIMEOUT_SECONDS", gt=0, allow_inf_nan=False
+    )
+    # health checks have their own thread limit
+    health_concurrency: PositiveInt = Field(default=2, alias="HEALTH_CONCURRENCY")
 
     def get_startup_log_message(self) -> str:
         """Returns the startup log line, `Starting app: name=value ...`, for the public settings.
@@ -49,7 +62,9 @@ class Settings(BaseSettings):
         Returns:
             The log message.
         """
-        message = " ".join(f"{k}={v}" for k, v in self.model_dump().items() if k in PUBLIC_SETTINGS)
+        message = " ".join(
+            f"{k}={v}" for k, v in sorted(self.model_dump().items()) if k in PUBLIC_SETTINGS
+        )
         return f"Starting app: {message}"
 
 

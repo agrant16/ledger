@@ -118,7 +118,7 @@ def test_the_cap_that_is_enforced_is_the_cap_that_is_logged(
         held = executor.submit(client.get, READ)
         try:
             assert entered.wait(WAIT_SECONDS), "the held request never reached the route"
-            assert client.get("/health").status_code == 503
+            assert client.get(READ).status_code == 503
         finally:
             release.set()
         held.result(timeout=WAIT_SECONDS)

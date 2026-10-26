@@ -23,6 +23,10 @@ from ledger.infra.config import (
     load_settings,
 )
 
+# libpq never waits less than 2 seconds for a connection (a connect_timeout of 1 is read as 2), so
+# a shorter default could not bound the readiness probe's connect step.
+HEALTH_TIMEOUT_DEFAULT = 2
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -55,8 +59,17 @@ def test_the_handler_thread_limit_can_be_set_by_the_environment(monkeypatch) -> 
     assert load_settings().handler_thread_limit == 7
 
 
-POSITIVE_INTEGER_VARIABLES = ["POOL_SIZE", "HANDLER_THREAD_LIMIT", "CONCURRENCY_CAP"]
-POSITIVE_NUMBER_VARIABLES = [*POSITIVE_INTEGER_VARIABLES, "POOL_TIMEOUT_SECONDS"]
+POSITIVE_INTEGER_VARIABLES = [
+    "POOL_SIZE",
+    "HANDLER_THREAD_LIMIT",
+    "CONCURRENCY_CAP",
+    "HEALTH_CONCURRENCY",
+]
+POSITIVE_NUMBER_VARIABLES = [
+    *POSITIVE_INTEGER_VARIABLES,
+    "POOL_TIMEOUT_SECONDS",
+    "HEALTH_TIMEOUT_SECONDS",
+]
 
 
 def test_every_setting_has_its_default_when_the_environment_is_empty(monkeypatch) -> None:
@@ -77,6 +90,8 @@ def test_every_setting_has_its_default_when_the_environment_is_empty(monkeypatch
     assert settings.pool_timeout_seconds == 2
     assert settings.handler_thread_limit == 20
     assert settings.concurrency_cap == 40
+    assert settings.health_timeout_seconds == HEALTH_TIMEOUT_DEFAULT
+    assert settings.health_concurrency == 2
 
 
 def test_valid_numeric_values_are_read_from_the_environment(monkeypatch) -> None:
@@ -84,6 +99,8 @@ def test_valid_numeric_values_are_read_from_the_environment(monkeypatch) -> None
     monkeypatch.setenv("POOL_TIMEOUT_SECONDS", "0.5")
     monkeypatch.setenv("HANDLER_THREAD_LIMIT", "1")
     monkeypatch.setenv("CONCURRENCY_CAP", "5")
+    monkeypatch.setenv("HEALTH_TIMEOUT_SECONDS", "3")
+    monkeypatch.setenv("HEALTH_CONCURRENCY", "4")
 
     settings = load_settings()
 
@@ -91,6 +108,8 @@ def test_valid_numeric_values_are_read_from_the_environment(monkeypatch) -> None
     assert settings.pool_timeout_seconds == 0.5
     assert settings.handler_thread_limit == 1
     assert settings.concurrency_cap == 5
+    assert settings.health_timeout_seconds == 3
+    assert settings.health_concurrency == 4
 
 
 @pytest.mark.parametrize("value", ["0", "-1", "-20"])
@@ -124,11 +143,12 @@ def test_a_decimal_is_rejected_for_a_whole_number_setting(monkeypatch, name: str
 
 
 @pytest.mark.parametrize("value", ["inf", "-inf", "nan"])
-def test_an_infinite_or_nan_pool_wait_is_rejected(monkeypatch, value: str) -> None:
-    # `inf` would pass a plain "greater than 0" check and give a pool that never times out.
-    monkeypatch.setenv("POOL_TIMEOUT_SECONDS", value)
+@pytest.mark.parametrize("name", ["POOL_TIMEOUT_SECONDS", "HEALTH_TIMEOUT_SECONDS"])
+def test_an_infinite_or_nan_wait_is_rejected(monkeypatch, name: str, value: str) -> None:
+    # `inf` would pass a plain "greater than 0" check and give a wait that never times out.
+    monkeypatch.setenv(name, value)
 
-    with pytest.raises(ValueError, match="POOL_TIMEOUT_SECONDS"):
+    with pytest.raises(ValueError, match=name):
         load_settings()
 
 

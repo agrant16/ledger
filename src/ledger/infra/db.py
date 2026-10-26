@@ -88,19 +88,3 @@ def run_in_transaction[T](
         raise LedgerInvariantError(
             f"A database constraint was violated: ({failure.diag.constraint_name})"
         ) from failure
-
-
-def check_database(pool: ConnectionPool) -> None:
-    """Checks that the service can reach the database, for `GET /health`.
-
-    Args:
-        pool: The connection pool to take a connection from.
-
-    Raises:
-        ServiceBusyError: No connection became free within the pool timeout.
-
-    Propagates any other database error.
-    """
-    with ExitStack() as stack:
-        conn = _acquire(pool, stack)
-        conn.execute("SELECT 1")

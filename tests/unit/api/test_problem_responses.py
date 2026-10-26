@@ -167,7 +167,7 @@ def test_a_ledger_error_becomes_a_problem_response(client, caplog, name) -> None
     for key, value in extensions.items():
         assert body[key] == value
     assert body["instance"] == f"urn:uuid:{request_id(response)}"
-    assert ("Retry-After" in response.headers) == (status == 503)
+    assert ("Retry-After" in response.headers) == (status == 503 and title == "Service busy")
     assert not at_least(caplog, logging.ERROR)
 
 
