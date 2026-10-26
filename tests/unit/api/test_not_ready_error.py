@@ -58,7 +58,7 @@ def test_the_response_has_no_retry_after_and_one_warning_with_the_cause(
 
     @application.get("/not-ready")
     def raise_not_ready() -> None:
-        raise NotReadyError("the database check failed") from cause
+        raise NotReadyError("the database check failed", "database") from cause
 
     caplog.set_level(logging.DEBUG)
 

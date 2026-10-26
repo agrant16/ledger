@@ -67,5 +67,5 @@ EXAMPLES: dict[type[LedgerError], Callable[[], LedgerError]] = {
     DuplicateAccountNameError: lambda: DuplicateAccountNameError("customer:alice"),
     InsufficientFundsError: lambda: InsufficientFundsError(7, 100, -250),
     ServiceBusyError: lambda: ServiceBusyError("lock timeout"),
-    NotReadyError: lambda: NotReadyError("The database is not writable"),
+    NotReadyError: lambda: NotReadyError("The database is not writable", "writable"),
 }
