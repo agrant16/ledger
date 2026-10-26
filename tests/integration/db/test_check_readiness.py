@@ -32,7 +32,7 @@ import psycopg
 import pytest
 from psycopg.conninfo import conninfo_to_dict
 
-from tests.db_helpers import TEST_DATABASE_NAME, with_database
+from tests.db_helpers import with_database
 
 TIMEOUT = 2.0
 # How much longer than the timeout a failed check may take (process and network overhead).
@@ -84,17 +84,22 @@ def black_hole_url(settings) -> Iterator[str]:
 
 
 @pytest.fixture
-def read_only_database(owner_conn: psycopg.Connection) -> Iterator[None]:
-    """New connections to the test database are read-only, as on a standby after a failover."""
-    owner_conn.execute(
-        f"ALTER DATABASE {TEST_DATABASE_NAME} SET default_transaction_read_only = on"
-    )
-    try:
-        yield
-    finally:
-        owner_conn.execute(
-            f"ALTER DATABASE {TEST_DATABASE_NAME} RESET default_transaction_read_only"
-        )
+def read_only_connections(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every connection `psycopg.connect` opens from now on is read-only, as on a standby after a
+    failover: the server itself reports `transaction_read_only = on`.
+
+    The option is added to each connection instead of being set on the database or the role, so
+    nothing is stored in the database and a run that is killed during the test leaves nothing
+    behind (a database-level setting would make every later connection read-only, the owner's
+    too).
+    """
+    real_connect = psycopg.connect
+
+    def connect_read_only(*args, **kwargs):
+        options = f"{kwargs.get('options', '')} -c default_transaction_read_only=on".strip()
+        return real_connect(*args, **{**kwargs, "options": options})
+
+    monkeypatch.setattr(psycopg, "connect", connect_read_only)
 
 
 @pytest.fixture
@@ -203,7 +208,7 @@ def test_a_database_that_never_answers_is_not_ready_within_the_timeout(
     assert elapsed < TIMEOUT + MARGIN
 
 
-@pytest.mark.usefixtures("read_only_database")
+@pytest.mark.usefixtures("read_only_connections")
 def test_a_read_only_database_is_not_ready(readiness, settings) -> None:
     """The service cannot post a transfer to a database that refuses writes, as after a failover to
     a standby, even though `SELECT 1` works."""
