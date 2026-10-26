@@ -51,3 +51,15 @@ def test_a_pool_with_every_connection_in_use_is_saturated_and_answers_at_once(
     assert state == "saturated"
     assert elapsed < 0.25, "it must not wait for a connection (the pool wait is 0.5 seconds)"
     assert readiness.pool_state(small_pool) == "ok"  # the control: free again
+
+
+def test_a_pool_short_of_connections_is_ok_not_saturated(settings) -> None:
+    """No connection is free, but none is in use either: the pool has not made any yet (as at
+    start-up or while reconnecting), so "saturated" would be the wrong word."""
+    with ConnectionPool(
+        settings.app_url, min_size=0, max_size=SIZE, timeout=0.5, open=True
+    ) as pool:
+        stats = pool.get_stats()
+        assert (stats["pool_size"], stats["pool_available"]) == (0, 0), "the setup is not as meant"
+
+        assert readiness.pool_state(pool) == "ok"

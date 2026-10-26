@@ -25,18 +25,23 @@ import time
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 
+import psycopg
 import pytest
 from anyio import CapacityLimiter, to_thread
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from psycopg_pool import ConnectionPool
 
 from ledger.infra import readiness
+from tests.db_helpers import commit_accounts, commit_transfer, reset_database
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
 
 # Long enough for a loaded CI runner, short enough that a hung request fails the test promptly.
 WAIT_SECONDS = 10
 UNKNOWN_ACCOUNT = 999_999_999
+FUNDED = 1000  # what alice holds when the transfer test starts
+AMOUNT = 300
 
 
 def ready_result() -> readiness.ReadinessResult:
@@ -192,6 +197,48 @@ def test_traffic_is_served_while_every_health_slot_is_busy(
             probe.result(timeout=WAIT_SECONDS)
 
     assert response.status_code == 404
+
+
+def test_a_transfer_completes_while_every_health_slot_is_busy(
+    fresh_app: Callable[..., FastAPI],
+    executor: ThreadPoolExecutor,
+    slow_check: SlowCheck,
+    app_pool: ConnectionPool,
+    owner_conn: psycopg.Connection,
+) -> None:
+    """A write needs a handler thread, a pooled connection, row locks and the key claim. It must
+    finish while the probes hold every health slot and more are queued."""
+    reset_database(owner_conn)
+    funding, alice, bob = commit_accounts(app_pool)
+    commit_transfer(app_pool, "fund-alice", funding.id, alice.id, FUNDED)
+    body = {
+        "from_account_id": alice.id,
+        "to_account_id": bob.id,
+        "amount_minor": AMOUNT,
+        "currency": "USD",
+    }
+    try:
+        with started(fresh_app, HANDLER_THREAD_LIMIT="2", HEALTH_CONCURRENCY="2") as client:
+            probes = [executor.submit(client.get, "/health") for _ in range(4)]
+            slow_check.wait_until_entered(2)
+
+            response = executor.submit(
+                client.post, "/transfers", json=body, headers={"Idempotency-Key": "during-probes"}
+            ).result(timeout=WAIT_SECONDS)
+
+            slow_check.release.set()
+            for probe in probes:
+                probe.result(timeout=WAIT_SECONDS)
+
+        assert response.status_code == 201
+        balances = owner_conn.execute(
+            "SELECT account_id, balance_minor FROM balances WHERE account_id IN (%s, %s)"
+            " ORDER BY account_id",
+            (alice.id, bob.id),
+        ).fetchall()
+        assert dict(balances) == {alice.id: FUNDED - AMOUNT, bob.id: AMOUNT}
+    finally:
+        reset_database(owner_conn)
 
 
 def test_a_check_that_fails_gives_its_slot_back(

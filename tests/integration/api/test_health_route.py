@@ -40,6 +40,7 @@ from ledger.api.rest.error_handlers import install_error_handling
 from ledger.api.rest.routers.health import router
 from ledger.infra import readiness
 from ledger.infra.config import Settings
+from ledger.infra.readiness import NOT_READY_DETAIL
 
 
 @pytest.fixture
@@ -156,7 +157,7 @@ def test_a_check_that_is_not_ready_is_a_503_not_ready_problem_without_retry_afte
         503,
     )
     assert problem["instance"] == f"urn:uuid:{response.headers['X-Request-ID']}"
-    assert isinstance(problem["detail"], str)
+    assert problem["detail"] == NOT_READY_DETAIL[failed_check]  # generic, no "Not Ready:" prefix
     assert "password" not in response.text
     assert "ledger_app" not in response.text
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]

@@ -9,6 +9,8 @@ and a client has no reason to retry soon.
 Contract these tests expect:
 
 - `NotReadyError(LedgerError)` in ledger/errors.py.
+- It stores `detail` (the client-facing text) and `failed_check`, and its message is the detail
+  alone: no "Not Ready:" prefix, because the problem's `title` already says it.
 - Its row in the table: status 503, type `urn:ledger:error:not-ready`, title "Not ready".
 - The LedgerError handler adds Retry-After and the "busy" warning only for `ServiceBusyError`, not
   for every 503. The warning for a `NotReadyError` is still one WARNING line, and it carries the
@@ -33,6 +35,14 @@ from ledger.errors import LedgerError, NotReadyError, ServiceBusyError
 
 def test_it_is_a_ledger_error_so_it_is_an_expected_failure_and_not_a_bug() -> None:
     assert issubclass(NotReadyError, LedgerError)
+
+
+def test_it_keeps_the_detail_and_the_failed_check_and_its_message_is_the_detail_alone() -> None:
+    error = NotReadyError("The database is not writable", "writable")
+
+    assert error.detail == "The database is not writable"
+    assert error.failed_check == "writable"
+    assert str(error) == "The database is not writable"
 
 
 def test_it_has_its_own_row_in_the_table() -> None:
@@ -66,9 +76,11 @@ def test_the_response_has_no_retry_after_and_one_warning_with_the_cause(
 
     assert response.status_code == 503
     assert response.json()["type"] == "urn:ledger:error:not-ready"
+    assert response.json()["detail"] == "the database check failed"
     assert "Retry-After" not in response.headers
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1
     assert "connection refused" in warnings[0].getMessage()
+    assert "failed_check=database" in warnings[0].getMessage()
     assert "busy" not in warnings[0].getMessage().lower()
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
