@@ -47,9 +47,9 @@ class InsufficientFundsError(LedgerError):
     """A non-funding account would go negative (rule 4).
 
     Attributes:
-        account_id (int): The id of the account that would go negative.
-        balance_minor (int): That account's current balance.
-        net_change_minor (int): The net change the transfer would make to that balance.
+        account_id: The id of the account that would go negative.
+        balance_minor: That account's current balance.
+        net_change_minor: The net change the transfer would make to that balance.
     """
 
     def __init__(self, account_id: int, balance_minor: int, net_change_minor: int) -> None:
@@ -79,17 +79,21 @@ class ServiceBusyError(LedgerError):
 
 
 class NotReadyError(LedgerError):
-    """The service cannot do its job.
+    """A 503 `not-ready`, raised by `GET /health`.
+
+    Args:
+        detail: Client-facing text saying why the service is not ready.
+        failed_check: The readiness check that failed.
 
     Attributes:
-        details: The details of the readiness check.
-        failed_check: The check that failed.
+        detail: Client-facing text saying why the service is not ready.
+        failed_check: The readiness check that failed.
     """
 
-    def __init__(self, details: str, failed_check: str) -> None:
-        self.details = details
+    def __init__(self, detail: str, failed_check: str) -> None:
+        self.detail = detail
         self.failed_check = failed_check
-        super().__init__(f"Not Ready: {self.details}")
+        super().__init__(detail)
 
 
 class UnbalancedEntriesError(LedgerInvariantError):
