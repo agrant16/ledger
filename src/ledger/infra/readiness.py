@@ -1,4 +1,5 @@
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -21,11 +22,11 @@ NOT_READY_DETAIL: dict[FailedCheck, str] = {
     "tables": "Required tables, or privileges, are missing",
 }
 
+
 TABLE_EXISTS_SQL = """SELECT 1 FROM {} LIMIT 1;"""
 
 TABLE_PRIVILEGES_CHECK_SQL = """
-                           SELECT 
-                               bool_and(has_table_privilege(current_user, %s, p)) 
+                           SELECT bool_and(has_table_privilege(current_user, %s, p))
                            FROM unnest(%s::text[]) AS p;
                            """
 
@@ -61,7 +62,7 @@ def pool_state(pool: ConnectionPool) -> Literal["ok", "saturated"]:
         `"ok"` when at least one connection is free, `"saturated"` when every connection is in use.
     """
     stats = pool.get_stats()
-    if stats["pool_available"] == 0:
+    if stats["pool_available"] == 0 or stats["requests_waiting"] > 0:
         return "saturated"
     return "ok"
 
@@ -82,36 +83,52 @@ def check_readiness(app_url: str, timeout_seconds: float) -> ReadinessResult:
         The result. `ready` is true when every check passed. Otherwise `failed_check` names
         the first check that failed and `cause` holds the database error, if there was one.
     """
-    stage: FailedCheck = "database"
+    name: FailedCheck = "database"
     try:
         with psycopg.connect(
             app_url,
             autocommit=True,
             connect_timeout=max(1, math.ceil(timeout_seconds)),
-            options=f"-c statement_timeout={int(timeout_seconds * 1000)}",
+            options=f"-c statement_timeout={max(1, int(timeout_seconds * 1000))}",
         ) as conn:
-            conn.execute("SELECT 1;")
-            stage = "writable"
-            read_only = conn.execute("SHOW transaction_read_only;").fetchone()[0]
-            if read_only == "on":
-                return ReadinessResult(stage)
-            stage = "tables"
-            for table, privileges in REQUIRED_PRIVILEGES.items():
-                if not _check_table_and_privileges(conn, table, privileges):
-                    return ReadinessResult(stage)
+            for name, check in READINESS_CHECKS:
+                if not check(conn):
+                    return ReadinessResult(name)
     except psycopg.Error as failure:
-        return ReadinessResult(stage, failure)
+        return ReadinessResult(name, failure)
     return ReadinessResult(None)
 
 
 def _check_table_and_privileges(
     conn: psycopg.Connection, table: str, privileges: tuple[str, ...]
 ) -> bool:
-    conn.execute(sql.SQL(TABLE_EXISTS_SQL).format(sql.Identifier(table))).fetchone()
-    result = bool(
+    conn.execute(sql.SQL(TABLE_EXISTS_SQL).format(sql.Identifier(table)))
+    return bool(
         conn.execute(
             TABLE_PRIVILEGES_CHECK_SQL,
             (table, list(privileges)),
         ).fetchone()[0]
     )
-    return result
+
+
+def _database_answers(conn: psycopg.Connection) -> bool:
+    conn.execute("SELECT 1;")
+    return True
+
+
+def _is_writable(conn: psycopg.Connection) -> bool:
+    return conn.execute("SHOW transaction_read_only;").fetchone()[0] == "off"
+
+
+def _tables_ready(conn: psycopg.Connection) -> bool:
+    return all(
+        _check_table_and_privileges(conn, table, privileges)
+        for table, privileges in REQUIRED_PRIVILEGES.items()
+    )
+
+
+READINESS_CHECKS: tuple[tuple[FailedCheck, Callable], ...] = (
+    ("database", _database_answers),
+    ("writable", _is_writable),
+    ("tables", _tables_ready),
+)
