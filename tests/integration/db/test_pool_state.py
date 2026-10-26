@@ -17,16 +17,9 @@ from collections.abc import Iterator
 import pytest
 from psycopg_pool import ConnectionPool
 
+from ledger.infra import readiness
+
 SIZE = 2
-
-
-@pytest.fixture
-def readiness():
-    """The module under test. Imported lazily so these tests fail one by one while the module does
-    not exist yet."""
-    from ledger.infra import readiness as module  # noqa: PLC0415
-
-    return module
 
 
 @pytest.fixture
@@ -38,17 +31,17 @@ def small_pool(settings) -> Iterator[ConnectionPool]:
         yield pool
 
 
-def test_an_idle_pool_is_ok(readiness, small_pool: ConnectionPool) -> None:
+def test_an_idle_pool_is_ok(small_pool: ConnectionPool) -> None:
     assert readiness.pool_state(small_pool) == "ok"
 
 
-def test_a_pool_with_one_connection_free_is_ok(readiness, small_pool: ConnectionPool) -> None:
+def test_a_pool_with_one_connection_free_is_ok(small_pool: ConnectionPool) -> None:
     with small_pool.connection():
         assert readiness.pool_state(small_pool) == "ok"
 
 
 def test_a_pool_with_every_connection_in_use_is_saturated_and_answers_at_once(
-    readiness, small_pool: ConnectionPool
+    small_pool: ConnectionPool,
 ) -> None:
     with small_pool.connection(), small_pool.connection():
         started = time.monotonic()

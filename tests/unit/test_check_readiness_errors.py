@@ -14,6 +14,8 @@ the connection with `psycopg.connect` and runs its statements with `conn.execute
 import psycopg
 import pytest
 
+from ledger.infra import readiness
+
 TIMEOUT = 2.0
 
 
@@ -59,15 +61,6 @@ class StandInConnection:
         self.close()
 
 
-@pytest.fixture
-def readiness():
-    """The module under test. Imported lazily so these tests fail one by one while the module does
-    not exist yet."""
-    from ledger.infra import readiness as module  # noqa: PLC0415
-
-    return module
-
-
 ERRORS = [
     psycopg.OperationalError("connection refused"),
     psycopg.errors.AdminShutdown("shutting down"),
@@ -79,7 +72,7 @@ ERRORS = [
 
 @pytest.mark.parametrize("error", ERRORS, ids=lambda error: type(error).__name__)
 def test_an_error_while_connecting_is_a_not_ready_result_with_the_error_as_its_cause(
-    readiness, monkeypatch: pytest.MonkeyPatch, error: Exception
+    monkeypatch: pytest.MonkeyPatch, error: Exception
 ) -> None:
     def refuse(*args, **kwargs):
         raise error
@@ -99,7 +92,7 @@ def test_an_error_while_connecting_is_a_not_ready_result_with_the_error_as_its_c
     ids=["select-1", "read-only-check", "first-table-check", "later-table-check"],
 )
 def test_the_failed_check_is_named_by_the_stage_where_the_error_happened(
-    readiness, monkeypatch: pytest.MonkeyPatch, fail_at: int, failed_check: str
+    monkeypatch: pytest.MonkeyPatch, fail_at: int, failed_check: str
 ) -> None:
     error = psycopg.errors.QueryCanceled("statement timeout")
     connection = StandInConnection(fail_at, error)
@@ -112,9 +105,7 @@ def test_the_failed_check_is_named_by_the_stage_where_the_error_happened(
     assert result.cause is error
 
 
-def test_the_connection_is_closed_even_when_a_check_fails(
-    readiness, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_connection_is_closed_even_when_a_check_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     connection = StandInConnection(2, psycopg.OperationalError("server closed the connection"))
     monkeypatch.setattr(psycopg, "connect", lambda *args, **kwargs: connection)
 
@@ -124,7 +115,7 @@ def test_the_connection_is_closed_even_when_a_check_fails(
 
 
 def test_an_error_that_is_not_a_database_error_in_a_statement_propagates(
-    readiness, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     connection = StandInConnection(2, RuntimeError("a bug"))
     monkeypatch.setattr(psycopg, "connect", lambda *args, **kwargs: connection)

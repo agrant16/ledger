@@ -33,16 +33,8 @@ from psycopg_pool import ConnectionPool
 
 from ledger.api.rest.error_handlers import install_error_handling
 from ledger.api.rest.routers.health import router
+from ledger.infra import readiness
 from ledger.infra.config import Settings
-
-
-@pytest.fixture
-def readiness():
-    """The module under test. Imported lazily so these tests fail one by one while the module does
-    not exist yet."""
-    from ledger.infra import readiness as module  # noqa: PLC0415
-
-    return module
 
 
 @pytest.fixture
@@ -81,7 +73,7 @@ def test_health_is_ok_when_the_database_is_ready(client: TestClient) -> None:
 
 
 def test_health_asks_the_check_about_the_apps_settings_and_pool(
-    client: TestClient, app: FastAPI, readiness, monkeypatch: pytest.MonkeyPatch
+    client: TestClient, app: FastAPI, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     checked = []
     asked_about = []
@@ -124,7 +116,6 @@ def test_a_saturated_pool_is_still_ready_and_is_reported(
 @pytest.mark.parametrize("failed_check", ["database", "writable", "tables"])
 def test_a_check_that_is_not_ready_is_a_503_not_ready_problem_without_retry_after(
     client: TestClient,
-    readiness,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
     failed_check: str,

@@ -28,24 +28,15 @@ from fastapi.testclient import TestClient
 
 from ledger.api.rest import problems as table
 from ledger.api.rest.error_handlers import install_error_handling
-from ledger.errors import LedgerError, ServiceBusyError
+from ledger.errors import LedgerError, NotReadyError, ServiceBusyError
 
 
-@pytest.fixture
-def not_ready_error():
-    """The error under test. Imported lazily so these tests fail one by one while it does not exist
-    yet."""
-    from ledger.errors import NotReadyError  # noqa: PLC0415
-
-    return NotReadyError
+def test_it_is_a_ledger_error_so_it_is_an_expected_failure_and_not_a_bug() -> None:
+    assert issubclass(NotReadyError, LedgerError)
 
 
-def test_it_is_a_ledger_error_so_it_is_an_expected_failure_and_not_a_bug(not_ready_error) -> None:
-    assert issubclass(not_ready_error, LedgerError)
-
-
-def test_it_has_its_own_row_in_the_table(not_ready_error) -> None:
-    spec = table.problem_for(not_ready_error)
+def test_it_has_its_own_row_in_the_table() -> None:
+    spec = table.problem_for(NotReadyError)
 
     assert (spec.status, spec.type, spec.title) == (
         503,
@@ -54,12 +45,12 @@ def test_it_has_its_own_row_in_the_table(not_ready_error) -> None:
     )
 
 
-def test_it_is_a_different_problem_from_a_busy_service(not_ready_error) -> None:
-    assert table.problem_for(not_ready_error).type != table.problem_for(ServiceBusyError).type
+def test_it_is_a_different_problem_from_a_busy_service() -> None:
+    assert table.problem_for(NotReadyError).type != table.problem_for(ServiceBusyError).type
 
 
 def test_the_response_has_no_retry_after_and_one_warning_with_the_cause(
-    not_ready_error, caplog: pytest.LogCaptureFixture
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     application = FastAPI()
     install_error_handling(application)
@@ -67,7 +58,7 @@ def test_the_response_has_no_retry_after_and_one_warning_with_the_cause(
 
     @application.get("/not-ready")
     def raise_not_ready() -> None:
-        raise not_ready_error("the database check failed") from cause
+        raise NotReadyError("the database check failed") from cause
 
     caplog.set_level(logging.DEBUG)
 

@@ -32,6 +32,7 @@ import psycopg
 import pytest
 from psycopg.conninfo import conninfo_to_dict
 
+from ledger.infra import readiness
 from tests.db_helpers import with_database
 
 TIMEOUT = 2.0
@@ -48,15 +49,6 @@ NEEDED_GRANTS = {
 }
 GRANT_CASES = [(table, grant) for table, grants in NEEDED_GRANTS.items() for grant in grants]
 TABLES_WITH_IDS = ("accounts", "transactions", "entries")
-
-
-@pytest.fixture
-def readiness():
-    """The module under test. Imported lazily so these tests fail one by one while the module does
-    not exist yet."""
-    from ledger.infra import readiness as module  # noqa: PLC0415
-
-    return module
 
 
 def with_host_and_port(url: str, port: int) -> str:
@@ -130,7 +122,7 @@ def balances_locked(settings) -> Iterator[None]:
             holder.rollback()
 
 
-def test_a_healthy_database_is_ready(readiness, settings) -> None:
+def test_a_healthy_database_is_ready(settings) -> None:
     result = readiness.check_readiness(settings.app_url, TIMEOUT)
 
     assert result.ready is True
@@ -139,7 +131,7 @@ def test_a_healthy_database_is_ready(readiness, settings) -> None:
 
 
 def test_a_probe_writes_nothing_so_it_burns_no_ids(
-    readiness, settings, owner_conn: psycopg.Connection
+    settings, owner_conn: psycopg.Connection
 ) -> None:
     """A write probe, even one that is rolled back, would use up identity values. Every identity
     sequence is exactly where it was after many probes."""
@@ -157,9 +149,7 @@ def test_a_probe_writes_nothing_so_it_burns_no_ids(
     assert sequences() == before
 
 
-def test_every_probe_closes_its_connection(
-    readiness, settings, owner_conn: psycopg.Connection
-) -> None:
+def test_every_probe_closes_its_connection(settings, owner_conn: psycopg.Connection) -> None:
     """The app role has no more sessions after 20 probes than before, so none is leaked."""
     role = conninfo_to_dict(settings.app_url)["user"]
 
@@ -181,9 +171,7 @@ def test_every_probe_closes_its_connection(
     assert sessions() <= before  # not "==": a session left by an earlier test may exit meanwhile
 
 
-def test_an_unreachable_database_is_not_ready_and_the_error_is_kept(
-    readiness, closed_port_url: str
-) -> None:
+def test_an_unreachable_database_is_not_ready_and_the_error_is_kept(closed_port_url: str) -> None:
     started = time.monotonic()
     result = readiness.check_readiness(closed_port_url, TIMEOUT)
 
@@ -193,9 +181,7 @@ def test_an_unreachable_database_is_not_ready_and_the_error_is_kept(
     assert time.monotonic() - started < TIMEOUT + MARGIN
 
 
-def test_a_database_that_never_answers_is_not_ready_within_the_timeout(
-    readiness, black_hole_url: str
-) -> None:
+def test_a_database_that_never_answers_is_not_ready_within_the_timeout(black_hole_url: str) -> None:
     """The bound that has to stay below a probe's timeoutSeconds: a hung database must not hold the
     probe for longer than the timeout."""
     started = time.monotonic()
@@ -209,7 +195,7 @@ def test_a_database_that_never_answers_is_not_ready_within_the_timeout(
 
 
 @pytest.mark.usefixtures("read_only_connections")
-def test_a_read_only_database_is_not_ready(readiness, settings) -> None:
+def test_a_read_only_database_is_not_ready(settings) -> None:
     """The service cannot post a transfer to a database that refuses writes, as after a failover to
     a standby, even though `SELECT 1` works."""
     result = readiness.check_readiness(settings.app_url, TIMEOUT)
@@ -218,7 +204,7 @@ def test_a_read_only_database_is_not_ready(readiness, settings) -> None:
     assert result.failed_check == "writable"
 
 
-def test_a_database_without_the_ledger_tables_is_not_ready(readiness, settings) -> None:
+def test_a_database_without_the_ledger_tables_is_not_ready(settings) -> None:
     """The `postgres` database answers and is writable, but has none of the ledger's tables."""
     url = with_database(settings.app_url, "postgres")
 
@@ -231,7 +217,7 @@ def test_a_database_without_the_ledger_tables_is_not_ready(readiness, settings) 
 
 @pytest.mark.parametrize("table, privilege", GRANT_CASES)
 def test_a_missing_grant_is_not_ready(
-    readiness, settings, revoke: Callable[[str, str], None], table: str, privilege: str
+    settings, revoke: Callable[[str, str], None], table: str, privilege: str
 ) -> None:
     assert readiness.check_readiness(
         settings.app_url, TIMEOUT
@@ -245,9 +231,7 @@ def test_a_missing_grant_is_not_ready(
 
 
 @pytest.mark.usefixtures("balances_locked")
-def test_a_read_that_waits_on_a_lock_is_cut_off_by_the_statement_timeout(
-    readiness, settings
-) -> None:
+def test_a_read_that_waits_on_a_lock_is_cut_off_by_the_statement_timeout(settings) -> None:
     started = time.monotonic()
     result = readiness.check_readiness(settings.app_url, TIMEOUT)
     elapsed = time.monotonic() - started
@@ -259,7 +243,7 @@ def test_a_read_that_waits_on_a_lock_is_cut_off_by_the_statement_timeout(
 
 
 def test_an_error_that_is_not_a_database_error_propagates(
-    readiness, settings, monkeypatch: pytest.MonkeyPatch
+    settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A bug in the check is not hidden as "not ready": the route turns it into a logged 500."""
 
