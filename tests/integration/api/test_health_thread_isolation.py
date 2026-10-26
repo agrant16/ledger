@@ -106,6 +106,14 @@ async def health_limiter_of(app: FastAPI) -> CapacityLimiter:
     return app.state.health_limiter
 
 
+def wait_until_queued(limiter: CapacityLimiter, count: int) -> None:
+    """Waits until `count` requests are queued on the limiter, polling the limiter itself."""
+    deadline = time.monotonic() + WAIT_SECONDS
+    while limiter.statistics().tasks_waiting < count:
+        assert time.monotonic() < deadline, "the other probes never reached the limiter"
+        time.sleep(0.01)
+
+
 def test_startup_creates_a_health_limiter_of_the_configured_size_apart_from_the_default_one(
     fresh_app: Callable[..., FastAPI],
 ) -> None:
@@ -151,10 +159,13 @@ def test_health_is_ready_while_every_handler_thread_is_taken(
 def test_a_burst_of_health_checks_never_runs_more_than_the_limit_at_once(
     fresh_app: Callable[..., FastAPI], executor: ThreadPoolExecutor, slow_check: SlowCheck
 ) -> None:
-    with started(fresh_app, HEALTH_CONCURRENCY="2") as client:
+    app = fresh_app(HEALTH_CONCURRENCY="2")
+    with TestClient(app, raise_server_exceptions=False) as client:
+        limiter = client.portal.call(health_limiter_of, app)
         pending = [executor.submit(client.get, "/health") for _ in range(8)]
         slow_check.wait_until_entered(2)
-        time.sleep(0.3)  # time for a third check to start, if the limit were not holding it back
+        wait_until_queued(limiter, 6)  # the other 6 are waiting for a slot, none has started
+        assert limiter.statistics().borrowed_tokens == 2
         assert slow_check.peak == 2
         slow_check.release.set()
         responses = [future.result(timeout=WAIT_SECONDS) for future in pending]
@@ -183,21 +194,25 @@ def test_traffic_is_served_while_every_health_slot_is_busy(
     assert response.status_code == 404
 
 
-def test_health_checks_do_not_count_against_the_concurrency_cap_while_they_wait_for_a_slot(
-    fresh_app: Callable[..., FastAPI], executor: ThreadPoolExecutor, slow_check: SlowCheck
+def test_a_check_that_fails_gives_its_slot_back(
+    fresh_app: Callable[..., FastAPI],
+    executor: ThreadPoolExecutor,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Probes queued on the health limiter are not traffic: with a cap of 1, a request still gets
-    through (the control for the exemption of #155, now that probes can wait)."""
-    with started(fresh_app, CONCURRENCY_CAP="1", HEALTH_CONCURRENCY="1") as client:
-        probes = [executor.submit(client.get, "/health") for _ in range(3)]
-        slow_check.wait_until_entered(1)
+    """A bug in the check (a 500) must not leak a slot: after more failures than there are slots,
+    the next probe still gets one."""
 
-        response = executor.submit(client.get, f"/accounts/{UNKNOWN_ACCOUNT}/balance").result(
-            timeout=WAIT_SECONDS
+    def broken(app_url: str, timeout_seconds: float) -> readiness.ReadinessResult:
+        raise RuntimeError("a bug in the check")
+
+    monkeypatch.setattr("ledger.api.rest.routers.health.check_readiness", broken)
+    with started(fresh_app, HEALTH_CONCURRENCY="1") as client:
+        failures = [client.get("/health") for _ in range(3)]
+        monkeypatch.setattr(
+            "ledger.api.rest.routers.health.check_readiness",
+            lambda app_url, timeout_seconds: ready_result(),
         )
+        response = executor.submit(client.get, "/health").result(timeout=WAIT_SECONDS)
 
-        slow_check.release.set()
-        for probe in probes:
-            probe.result(timeout=WAIT_SECONDS)
-
-    assert response.status_code == 404  # not 503 service-busy
+    assert [r.status_code for r in failures] == [500] * 3
+    assert response.status_code == 200

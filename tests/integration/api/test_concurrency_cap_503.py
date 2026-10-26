@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 
 from ledger.api.rest.error_handlers import RETRY_AFTER_SECONDS
 from ledger.api.rest.routers import accounts as accounts_router
+from ledger.infra.readiness import ReadinessResult
 from tests.db_helpers import reset_database
 
 pytestmark = pytest.mark.usefixtures("migrated_database")
@@ -134,6 +135,36 @@ def test_the_readiness_probe_is_not_rejected_at_the_cap_and_is_not_counted(
     assert probe.status_code == 200
     assert saturated.client.get(READ).status_code == 503, "the cap is still full for other routes"
     assert saturated.hold.calls == CAP
+
+
+def test_probes_in_flight_do_not_use_up_the_cap(
+    fresh_app: Callable[..., FastAPI], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other half of the exemption: a probe being handled is not counted, so with a cap of 1
+    and a probe held inside its check, an ordinary request still gets through."""
+    release = threading.Event()
+    entered = threading.Event()
+
+    def held_check(app_url, timeout_seconds):
+        entered.set()
+        assert release.wait(WAIT_SECONDS), "the test never released the probe"
+        return ReadinessResult(failed_check=None, cause=None)
+
+    monkeypatch.setattr("ledger.api.rest.routers.health.check_readiness", held_check)
+    app = fresh_app(CONCURRENCY_CAP="1")
+    with (
+        TestClient(app, raise_server_exceptions=False) as client,
+        ThreadPoolExecutor(1) as executor,
+    ):
+        probe = executor.submit(client.get, "/health")
+        try:
+            assert entered.wait(WAIT_SECONDS), "the probe never reached its check"
+            response = client.get(READ)
+        finally:
+            release.set()
+        assert probe.result(timeout=WAIT_SECONDS).status_code == 200
+
+    assert response.status_code == 404, "not a 503: the probe holds no place under the cap"
 
 
 def test_the_rejected_request_never_reaches_the_route_and_the_held_ones_finish(

@@ -52,7 +52,9 @@ def pool_of_one(settings: Settings) -> Iterator[ConnectionPool]:
 @asynccontextmanager
 async def health_limiter_lifespan(application: FastAPI) -> AsyncIterator[None]:
     # Like the real lifespan, the limiter is made inside the running event loop.
-    application.state.health_limiter = CapacityLimiter(2)
+    application.state.health_limiter = CapacityLimiter(
+        application.state.settings.health_concurrency
+    )
     yield
 
 

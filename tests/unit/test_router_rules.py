@@ -93,7 +93,11 @@ def is_offloaded_to_a_limiter(node: ast.Await) -> bool:
     return (
         call.func.attr == "run_sync"
         and is_to_thread
-        and any(keyword.arg == "limiter" for keyword in call.keywords)
+        and any(
+            keyword.arg == "limiter"
+            and not (isinstance(keyword.value, ast.Constant) and keyword.value.value is None)
+            for keyword in call.keywords
+        )
     )
 
 
@@ -260,6 +264,12 @@ def test_a_router_that_follows_the_rules_is_clean(tmp_path: Path) -> None:
         "router = 1\nfrom ledger.service.account_service import create_account\n\n\n"
         "async def f(conn):\n    await to_thread.run_sync(g, limiter=lim)\n"
         "    return create_account(conn, 'x', 'USD', False)\n",
+        # an async route that passes no limiter (limiter=None is the default limiter)
+        "router = 1\n\n\nasync def f():\n    return await to_thread.run_sync(g, limiter=None)\n",
+        # two transactions in one async route
+        "router = 1\nfrom ledger.infra.db import run_in_transaction\n\n\n"
+        "async def f(pool):\n    await to_thread.run_sync(g, limiter=lim)\n"
+        "    run_in_transaction(pool, lambda c: 1)\n    run_in_transaction(pool, lambda c: 2)\n",
         # a sync route with an await
         "router = 1\n\n\ndef f():\n    return await to_thread.run_sync(g, limiter=lim)\n",
         "router = 1\n\n\ndef f():\n    async def g():\n        await h()\n",
@@ -293,6 +303,8 @@ def test_a_router_that_follows_the_rules_is_clean(tmp_path: Path) -> None:
         "async route offloading to another call",
         "async route with another await",
         "async route calling a service directly",
+        "async route with limiter=None",
+        "two transactions in an async route",
         "await in a sync def",
         "await in a nested async def",
         "two transactions",
