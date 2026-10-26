@@ -23,7 +23,9 @@ smoke job.
 """
 
 import logging
+import socket
 from collections.abc import Iterator
+from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
 import pytest
@@ -146,8 +148,55 @@ def test_a_check_that_is_not_ready_is_a_503_not_ready_problem_without_retry_afte
     assert "ledger_app" not in response.text
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1, "a not-ready answer is logged once, at WARNING"
-    assert failed_check in warnings[0].getMessage()
+    assert f"failed_check={failed_check}" in warnings[0].getMessage()
     assert "password authentication failed" in warnings[0].getMessage()  # the cause
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def test_a_revoked_grant_is_a_503_not_ready_problem_through_the_real_check(
+    client: TestClient, owner_conn: psycopg.Connection, caplog: pytest.LogCaptureFixture
+) -> None:
+    """No monkeypatching: the real check runs against the real database."""
+    assert client.get("/health").status_code == 200  # the control: it starts ready
+    owner_conn.execute("REVOKE INSERT ON entries FROM ledger_app")
+    caplog.set_level(logging.DEBUG)
+    try:
+        response = client.get("/health")
+    finally:
+        owner_conn.execute("GRANT INSERT ON entries TO ledger_app")
+
+    assert response.status_code == 503
+    assert response.json()["type"] == "urn:ledger:error:not-ready"
+    assert "Retry-After" not in response.headers
+    assert "entries" not in response.text
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "failed_check=tables" in warnings[0].getMessage()
+    assert client.get("/health").status_code == 200  # the grant is back
+
+
+def test_an_unreachable_database_is_a_503_not_ready_problem_through_the_real_check(
+    settings: Settings, app_pool: ConnectionPool, caplog: pytest.LogCaptureFixture
+) -> None:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    parts = urlsplit(settings.app_url)
+    userinfo = parts.netloc.rpartition("@")[0]
+    dead_url = urlunsplit(parts._replace(netloc=f"{userinfo}@127.0.0.1:{port}"))
+    unreachable = settings.model_copy(update={"app_url": dead_url})
+    client = TestClient(build_app(unreachable, app_pool), raise_server_exceptions=False)
+    caplog.set_level(logging.DEBUG)
+
+    response = client.get("/health")
+
+    assert response.status_code == 503
+    assert response.json()["type"] == "urn:ledger:error:not-ready"
+    assert "Retry-After" not in response.headers
+    assert "127.0.0.1" not in response.text
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "failed_check=database" in warnings[0].getMessage()
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
 
