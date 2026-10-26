@@ -20,7 +20,7 @@ async def health(
     the service unready; it is reported in the `pool` field. The route is left out of OpenAPI.
 
     Args:
-        request: The current request object.
+        request: The current request.
         pool: The request connection pool, injected.
         settings: The application settings, injected.
 

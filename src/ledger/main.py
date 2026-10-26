@@ -33,10 +33,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Sets up logging and the connection pool at startup and closes the pool at shutdown.
+    """Sets up logging, thread limits and the pool at startup; closes pool at shutdown. (ADR 0004)
 
-    The pool is available as `app.state.pool` while the app runs (ADR 0004). Startup waits until
-    the pool has its connections, so a database that cannot be reached stops the app starting.
+    While the app runs, `app.state.pool` is the connection pool and `app.state.health_limiter` is
+    the `CapacityLimiter` that bounds concurrent readiness checks to `health_concurrency`, apart
+    from the handler thread limit. Startup waits until the pool has its connections, so a database
+    that cannot be reached stops the app starting.
 
     Args:
         app: The application. Its `state.settings` must be set.
