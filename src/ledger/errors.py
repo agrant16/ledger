@@ -83,4 +83,5 @@ class UnbalancedEntriesError(LedgerInvariantError):
 
 
 class NotReadyError(LedgerError):
-    """The service is not ready."""
+    """The service cannot do its job: the database is unreachable or read-only, or a
+    required table or privilege is missing."""
