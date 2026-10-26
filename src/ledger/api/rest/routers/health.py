@@ -1,4 +1,4 @@
-import anyio
+from anyio import to_thread
 from fastapi import APIRouter, Depends, Request
 
 from ledger.api.rest.dependencies import get_pool, get_settings
@@ -32,7 +32,7 @@ async def health(
         NotReadyError: The database cannot be reached or queried, it is read-only, or a required
             table or privilege is missing.
     """
-    result = await anyio.to_thread.run_sync(
+    result = await to_thread.run_sync(
         check_readiness,
         settings.app_url,
         settings.health_timeout_seconds,
