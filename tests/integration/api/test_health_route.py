@@ -3,8 +3,9 @@
 Contract these tests expect:
 
 - ledger/api/rest/routers/health.py has an `APIRouter` called `router` with the route.
-- The route is a synchronous function that calls `check_readiness(settings.app_url,
-  settings.health_timeout_seconds)` and `pool_state(pool)`, both imported by those names from
+- The route is an `async` function that runs `check_readiness(settings.app_url,
+  settings.health_timeout_seconds)` on the limiter in `app.state.health_limiter` (see
+  test_health_thread_isolation.py) and calls `pool_state(pool)`, both imported by those names from
   ledger.infra.readiness so a test can replace them, with the settings in `app.state.settings` and
   the pool in `app.state.pool`. It runs no SQL itself.
 - It is a readiness check (issue #155). When the check is ready the response is 200 with
@@ -24,11 +25,13 @@ smoke job.
 
 import logging
 import socket
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
 from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
 import pytest
+from anyio import CapacityLimiter
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from psycopg_pool import ConnectionPool
@@ -46,8 +49,15 @@ def pool_of_one(settings: Settings) -> Iterator[ConnectionPool]:
         yield pool
 
 
+@asynccontextmanager
+async def health_limiter_lifespan(application: FastAPI) -> AsyncIterator[None]:
+    # Like the real lifespan, the limiter is made inside the running event loop.
+    application.state.health_limiter = CapacityLimiter(2)
+    yield
+
+
 def build_app(settings: Settings, pool: ConnectionPool) -> FastAPI:
-    application = FastAPI()
+    application = FastAPI(lifespan=health_limiter_lifespan)
     install_error_handling(application)
     application.include_router(router)
     application.state.pool = pool
@@ -61,8 +71,9 @@ def app(settings: Settings, app_pool: ConnectionPool) -> FastAPI:
 
 
 @pytest.fixture
-def client(app: FastAPI) -> TestClient:
-    return TestClient(app, raise_server_exceptions=False)
+def client(app: FastAPI) -> Iterator[TestClient]:
+    with TestClient(app, raise_server_exceptions=False) as started:
+        yield started
 
 
 def test_health_is_ok_when_the_database_is_ready(client: TestClient) -> None:
@@ -104,11 +115,11 @@ def test_a_saturated_pool_is_still_ready_and_is_reported(
 ) -> None:
     """The check does not use the request pool, so a pool with every connection in use does not make
     the service unready: the concurrency cap and Retry-After deal with that, request by request."""
-    client = TestClient(build_app(settings, pool_of_one), raise_server_exceptions=False)
     caplog.set_level(logging.DEBUG)
 
-    with pool_of_one.connection():  # the only connection is in use
-        response = client.get("/health")
+    with TestClient(build_app(settings, pool_of_one), raise_server_exceptions=False) as client:
+        with pool_of_one.connection():  # the only connection is in use
+            response = client.get("/health")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "pool": "saturated"}
@@ -185,10 +196,10 @@ def test_an_unreachable_database_is_a_503_not_ready_problem_through_the_real_che
     userinfo = parts.netloc.rpartition("@")[0]
     dead_url = urlunsplit(parts._replace(netloc=f"{userinfo}@127.0.0.1:{port}"))
     unreachable = settings.model_copy(update={"app_url": dead_url})
-    client = TestClient(build_app(unreachable, app_pool), raise_server_exceptions=False)
     caplog.set_level(logging.DEBUG)
 
-    response = client.get("/health")
+    with TestClient(build_app(unreachable, app_pool), raise_server_exceptions=False) as client:
+        response = client.get("/health")
 
     assert response.status_code == 503
     assert response.json()["type"] == "urn:ledger:error:not-ready"

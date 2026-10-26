@@ -59,7 +59,12 @@ def test_the_handler_thread_limit_can_be_set_by_the_environment(monkeypatch) -> 
     assert load_settings().handler_thread_limit == 7
 
 
-POSITIVE_INTEGER_VARIABLES = ["POOL_SIZE", "HANDLER_THREAD_LIMIT", "CONCURRENCY_CAP"]
+POSITIVE_INTEGER_VARIABLES = [
+    "POOL_SIZE",
+    "HANDLER_THREAD_LIMIT",
+    "CONCURRENCY_CAP",
+    "HEALTH_CONCURRENCY",
+]
 POSITIVE_NUMBER_VARIABLES = [
     *POSITIVE_INTEGER_VARIABLES,
     "POOL_TIMEOUT_SECONDS",
@@ -86,6 +91,7 @@ def test_every_setting_has_its_default_when_the_environment_is_empty(monkeypatch
     assert settings.handler_thread_limit == 20
     assert settings.concurrency_cap == 40
     assert settings.health_timeout_seconds == HEALTH_TIMEOUT_DEFAULT
+    assert settings.health_concurrency == 2
 
 
 def test_valid_numeric_values_are_read_from_the_environment(monkeypatch) -> None:
@@ -94,6 +100,7 @@ def test_valid_numeric_values_are_read_from_the_environment(monkeypatch) -> None
     monkeypatch.setenv("HANDLER_THREAD_LIMIT", "1")
     monkeypatch.setenv("CONCURRENCY_CAP", "5")
     monkeypatch.setenv("HEALTH_TIMEOUT_SECONDS", "3")
+    monkeypatch.setenv("HEALTH_CONCURRENCY", "4")
 
     settings = load_settings()
 
@@ -102,6 +109,7 @@ def test_valid_numeric_values_are_read_from_the_environment(monkeypatch) -> None
     assert settings.handler_thread_limit == 1
     assert settings.concurrency_cap == 5
     assert settings.health_timeout_seconds == 3
+    assert settings.health_concurrency == 4
 
 
 @pytest.mark.parametrize("value", ["0", "-1", "-20"])
