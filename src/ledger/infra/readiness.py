@@ -28,6 +28,19 @@ class ReadinessResult:
 
 
 def check_readiness(app_url: str, timeout_seconds: float) -> ReadinessResult:
+    """Checks the applications readiness status.
+
+    Checks that the database is available and writable. Checks that each table exists
+    and that each table has the proper privileges for the app role.
+
+    Args:
+        app_url: The app role url for the database.
+        timeout_seconds: The timeout in seconds for the readiness check.
+
+    Returns:
+        ReadinessResult: The result of the readiness check with result.ready=True if all
+            checks pass and False otherwise.
+    """
     stage = "database"
     try:
         with psycopg.connect(
@@ -60,4 +73,4 @@ def _check_table_and_privileges(
     ).fetchall()[0]
     if not result:
         return False
-    return True
+    return result[0]
