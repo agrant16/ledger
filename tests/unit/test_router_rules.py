@@ -8,9 +8,13 @@ module, so they need no database:
    aggregate router includes it.
 2. Route functions are synchronous. A blocking database call inside an `async def` would stall the
    event loop for every request (ADR 0004), so `async def` and `await` do not appear in a router
-   module.
-3. A route function calls `run_in_transaction` at most once: one request, one transaction
-   (ADR 0011).
+   module, with one exception (issue #155): an `async def` route may `await
+   to_thread.run_sync(..., limiter=...)` to run blocking work on a limiter of its own, and every
+   `await` in it must be such a call. The `limiter=` is required because a call without it would
+   use the default limiter shared with the traffic handlers. An `async def` with no such call, or
+   with any other `await`, is a violation.
+3. A route function, sync or async, calls `run_in_transaction` at most once: one request, one
+   transaction (ADR 0011).
 4. A route calls a service function only inside the function it hands to `run_in_transaction`,
    never directly in its own body, and never without a `run_in_transaction` to put it in. The API
    layer owns the transaction; the service is always given an open connection.
@@ -77,6 +81,44 @@ def is_transaction_call(call: ast.Call) -> bool:
     return isinstance(call.func, ast.Name) and call.func.id == TRANSACTION_HELPER
 
 
+def is_offloaded_to_a_limiter(node: ast.Await) -> bool:
+    """True for `await to_thread.run_sync(..., limiter=...)`, also as `anyio.to_thread.run_sync`."""
+    call = node.value
+    if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute)):
+        return False
+    owner = call.func.value
+    is_to_thread = (isinstance(owner, ast.Name) and owner.id == "to_thread") or (
+        isinstance(owner, ast.Attribute) and owner.attr == "to_thread"
+    )
+    return (
+        call.func.attr == "run_sync"
+        and is_to_thread
+        and any(keyword.arg == "limiter" for keyword in call.keywords)
+    )
+
+
+def async_route_violations(name: str, tree: ast.Module) -> list[str]:
+    problems: list[str] = []
+    allowed: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.AsyncFunctionDef):
+            awaits = [n for n in ast.walk(node) if isinstance(n, ast.Await)]
+            offloaded = [n for n in awaits if is_offloaded_to_a_limiter(n)]
+            allowed.update(id(n) for n in offloaded)
+            if not offloaded:
+                problems.append(
+                    f"{name} line {node.lineno}: an async route must await "
+                    "to_thread.run_sync(..., limiter=...)"
+                )
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Await) and id(node) not in allowed:
+            problems.append(
+                f"{name} line {node.lineno}: the only await allowed in a route is "
+                "to_thread.run_sync(..., limiter=...)"
+            )
+    return problems
+
+
 def router_violations(root: Path) -> list[str]:
     problems: list[str] = []
     for path in sorted((root / ROUTERS).glob("*.py")):
@@ -93,14 +135,10 @@ def router_violations(root: Path) -> list[str]:
         )
         if not defines_router:
             problems.append(f"{name} defines no module-level `router`")
-        for node in ast.walk(tree):
-            if isinstance(node, (ast.AsyncFunctionDef, ast.Await)):
-                problems.append(
-                    f"{name} line {node.lineno}: routes are synchronous (no async/await)"
-                )
+        problems.extend(async_route_violations(name, tree))
         services = service_names(tree)
         for function in tree.body:
-            if not isinstance(function, ast.FunctionDef):
+            if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             where = f"{name}.{function.name}"
             transactions = [c for c in calls_in(function, True) if is_transaction_call(c)]
@@ -156,6 +194,8 @@ def test_main_reaches_into_the_api_layer_only_for_the_router_and_the_handlers() 
 # --- the rules themselves must catch what they claim to catch ---------------------------------
 
 GOOD_ROUTER = """
+import anyio
+from anyio import to_thread
 from fastapi import APIRouter, Request
 from ledger.infra.db import run_in_transaction
 from ledger.service.account_service import create_account, get_balance
@@ -183,6 +223,16 @@ def read(request: Request):
 @router.get("/ping")
 def ping(request: Request):
     return {"ok": True}
+
+
+@router.get("/ready")
+async def ready(request: Request):
+    return await to_thread.run_sync(check, limiter=request.app.state.health_limiter)
+
+
+@router.get("/ready2")
+async def ready_again(request: Request):
+    return await anyio.to_thread.run_sync(check, limiter=request.app.state.health_limiter)
 """
 
 
@@ -199,6 +249,19 @@ def test_a_router_that_follows_the_rules_is_clean(tmp_path: Path) -> None:
         "def f():\n    return 1\n",
         # async routes
         "router = 1\n\n\nasync def f():\n    return 1\n",
+        # an async route that offloads with the default limiter
+        "router = 1\n\n\nasync def f():\n    return await to_thread.run_sync(g)\n",
+        # an async route that offloads to something other than to_thread.run_sync
+        "router = 1\n\n\nasync def f():\n    return await other.run_sync(g, limiter=lim)\n",
+        # an async route that awaits something besides the offload
+        "router = 1\n\n\nasync def f():\n    await to_thread.run_sync(g, limiter=lim)\n"
+        "    return await h()\n",
+        # an async route that calls a service directly next to the offload
+        "router = 1\nfrom ledger.service.account_service import create_account\n\n\n"
+        "async def f(conn):\n    await to_thread.run_sync(g, limiter=lim)\n"
+        "    return create_account(conn, 'x', 'USD', False)\n",
+        # a sync route with an await
+        "router = 1\n\n\ndef f():\n    return await to_thread.run_sync(g, limiter=lim)\n",
         "router = 1\n\n\ndef f():\n    async def g():\n        await h()\n",
         # two transactions in one route
         "router = 1\nfrom ledger.infra.db import run_in_transaction\n\n\n"
@@ -226,6 +289,11 @@ def test_a_router_that_follows_the_rules_is_clean(tmp_path: Path) -> None:
     ids=[
         "no router",
         "async def",
+        "async route on the default limiter",
+        "async route offloading to another call",
+        "async route with another await",
+        "async route calling a service directly",
+        "await in a sync def",
         "await in a nested async def",
         "two transactions",
         "direct service call",
