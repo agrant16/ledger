@@ -21,6 +21,10 @@ Every write is one database transaction on one connection. Under load, the servi
 
 *Note (2026-10-20): settings are loaded once, by the app factory `create_app(settings=None)` in `ledger/main.py`, and stored on `app.state.settings` (issue #100, PR #113). The concurrency cap middleware, the thread limit, the pool and the startup INFO line all read that one object, so the cap that is logged is the cap that is enforced. `app = create_app()` stays at module level for `uvicorn ledger.main:app`, and tests build their own apps with `create_app(Settings(...))`. A bad value stops the app when it is built, with an error naming the variable. `Settings` is a `BaseSettings`, so a field that is not passed is still read from the environment; a test that must not depend on the environment passes every field it cares about. The decision itself is unchanged; the design doc (Stack decisions, Settings) holds the detail.*
 
+*Note (2026-10-26, #155): `GET /health` no longer takes a connection from the pool, so the 2026-10-19 note above no longer holds: a pool wait timeout there is not a 503 `service-busy`. The check opens its own short-lived connection with its own timeouts (`HEALTH_TIMEOUT_SECONDS`, default 2), so a pool with every connection in use cannot make the service unready; the body reports `"pool": "saturated"` with a 200, and overload is left to the concurrency cap and `Retry-After`. A failed check is a 503 `not-ready` problem without `Retry-After`. The decision itself (synchronous handlers, a fixed pool, one connection per request) is unchanged; the design doc (Error behavior) holds the detail.*
+
+*Note (2026-10-26, #155): the concurrency cap no longer counts `/health`, so it can never reject a readiness probe. This replaces the part of the 2026-10-20 note that says it counts every in-flight HTTP request, `/health` included. The startup INFO line also records the readiness timeout.*
+
 ## Consequences
 * **Positive:**
   - Overload turns into a bounded 503 with a retry hint, not a hang.

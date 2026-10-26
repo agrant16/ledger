@@ -46,11 +46,30 @@ The service and its tools read these environment variables (`Settings` in `src/l
 | `POOL_SIZE` | `10` | the service | Number of connections in the fixed pool (a positive integer). |
 | `POOL_TIMEOUT_SECONDS` | `2.0` | the service | How long a request waits for a pooled connection before it gets a 503 with `Retry-After` (a number greater than 0). |
 | `HANDLER_THREAD_LIMIT` | `20` | the service | Maximum number of handler threads running at once (a positive integer). |
-| `CONCURRENCY_CAP` | `40` | the service | Maximum number of requests in flight before a 503 with `Retry-After` (a positive integer). |
+| `CONCURRENCY_CAP` | `40` | the service | Maximum number of requests in flight before a 503 with `Retry-After` (a positive integer). `/health` is not counted. |
+| `HEALTH_TIMEOUT_SECONDS` | `2.0` | the service | How long the `/health` readiness check waits to connect and for each of its statements (a number greater than 0). libpq never waits less than 2 seconds for a connection, so a value below 2 does not shorten the connect. |
 
-The settings are loaded once, when the app is built (`create_app` in `src/ledger/main.py`), and that one object feeds the pool, the thread limit, the concurrency cap and the startup line, so the logged values are the enforced ones. A value that does not validate stops the service at startup with an error that names the variable. The pool size, pool wait, thread limit and concurrency cap are logged in one INFO line when the service starts, so the effective values are on record; the database URLs are not.
+The settings are loaded once, when the app is built (`create_app` in `src/ledger/main.py`), and that one object feeds the pool, the thread limit, the concurrency cap and the startup line, so the logged values are the enforced ones. A value that does not validate stops the service at startup with an error that names the variable. The pool size, pool wait, thread limit, concurrency cap and readiness timeout are logged in one INFO line when the service starts, so the effective values are on record; the database URLs are not.
 
 Docker Compose builds the two URLs for its containers from three more variables that only Compose reads, and no Python code does: `POSTGRES_PASSWORD` (the superuser, used by the database container), `LEDGER_OWNER_PASSWORD` (default `owner-dev-only`) and `LEDGER_APP_PASSWORD` (default `app-dev-only`). These defaults are for development only.
+
+### Readiness probe
+
+`GET /health` is a readiness check, written to be used as a Kubernetes (or similar) readiness probe. It answers 200 `{"status": "ok", "pool": "ok"}` when the database can be reached, accepts writes, and has the tables and privileges the service needs, and a 503 `not-ready` problem when it does not. It uses its own connection, not the request pool, and it never writes. A pool with every connection in use is still ready: the body says `"pool": "saturated"` and the concurrency cap and `Retry-After` deal with overload request by request. Kubernetes fails a probe on any status outside 200 to 399, so a 2xx is the only way to say "busy, but keep sending traffic".
+
+An example probe (documentation only; the repository has no Kubernetes manifest):
+
+```yaml
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  periodSeconds: 10
+  failureThreshold: 3
+  timeoutSeconds: 5
+```
+
+The check's own timeout (`HEALTH_TIMEOUT_SECONDS`, default 2) applies to the connect and to each statement, so a probe can take about twice that in a bad case. Keep `timeoutSeconds` at least twice `HEALTH_TIMEOUT_SECONDS` plus one second. There is no liveness endpoint yet (#94); a liveness probe must not touch the database.
 
 ### Funding accounts (the seed script)
 
