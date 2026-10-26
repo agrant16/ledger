@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+import anyio
+from fastapi import APIRouter, Depends, Request
 
 from ledger.api.rest.dependencies import get_pool, get_settings
 from ledger.errors import NotReadyError
@@ -8,7 +9,8 @@ router = APIRouter()
 
 
 @router.get("/health", include_in_schema=False)
-def health(
+async def health(
+    request: Request,
     pool=Depends(get_pool),  # noqa: B008
     settings=Depends(get_settings),  # noqa: B008
 ) -> dict[str, str]:
@@ -18,7 +20,7 @@ def health(
     the service unready; it is reported in the `pool` field. The route is left out of OpenAPI.
 
     Args:
-        request: The incoming request.
+        request: The current request object.
         pool: The request connection pool, injected.
         settings: The application settings, injected.
 
@@ -30,7 +32,12 @@ def health(
         NotReadyError: The database cannot be reached or queried, it is read-only, or a required
             table or privilege is missing.
     """
-    result = check_readiness(settings.app_url, settings.health_timeout_seconds)
+    result = await anyio.to_thread.run_sync(
+        check_readiness,
+        settings.app_url,
+        settings.health_timeout_seconds,
+        limiter=request.app.state.health_limiter,
+    )
     if not result.ready:
         raise NotReadyError(
             NOT_READY_DETAIL[result.failed_check], result.failed_check

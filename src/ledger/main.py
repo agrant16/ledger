@@ -2,7 +2,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from anyio import to_thread
+from anyio import CapacityLimiter, to_thread
 from fastapi import FastAPI
 
 from ledger.api.rest.error_handlers import install_error_handling
@@ -51,6 +51,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = app.state.settings
     logger.info(settings.get_startup_log_message())
     to_thread.current_default_thread_limiter().total_tokens = settings.handler_thread_limit
+    app.state.health_limiter = CapacityLimiter(settings.health_concurrency)
     pool = create_pool(settings)
     pool.open(wait=True)
     app.state.pool = pool
