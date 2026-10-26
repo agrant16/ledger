@@ -12,6 +12,7 @@ from ledger.errors import (
     InsufficientFundsError,
     InvalidRequestError,
     LedgerError,
+    NotReadyError,
     ReversalOfReversalError,
     ServiceBusyError,
     UnknownAccountError,
@@ -44,6 +45,7 @@ EXPECTED: dict[type[LedgerError], tuple[int, str, str]] = {
     ),
     InsufficientFundsError: (422, "urn:ledger:error:insufficient-funds", "Insufficient funds"),
     ServiceBusyError: (503, "urn:ledger:error:service-busy", "Service busy"),
+    NotReadyError: (503, "urn:ledger:error:not-ready", "Not ready"),
 }
 
 # Members a problem body carries beyond type, title, status, detail and instance.
@@ -65,4 +67,5 @@ EXAMPLES: dict[type[LedgerError], Callable[[], LedgerError]] = {
     DuplicateAccountNameError: lambda: DuplicateAccountNameError("customer:alice"),
     InsufficientFundsError: lambda: InsufficientFundsError(7, 100, -250),
     ServiceBusyError: lambda: ServiceBusyError("lock timeout"),
+    NotReadyError: lambda: NotReadyError("The database is not writable"),
 }
