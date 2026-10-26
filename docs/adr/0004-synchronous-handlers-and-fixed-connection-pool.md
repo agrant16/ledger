@@ -25,6 +25,10 @@ Every write is one database transaction on one connection. Under load, the servi
 
 *Note (2026-10-26, #155): the concurrency cap no longer counts `/health`, so it can never reject a readiness probe. This replaces the part of the 2026-10-20 note that says it counts every in-flight HTTP request, `/health` included. The startup INFO line also records the readiness timeout.*
 
+*Note (2026-10-26, #155): `GET /health` runs its check on a thread limiter of its own, `HEALTH_CONCURRENCY` (default 2), and not on the handler threads, so a burst of probes cannot take the handler threads and traffic cannot make a probe wait for one; exempting it from the cap did not bound that, because the route still ran on the shared 20. The route is therefore `async` and hands the blocking check to that limiter. A probe that arrives while every health slot is busy waits for one with no timeout of its own; whether to bound that wait is a deferred decision (#168). The startup INFO line also records `health_concurrency`. The decision itself (synchronous handlers, a fixed pool, one connection per request) is unchanged.*
+
+*Note (2026-10-26, #155): `Retry-After` and the "Service was busy" WARNING are tied to the error class, not to the 503 status. `ledger_error_handler` used to send them for every 503; it now does so for `ServiceBusyError` only, which is what lets `NotReadyError` be a 503 without `Retry-After`. The failures that this ADR's status line lists for milestone 4 (the lock timeout, exhausted deadlock retries and a lost commit connection) therefore get no `Retry-After` unless they are raised as `ServiceBusyError` or the handler is changed. Whether they are `ServiceBusyError` or their own error classes is open and is a decision item in milestone 4 of the design doc. The decision itself is unchanged.*
+
 ## Consequences
 * **Positive:**
   - Overload turns into a bounded 503 with a retry hint, not a hang.

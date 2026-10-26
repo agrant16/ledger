@@ -48,8 +48,9 @@ The service and its tools read these environment variables (`Settings` in `src/l
 | `HANDLER_THREAD_LIMIT` | `20` | the service | Maximum number of handler threads running at once (a positive integer). |
 | `CONCURRENCY_CAP` | `40` | the service | Maximum number of requests in flight before a 503 with `Retry-After` (a positive integer). `/health` is not counted. |
 | `HEALTH_TIMEOUT_SECONDS` | `2.0` | the service | How long the `/health` readiness check waits to connect and for each of its statements (a number greater than 0). libpq never waits less than 2 seconds for a connection, so a value below 2 does not shorten the connect. |
+| `HEALTH_CONCURRENCY` | `2` | the service | How many `/health` readiness checks may run at once, on a thread limiter of their own apart from the handler threads (a positive integer). |
 
-The settings are loaded once, when the app is built (`create_app` in `src/ledger/main.py`), and that one object feeds the pool, the thread limit, the concurrency cap and the startup line, so the logged values are the enforced ones. A value that does not validate stops the service at startup with an error that names the variable. The pool size, pool wait, thread limit, concurrency cap and readiness timeout are logged in one INFO line when the service starts, so the effective values are on record; the database URLs are not.
+The settings are loaded once, when the app is built (`create_app` in `src/ledger/main.py`), and that one object feeds the pool, the thread limit, the concurrency cap and the startup line, so the logged values are the enforced ones. A value that does not validate stops the service at startup with an error that names the variable. The pool size, pool wait, thread limit, concurrency cap, readiness timeout and health concurrency are logged in one INFO line when the service starts, so the effective values are on record; the database URLs are not.
 
 Docker Compose builds the two URLs for its containers from three more variables that only Compose reads, and no Python code does: `POSTGRES_PASSWORD` (the superuser, used by the database container), `LEDGER_OWNER_PASSWORD` (default `owner-dev-only`) and `LEDGER_APP_PASSWORD` (default `app-dev-only`). These defaults are for development only.
 
@@ -69,7 +70,7 @@ readinessProbe:
   timeoutSeconds: 5
 ```
 
-The check's own timeout (`HEALTH_TIMEOUT_SECONDS`, default 2) applies to the connect and to each statement, so a probe can take about twice that in a bad case. Keep `timeoutSeconds` at least twice `HEALTH_TIMEOUT_SECONDS` plus one second. There is no liveness endpoint yet (#94); a liveness probe must not touch the database.
+The check's own timeout (`HEALTH_TIMEOUT_SECONDS`, default 2) applies to the connect and to each statement, so a probe can take about twice that in a bad case. Keep `timeoutSeconds` at least twice `HEALTH_TIMEOUT_SECONDS` plus one second. The checks run on their own thread limiter (`HEALTH_CONCURRENCY`, default 2), so probes neither take handler threads nor wait for them; a probe that arrives while every slot is busy waits for one (#168). There is no liveness endpoint yet (#94); a liveness probe must not touch the database.
 
 ### Funding accounts (the seed script)
 
