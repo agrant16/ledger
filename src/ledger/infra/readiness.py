@@ -62,7 +62,9 @@ def pool_state(pool: ConnectionPool) -> Literal["ok", "saturated"]:
         `"ok"` when at least one connection is free, `"saturated"` when every connection is in use.
     """
     stats = pool.get_stats()
-    if stats["pool_available"] == 0 or stats["requests_waiting"] > 0:
+    if stats["requests_waiting"] > 0 or (
+        stats["pool_available"] == 0 and stats["pool_size"] >= stats["pool_max"]
+    ):
         return "saturated"
     return "ok"
 
