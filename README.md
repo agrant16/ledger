@@ -38,19 +38,19 @@ To fill the local database with accounts for manual API testing, run `PYTHONPATH
 
 The service and its tools read these environment variables (`Settings` in `src/ledger/infra/config.py`). Every one has a default, so none is required for local development.
 
-| Variable | Default | Used by | What it does |
-| --- | --- | --- | --- |
-| `DATABASE_APP_URL` | `postgresql://ledger_app:app-dev-only@127.0.0.1:5432/ledger` | the service, `ledger.seed`, the dev scripts | Connection string for the app role, which owns no tables. The service never connects as the owner. |
-| `DATABASE_OWNER_URL` | `postgresql://ledger_owner:owner-dev-only@127.0.0.1:5432/ledger` | `ledger.migrate`, `scripts/reset_db.py`, test fixtures | Connection string for the owner role, used only to run migrations and reset data. |
-| `MIGRATIONS_DIR` | the repository's `migrations/` folder | `ledger.migrate`, `scripts/reset_db.py` | Where the numbered SQL migration files are read from. |
-| `POOL_SIZE` | `10` | the service | Number of connections in the fixed pool (a positive integer). |
-| `POOL_TIMEOUT_SECONDS` | `2.0` | the service | How long a request waits for a pooled connection before it gets a 503 with `Retry-After` (a number greater than 0). |
-| `HANDLER_THREAD_LIMIT` | `20` | the service | Maximum number of handler threads running at once (a positive integer). |
-| `CONCURRENCY_CAP` | `40` | the service | Maximum number of requests in flight before a 503 with `Retry-After` (a positive integer). `/health` is not counted. |
-| `HEALTH_TIMEOUT_SECONDS` | `2.0` | the service | How long the `/health` readiness check waits to connect and for each of its statements (a number greater than 0). libpq never waits less than 2 seconds for a connection, so a value below 2 does not shorten the connect. |
-| `HEALTH_CONCURRENCY` | `2` | the service | How many `/health` readiness checks may run at once, on a thread limiter of their own apart from the handler threads (a positive integer). |
+| Variable | Default | Used by | Public | What it does |
+| --- | --- | --- | --- | --- |
+| `DATABASE_APP_URL` | `postgresql://ledger_app:app-dev-only@127.0.0.1:5432/ledger` | the service, `ledger.seed`, the dev scripts | no | Connection string for the app role, which owns no tables. The service never connects as the owner. |
+| `DATABASE_OWNER_URL` | `postgresql://ledger_owner:owner-dev-only@127.0.0.1:5432/ledger` | `ledger.migrate`, `scripts/reset_db.py`, test fixtures | no | Connection string for the owner role, used only to run migrations and reset data. |
+| `MIGRATIONS_DIR` | the repository's `migrations/` folder | `ledger.migrate`, `scripts/reset_db.py` | no | Where the numbered SQL migration files are read from. |
+| `POOL_SIZE` | `10` | the service | yes | Number of connections in the fixed pool (a positive integer). |
+| `POOL_TIMEOUT_SECONDS` | `2.0` | the service | yes | How long a request waits for a pooled connection before it gets a 503 with `Retry-After` (a number greater than 0). |
+| `HANDLER_THREAD_LIMIT` | `20` | the service | yes | Maximum number of handler threads running at once (a positive integer). |
+| `CONCURRENCY_CAP` | `40` | the service | yes | Maximum number of requests in flight before a 503 with `Retry-After` (a positive integer). `/health` is not counted. |
+| `HEALTH_TIMEOUT_SECONDS` | `2.0` | the service | yes | How long the `/health` readiness check waits to connect and for each of its statements (a number greater than 0). libpq never waits less than 2 seconds for a connection, so a value below 2 does not shorten the connect. |
+| `HEALTH_CONCURRENCY` | `2` | the service | yes | How many `/health` readiness checks may run at once, on a thread limiter of their own apart from the handler threads (a positive integer). |
 
-The settings are loaded once, when the app is built (`create_app` in `src/ledger/main.py`), and that one object feeds the pool, the thread limit, the concurrency cap and the startup line, so the logged values are the enforced ones. A value that does not validate stops the service at startup with an error that names the variable. The pool size, pool wait, thread limit, concurrency cap, readiness timeout and health concurrency are logged in one INFO line when the service starts, so the effective values are on record; the database URLs are not.
+The settings are loaded once, when the app is built (`create_app` in `src/ledger/main.py`), and that one object feeds the pool, the thread limit, the concurrency cap and the startup line, so the logged values are the enforced ones. A value that does not validate stops the service at startup with an error that names the variable. The settings marked public in the table are logged, sorted by name, in one INFO line when the service starts, so the effective values are on record; the database URLs are not public and are never logged.
 
 Docker Compose builds the two URLs for its containers from three more variables that only Compose reads, and no Python code does: `POSTGRES_PASSWORD` (the superuser, used by the database container), `LEDGER_OWNER_PASSWORD` (default `owner-dev-only`) and `LEDGER_APP_PASSWORD` (default `app-dev-only`). These defaults are for development only.
 
