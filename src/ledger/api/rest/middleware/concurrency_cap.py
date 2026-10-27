@@ -13,19 +13,17 @@ class ConcurrencyCapMiddleware:
     response with a `Retry-After` header, and the wrapped app never sees it. Other scopes,
     such as lifespan, pass through. Calls to `/health` are passed through.
 
+    Args:
+    app: The application to wrap.
+    cap: The allowed number of concurrent HTTP requests.
+
     Attributes:
         app: The wrapped application.
         cap: The allowed number of concurrent HTTP requests.
         request_count: The number of HTTP requests currently being handled.
     """
 
-    def __init__(self, app: ASGIApp, cap: int):
-        """Initializes the middleware.
-
-        Args:
-            app: The application to wrap.
-            cap: The allowed number of concurrent HTTP requests.
-        """
+    def __init__(self, app: ASGIApp, cap: int) -> None:
         self.app = app
         self.cap = cap
         self.request_count = 0
