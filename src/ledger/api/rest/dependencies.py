@@ -1,7 +1,7 @@
 from fastapi import Request
 
 
-async def get_pool(request: Request):
+def get_pool(request: Request):
     """Gets the connection pool from the application state.
 
     Args:
@@ -13,7 +13,7 @@ async def get_pool(request: Request):
     return request.app.state.pool
 
 
-async def get_settings(request: Request):
+def get_settings(request: Request):
     """Gets the settings from the application state.
 
     Args:
