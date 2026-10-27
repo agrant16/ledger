@@ -59,7 +59,15 @@ src = ["src", "tests"]
 # PLC0415: no imports outside the top of a file. A late import needs a `# noqa: PLC0415` and a
 # comment saying why (a circular import, a patch target, or import timing that the test checks).
 # The same rule is stated in CLAUDE.md (Working style).
-select = ["E", "F", "I", "B", "UP", "PLC0415"]
+# PLR0913: at most 4 arguments per function in `src/`. Tests are exempt (see `per-file-ignores`),
+# because pytest fixtures take one argument per fixture they use.
+select = ["E", "F", "I", "B", "UP", "PLC0415", "PLR0913"]
+
+[tool.ruff.lint.pylint]
+max-args = 4
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR0913"]
 
 [tool.ruff.lint.isort]
 # Named explicitly so that import sorting never depends on which modules exist on disk (ruff's cache
