@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from ledger.api.rest.problems import problem_for, INTERNAL_ERROR
+from ledger.api.rest.problems import INTERNAL_ERROR, problem_for
 from ledger.api.rest.schemas.problem_schema import ProblemDetails
 from ledger.errors import LedgerError
 
