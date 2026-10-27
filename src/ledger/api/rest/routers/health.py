@@ -1,7 +1,7 @@
 from anyio import to_thread
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 
-from ledger.api.rest.dependencies import get_pool, get_settings
+from ledger.api.rest.dependencies import PoolDep, SettingsDep
 from ledger.errors import NotReadyError
 from ledger.infra.readiness import NOT_READY_DETAIL, check_readiness, pool_state
 
@@ -11,8 +11,8 @@ router = APIRouter()
 @router.get("/health", include_in_schema=False)
 async def health(
     request: Request,
-    pool=Depends(get_pool),  # noqa: B008
-    settings=Depends(get_settings),  # noqa: B008
+    pool: PoolDep,
+    settings: SettingsDep,
 ) -> dict[str, str]:
     """Reports whether the service is ready to take traffic. (ADR 0004)
 

@@ -1,9 +1,9 @@
 import logging
 from http import HTTPStatus
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 
-from ledger.api.rest.dependencies import get_pool
+from ledger.api.rest.dependencies import PoolDep
 from ledger.api.rest.openapi import problem_responses
 from ledger.api.rest.schemas.account_schema import (
     AccountResponse,
@@ -44,7 +44,7 @@ logger: logging.Logger = logging.getLogger(__name__)
 )
 def create_new_account(
     body: CreateAccountRequest,
-    pool=Depends(get_pool),  # noqa: B008
+    pool: PoolDep,
 ) -> AccountResponse:
     account = run_in_transaction(
         pool,
@@ -69,7 +69,7 @@ def create_new_account(
 )
 def get_account_balance(
     account_id: AccountIdInPath,
-    pool=Depends(get_pool),  # noqa: B008
+    pool: PoolDep,
 ) -> BalanceResponse:
     balance = run_in_transaction(pool, lambda conn: get_balance(conn, account_id), read_only=True)
     return BalanceResponse.from_model(balance)
@@ -99,7 +99,7 @@ def get_account_balance(
 )
 def read_account_entries(
     account_id: AccountIdInPath,
-    pool=Depends(get_pool),  # noqa: B008
+    pool: PoolDep,
     limit: LimitInQuery = DEFAULT_PAGE_SIZE,
     cursor: CursorInQuery | None = None,
 ) -> EntryPageResponse:
