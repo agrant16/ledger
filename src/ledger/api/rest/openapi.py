@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from ledger.api.rest.problems import problem_for
+from ledger.api.rest.problems import INTERNAL_ERROR, problem_for
 from ledger.api.rest.schemas.problem_schema import ProblemDetails
 from ledger.errors import LedgerError
 
@@ -44,7 +44,9 @@ def problem_responses(*error_classes: type[LedgerError]) -> dict[int | str, dict
     for error_class in error_classes:
         spec = problem_for(error_class)
         lines_by_status.setdefault(spec.status, []).append(f"{spec.title} (`{spec.type}`)")
-    lines_by_status[500] = ["Internal Server Error (`about:blank`): a bug, logged by the service"]
+    lines_by_status[INTERNAL_ERROR.status] = [
+        f"{INTERNAL_ERROR.title} (`{INTERNAL_ERROR.type}`): a bug, logged by the service"
+    ]
 
     responses: dict[int | str, dict[str, Any]] = {}
     for status, lines in sorted(lines_by_status.items()):
