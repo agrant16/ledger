@@ -1,10 +1,9 @@
 from fastapi import Request
-from psycopg_pool import ConnectionPool
 
 from ledger.infra.config import Settings
 
 
-def get_pool(request: Request) -> ConnectionPool:
+def get_pool(request: Request):
     """Gets the connection pool from the application state.
 
     Args:
