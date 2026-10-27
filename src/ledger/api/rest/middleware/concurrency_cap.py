@@ -14,8 +14,8 @@ class ConcurrencyCapMiddleware:
     such as lifespan, pass through. Calls to `/health` are passed through.
 
     Args:
-    app: The application to wrap.
-    cap: The allowed number of concurrent HTTP requests.
+        app: The application to wrap.
+        cap: The allowed number of concurrent HTTP requests.
 
     Attributes:
         app: The wrapped application.
