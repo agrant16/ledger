@@ -12,16 +12,14 @@ class RequestIDMiddleware:
     context, and every response carries it in the `X-Request-Id` header. Other scopes, such as
     lifespan, pass through.
 
+    Args:
+        app: The application to wrap.
+
     Attributes:
         app: The wrapped application.
     """
 
     def __init__(self, app: ASGIApp) -> None:
-        """Initializes the middleware.
-
-        Args:
-            app: The application to wrap.
-        """
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
