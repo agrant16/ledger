@@ -6,12 +6,13 @@ down and read the source with the ast module, so they need no database:
 1. Inside `ledger/api/rest/`, each part may import only what its job needs. Schemas are the wire
    contract: they hold the request and response shapes and the code that converts between them and
    the domain models, so they may import models but never services, infrastructure, routers or
-   handlers. The problem table (`problems.py`) has no web framework in it. Middleware depends on
-   infrastructure only. The error handlers use the table, the middleware and infrastructure.
-   Routers use schemas, the request hash, the cursor codec, services, models and infrastructure,
-   and never each other. The aggregate router (`router.py`) knows the routers and nothing else. A
-   module under `rest/` that is not in `PART_RULES` fails the test: a new module has to say where it
-   belongs.
+   handlers. The problem table (`problems.py`) has no web framework in it. The shared dependencies
+   (`dependencies.py`) use schemas and infrastructure (the `Pool` and `Settings` types), and nothing
+   else. Middleware depends on infrastructure only. The error handlers use the table, the
+   middleware and infrastructure. Routers use schemas, the request hash, the cursor codec,
+   services, models and infrastructure, and never each other. The aggregate router (`router.py`)
+   knows the routers and nothing else. A module under `rest/` that is not in `PART_RULES` fails the
+   test: a new module has to say where it belongs.
 
 2. File names say what a file is: `_model.py` in models, `_repo.py` in repository, `_service.py` in
    service, `_schema.py` in schemas. The suffixes keep names unique across layers.
@@ -205,7 +206,9 @@ def test_a_tree_that_follows_the_part_rules_has_no_violations(tmp_path: Path) ->
             ),
             "api/rest/idempotency.py": "import hashlib\nfrom pydantic import BaseModel\n",
             "api/rest/dependencies.py": (
-                "from fastapi import Header\nfrom ledger.api.rest.schemas import types\n"
+                "from fastapi import Header\n"
+                "from ledger.api.rest.schemas import types\n"
+                "from ledger.infra.db import Pool\n"
             ),
             "api/rest/middleware/request_id.py": (
                 "from starlette.types import Scope\nfrom ledger.infra.logging_config import v\n"
@@ -273,8 +276,9 @@ def test_a_tree_that_follows_the_part_rules_has_no_violations(tmp_path: Path) ->
         # the aggregate router knows the routers and nothing else
         ("api/rest/router.py", "from ledger.api.rest.schemas import types\n"),
         ("api/rest/router.py", "from ledger.service import account_service\n"),
-        # shared dependencies are small
+        # shared dependencies may use schemas and infra, and nothing else
         ("api/rest/dependencies.py", "from ledger.service import account_service\n"),
+        ("api/rest/dependencies.py", "from ledger.api.rest.error_handlers import f\n"),
         # a module that says nothing about where it belongs
         ("api/rest/surprise.py", "x = 1\n"),
     ],
