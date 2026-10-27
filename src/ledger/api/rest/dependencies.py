@@ -8,7 +8,7 @@ from ledger.infra.db import Pool
 
 # Must stay `async def`: a plain `def` dependency runs on a worker thread from the default
 # limiter, so `/health` would queue behind traffic for a handler thread (issue #155).
-async def get_pool(request: Request):
+async def get_pool(request: Request) -> Pool:
     """Gets the connection pool from the application state.
 
     Args:
@@ -25,7 +25,7 @@ PoolDep = Annotated[Pool, Depends(get_pool)]
 
 
 # `async def` for the same reason as `get_pool`.
-async def get_settings(request: Request):
+async def get_settings(request: Request) -> Settings:
     """Gets the settings from the application state.
 
     Args:
