@@ -20,7 +20,7 @@ async def get_pool(request: Request) -> Pool:
     return request.app.state.pool
 
 
-# declared here as get_pool has to be defined first
+# Declared here as get_pool has to be defined first
 PoolDep = Annotated[Pool, Depends(get_pool)]
 
 
@@ -37,5 +37,5 @@ async def get_settings(request: Request) -> Settings:
     return request.app.state.settings
 
 
-# declared here as get_settings has to be defined first
+
 SettingsDep = Annotated[Settings, Depends(get_settings)]
