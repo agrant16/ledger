@@ -14,6 +14,7 @@ cannot change the public API.
 """
 
 import re
+from http import HTTPStatus
 
 import pytest
 
@@ -101,3 +102,21 @@ def test_bugs_have_no_row(bug) -> None:
     """Bugs are not LedgerErrors: they take the logged-500 path, never a table status."""
     with pytest.raises(LookupError):
         table.problem_for(bug)
+
+
+def test_every_row_names_its_status_with_an_httpstatus_member() -> None:
+    """A raw integer in the table fails: the status is named where it is declared (#171)."""
+    for error, spec in table.PROBLEMS.items():
+        assert isinstance(spec.status, HTTPStatus), error.__name__
+
+
+def test_the_unhandled_error_problem_is_the_500_member() -> None:
+    """The fixed problem for a bug is declared once, outside PROBLEMS (#171)."""
+    spec = table.INTERNAL_ERROR
+    assert isinstance(spec.status, HTTPStatus)
+    assert (spec.status, spec.type, spec.title) == (
+        HTTPStatus.INTERNAL_SERVER_ERROR,
+        "about:blank",
+        "Internal Server Error",
+    )
+    assert spec not in table.PROBLEMS.values()
