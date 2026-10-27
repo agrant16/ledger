@@ -11,7 +11,7 @@ from starlette.responses import JSONResponse, Response
 
 from ledger.api.rest.middleware.concurrency_cap import ConcurrencyCapMiddleware
 from ledger.api.rest.middleware.request_id import RequestIDMiddleware
-from ledger.api.rest.problems import ProblemOccurrence, ProblemSpec, problem_for
+from ledger.api.rest.problems import ProblemOccurrence, ProblemSpec, problem_for, INTERNAL_ERROR
 from ledger.errors import InvalidRequestError, LedgerError, NotReadyError, ServiceBusyError
 from ledger.infra.config import CONCURRENCY_CAP
 from ledger.infra.logging_config import install_log_record_factory, request_id_ctx_var
@@ -236,11 +236,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     logger.error("unhandled exception", exc_info=exc)
     return problem_response(
         request,
-        ProblemSpec(
-            status=HTTPStatus.INTERNAL_SERVER_ERROR,
-            type="about:blank",
-            title="Internal Server Error",
-        ),
+        INTERNAL_ERROR,
         ProblemOccurrence(detail=GENERIC_500_DETAIL, headers={"X-Request-Id": str(request_id)}),
     )
 
