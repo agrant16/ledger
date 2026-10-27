@@ -63,6 +63,19 @@ def test_the_response_is_documented_from_the_error_table() -> None:
     assert status == problem_for(UnknownAccountError).status
 
 
+def test_documented_statuses_render_as_plain_numbers_in_the_document() -> None:
+    """`HTTPStatus` keys must not leak into the document as enum names (#171)."""
+    app = FastAPI()
+
+    @app.get("/x", responses=openapi.problem_responses(UnknownAccountError, InsufficientFundsError))
+    def route() -> dict[str, object]:
+        return {}
+
+    responses = app.openapi()["paths"]["/x"]["get"]["responses"]
+    assert {"404", "422", "500"} <= set(responses)
+    assert all(key.isdigit() for key in responses)
+
+
 def test_install_openapi_removes_fastapis_422_and_keeps_a_documented_one() -> None:
     app = FastAPI()
 
