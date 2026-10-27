@@ -29,6 +29,8 @@ Every write is one database transaction on one connection. Under load, the servi
 
 *Note (2026-10-26, #155): `Retry-After` and the "Service was busy" WARNING are tied to the error class, not to the 503 status. `ledger_error_handler` used to send them for every 503; it now does so for `ServiceBusyError` only, which is what lets `NotReadyError` be a 503 without `Retry-After`. The failures that this ADR's status line lists for milestone 4 (the lock timeout, exhausted deadlock retries and a lost commit connection) therefore get no `Retry-After` unless they are raised as `ServiceBusyError` or the handler is changed. Whether they are `ServiceBusyError` or their own error classes is open (#169) and is a decision item in milestone 4 of the design doc. The decision itself is unchanged.*
 
+*Note (2026-10-27, #169): settled in ADR 0016. The lock timeout and exhausted deadlock retries are raised as `ServiceBusyError`; a connection lost during commit is a new `CommitOutcomeUnknownError` with its own problem type. The decision itself is unchanged.*
+
 ## Consequences
 * **Positive:**
   - Overload turns into a bounded 503 with a retry hint, not a hang.
