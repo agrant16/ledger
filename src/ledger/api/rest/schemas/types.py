@@ -58,7 +58,7 @@ def _limit_param(value: object) -> int:
     return _canonical_digits_to_int(value)
 
 
-def timestamp_converter(value: datetime):
+def timestamp_converter(value: datetime) -> str:
     """Converts a datetime to an ISO 8601 string in UTC with a trailing `Z`.
 
     An example result is `2026-10-13T10:11:12.123456Z`.

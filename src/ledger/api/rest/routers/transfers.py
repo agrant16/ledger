@@ -95,7 +95,6 @@ def create_transfer(
 )
 def get_transfer_by_id(
     transfer_id: TransferIdInPath,
-    request: Request,
     pool=Depends(get_pool),  # noqa: B008
 ) -> TransferResponse:
     transfer = run_in_transaction(

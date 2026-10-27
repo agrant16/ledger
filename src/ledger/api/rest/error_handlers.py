@@ -32,23 +32,17 @@ ERROR_LOC_MAPPING: dict[str, str] = {
 }
 
 
-def _escape_pointer_tokens(pointer_tokens: Sequence[Any]) -> list[str]:
-    """Escapes `~` and `/` in JSON Pointer tokens (RFC 6901), so each stays one path segment."""
-    return [str(token).replace("~", "~0").replace("/", "~1") for token in pointer_tokens]
-
-
-def is_body_allowed(status_code: int) -> bool:
-    """Returns whether a response with this status may have a body.
-
-    Informational (1xx), 204, 205 and 304 responses may not.
+def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Converts Pydantic errors into the items of the `errors` problem extension. (ADR 0009)
 
     Args:
-        status_code: The HTTP status code.
+        errors: The error list of a `RequestValidationError`.
 
     Returns:
-        `True` when a body is allowed.
+        One item per error: its `detail` message plus a `pointer` or `parameter` when the
+        location is known.
     """
-    return not (100 <= status_code < 200 or status_code in (204, 205, 304))
+    return [{"detail": error.get("msg", ""), **_locator(error)} for error in errors]
 
 
 def _locator(error: dict[str, Any]) -> dict[str, str]:
@@ -75,17 +69,9 @@ def _locator(error: dict[str, Any]) -> dict[str, str]:
     return {}
 
 
-def validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Converts Pydantic errors into the items of the `errors` problem extension. (ADR 0009)
-
-    Args:
-        errors: The error list of a `RequestValidationError`.
-
-    Returns:
-        One item per error: its `detail` message plus a `pointer` or `parameter` when the
-        location is known.
-    """
-    return [{"detail": error.get("msg", ""), **_locator(error)} for error in errors]
+def _escape_pointer_tokens(pointer_tokens: Sequence[Any]) -> list[str]:
+    """Escapes `~` and `/` in JSON Pointer tokens (RFC 6901), so each stays one path segment."""
+    return [str(token).replace("~", "~0").replace("/", "~1") for token in pointer_tokens]
 
 
 def problem_response(
@@ -200,19 +186,32 @@ async def http_error_handler(
     except ValueError:
         title = "HTTP Error"  # generic title for anything not recognized
 
-    if not is_body_allowed(exc.status_code):
+    if not _is_body_allowed(exc.status_code):
         return Response(
             status_code=exc.status_code,
             headers=exc.headers,
         )
-    else:
-        return problem_response(
-            request,
-            ProblemSpec(status=exc.status_code, type="about:blank", title=title),
-            ProblemOccurrence(
-                detail=str(exc.detail), headers=dict(exc.headers) if exc.headers else None
-            ),
-        )
+    return problem_response(
+        request,
+        ProblemSpec(status=exc.status_code, type="about:blank", title=title),
+        ProblemOccurrence(
+            detail=str(exc.detail), headers=dict(exc.headers) if exc.headers else None
+        ),
+    )
+
+
+def _is_body_allowed(status_code: int) -> bool:
+    """Returns whether a response with this status may have a body.
+
+    Informational (1xx), 204, 205 and 304 responses may not.
+
+    Args:
+        status_code: The HTTP status code.
+
+    Returns:
+        `True` when a body is allowed.
+    """
+    return not (100 <= status_code < 200 or status_code in (204, 205, 304))
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:

@@ -19,7 +19,7 @@ class TransferRequest(BaseModel):
     currency: Currency
 
     @model_validator(mode="after")
-    def accounts_differ(self):
+    def accounts_differ(self) -> Self:
         if self.from_account_id == self.to_account_id:
             raise ValueError("from and to must be different accounts")
         return self

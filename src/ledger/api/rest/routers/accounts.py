@@ -1,7 +1,7 @@
 import logging
 from http import HTTPStatus
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
 from ledger.api.rest.dependencies import get_pool
 from ledger.api.rest.openapi import problem_responses
@@ -44,12 +44,11 @@ logger: logging.Logger = logging.getLogger(__name__)
 )
 def create_new_account(
     body: CreateAccountRequest,
-    request: Request,
     pool=Depends(get_pool),  # noqa: B008
-):
+) -> AccountResponse:
     account = run_in_transaction(
         pool,
-        lambda conn: create_account(conn, body.account_name, body.currency, False),
+        lambda conn: create_account(conn, body.account_name, body.currency, allow_negative=False),
     )
     logger.info("account created id=%s currency=%s", account.id, account.currency)
     return AccountResponse.from_model(account)
@@ -70,9 +69,8 @@ def create_new_account(
 )
 def get_account_balance(
     account_id: AccountIdInPath,
-    request: Request,
     pool=Depends(get_pool),  # noqa: B008
-):
+) -> BalanceResponse:
     balance = run_in_transaction(pool, lambda conn: get_balance(conn, account_id), read_only=True)
     return BalanceResponse.from_model(balance)
 
@@ -101,11 +99,10 @@ def get_account_balance(
 )
 def read_account_entries(
     account_id: AccountIdInPath,
-    request: Request,
     pool=Depends(get_pool),  # noqa: B008
     limit: LimitInQuery = DEFAULT_PAGE_SIZE,
     cursor: CursorInQuery | None = None,
-):
+) -> EntryPageResponse:
     entries = run_in_transaction(
         pool, lambda conn: get_entry_history(conn, account_id, cursor, limit), read_only=True
     )
