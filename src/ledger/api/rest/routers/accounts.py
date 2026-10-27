@@ -48,7 +48,7 @@ def create_new_account(
 ) -> AccountResponse:
     account = run_in_transaction(
         pool,
-        lambda conn: create_account(conn, body.account_name, body.currency, False),
+        lambda conn: create_account(conn, body.account_name, body.currency, allow_negative=False),
     )
     logger.info("account created id=%s currency=%s", account.id, account.currency)
     return AccountResponse.from_model(account)
