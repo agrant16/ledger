@@ -60,35 +60,47 @@ INTERNAL_ERROR = ProblemSpec(
 
 
 PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
-    InvalidRequestError: ProblemSpec(400, "urn:ledger:error:invalid-request", "Invalid request"),
-    UnknownAccountError: ProblemSpec(404, "urn:ledger:error:unknown-account", "Unknown account"),
-    UnknownTransferError: ProblemSpec(404, "urn:ledger:error:unknown-transfer", "Unknown transfer"),
+    InvalidRequestError: ProblemSpec(
+        HTTPStatus.BAD_REQUEST, "urn:ledger:error:invalid-request", "Invalid request"
+    ),
+    UnknownAccountError: ProblemSpec(
+        HTTPStatus.NOT_FOUND, "urn:ledger:error:unknown-account", "Unknown account"
+    ),
+    UnknownTransferError: ProblemSpec(
+        HTTPStatus.NOT_FOUND, "urn:ledger:error:unknown-transfer", "Unknown transfer"
+    ),
     CurrencyMismatchError: ProblemSpec(
-        400, "urn:ledger:error:currency-mismatch", "Currency mismatch"
+        HTTPStatus.BAD_REQUEST, "urn:ledger:error:currency-mismatch", "Currency mismatch"
     ),
     InsufficientFundsError: ProblemSpec(
-        422,
+        HTTPStatus.UNPROCESSABLE_CONTENT,
         "urn:ledger:error:insufficient-funds",
         "Insufficient funds",
         extensions=("account_id", "balance_minor", "net_change_minor"),
     ),
     IdempotencyConflictError: ProblemSpec(
-        409, "urn:ledger:error:idempotency-conflict", "Idempotency key reused"
+        HTTPStatus.CONFLICT, "urn:ledger:error:idempotency-conflict", "Idempotency key reused"
     ),
     AlreadyReversedError: ProblemSpec(
-        409, "urn:ledger:error:already-reversed", "Transfer already reversed"
+        HTTPStatus.CONFLICT, "urn:ledger:error:already-reversed", "Transfer already reversed"
     ),
     ReversalOfReversalError: ProblemSpec(
-        409, "urn:ledger:error:reversal-of-reversal", "A reversal cannot be reversed"
+        HTTPStatus.CONFLICT,
+        "urn:ledger:error:reversal-of-reversal",
+        "A reversal cannot be reversed",
     ),
     DuplicateAccountNameError: ProblemSpec(
-        409,
+        HTTPStatus.CONFLICT,
         "urn:ledger:error:duplicate-account-name",
         "Duplicate account name",
         extensions=("account_name",),
     ),
-    ServiceBusyError: ProblemSpec(503, "urn:ledger:error:service-busy", "Service busy"),
-    NotReadyError: ProblemSpec(503, "urn:ledger:error:not-ready", "Not ready"),
+    ServiceBusyError: ProblemSpec(
+        HTTPStatus.SERVICE_UNAVAILABLE, "urn:ledger:error:service-busy", "Service busy"
+    ),
+    NotReadyError: ProblemSpec(
+        HTTPStatus.SERVICE_UNAVAILABLE, "urn:ledger:error:not-ready", "Not ready"
+    ),
 }
 
 
