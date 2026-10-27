@@ -23,6 +23,10 @@ class ConcurrencyCapMiddleware:
         request_count: The number of HTTP requests currently being handled.
     """
 
+    app: ASGIApp
+    cap: int
+    request_count: int
+
     def __init__(self, app: ASGIApp, cap: int) -> None:
         self.app = app
         self.cap = cap
