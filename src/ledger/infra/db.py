@@ -7,6 +7,8 @@ from psycopg_pool import ConnectionPool, PoolTimeout
 from ledger.errors import LedgerInvariantError, ServiceBusyError
 from ledger.infra.config import Settings
 
+Pool = ConnectionPool
+
 
 def create_pool(settings: Settings) -> ConnectionPool:
     """Creates a fixed-size pool of app-role connections that never grows.
