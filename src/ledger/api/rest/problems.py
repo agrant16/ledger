@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import Any
 
 from ledger.errors import (
@@ -49,6 +50,13 @@ class ProblemOccurrence:
     detail: str
     headers: dict[str, str] | None = None
     extensions: Mapping[str, Any] | None = None
+
+
+INTERNAL_ERROR = ProblemSpec(
+    status=HTTPStatus.INTERNAL_SERVER_ERROR,
+    type="about:blank",
+    title="Internal Server Error",
+)
 
 
 PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
