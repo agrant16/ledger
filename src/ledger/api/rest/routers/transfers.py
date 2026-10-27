@@ -1,9 +1,9 @@
 from http import HTTPStatus
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Header, Request
 
-from ledger.api.rest.dependencies import get_pool
+from ledger.api.rest.dependencies import PoolDep
 from ledger.api.rest.idempotency import request_hash
 from ledger.api.rest.openapi import problem_responses
 from ledger.api.rest.schemas.transfer_schema import TransferRequest, TransferResponse
@@ -59,7 +59,7 @@ def create_transfer(
     body: TransferRequest,
     idempotency_key: Annotated[IdempotencyKey, Header()],
     request: Request,
-    pool=Depends(get_pool),  # noqa: B008
+    pool: PoolDep,  # noqa: B008
 ) -> TransferResponse:
     transfer = run_in_transaction(
         pool,
@@ -95,7 +95,7 @@ def create_transfer(
 )
 def get_transfer_by_id(
     transfer_id: TransferIdInPath,
-    pool=Depends(get_pool),  # noqa: B008
+    pool: PoolDep,  # noqa: B008
 ) -> TransferResponse:
     transfer = run_in_transaction(
         pool, lambda conn: get_transfer(conn, transfer_id), read_only=True
