@@ -59,7 +59,7 @@ def create_transfer(
     body: TransferRequest,
     idempotency_key: Annotated[IdempotencyKey, Header()],
     request: Request,
-    pool: PoolDep,  # noqa: B008
+    pool: PoolDep,
 ) -> TransferResponse:
     transfer = run_in_transaction(
         pool,
@@ -95,7 +95,7 @@ def create_transfer(
 )
 def get_transfer_by_id(
     transfer_id: TransferIdInPath,
-    pool: PoolDep,  # noqa: B008
+    pool: PoolDep,
 ) -> TransferResponse:
     transfer = run_in_transaction(
         pool, lambda conn: get_transfer(conn, transfer_id), read_only=True

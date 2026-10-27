@@ -11,8 +11,8 @@ router = APIRouter()
 @router.get("/health", include_in_schema=False)
 async def health(
     request: Request,
-    pool: PoolDep,  # noqa: B008
-    settings: SettingsDep,  # noqa: B008
+    pool: PoolDep,
+    settings: SettingsDep,
 ) -> dict[str, str]:
     """Reports whether the service is ready to take traffic. (ADR 0004)
 
