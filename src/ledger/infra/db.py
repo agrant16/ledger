@@ -10,7 +10,7 @@ from ledger.infra.config import Settings
 Pool = ConnectionPool
 
 
-def create_pool(settings: Settings) -> ConnectionPool:
+def create_pool(settings: Settings) -> Pool:
     """Creates a fixed-size pool of app-role connections that never grows.
 
     A request must use one connection for its whole transaction and never take a second
@@ -23,7 +23,7 @@ def create_pool(settings: Settings) -> ConnectionPool:
         A pool that is not yet open. A caller waits up to the configured timeout for a free
         connection.
     """
-    return ConnectionPool(
+    return Pool(
         settings.app_url,
         min_size=settings.pool_size,
         max_size=settings.pool_size,
@@ -32,7 +32,7 @@ def create_pool(settings: Settings) -> ConnectionPool:
     )
 
 
-def _acquire(pool: ConnectionPool, stack: ExitStack) -> psycopg.Connection:
+def _acquire(pool: Pool, stack: ExitStack) -> psycopg.Connection:
     """Acquires a connection from the pool, raising `ServiceBusyError` on a wait timeout."""
     try:
         return stack.enter_context(pool.connection())
@@ -41,7 +41,7 @@ def _acquire(pool: ConnectionPool, stack: ExitStack) -> psycopg.Connection:
 
 
 def run_in_transaction[T](
-    pool: ConnectionPool,
+    pool: Pool,
     work: Callable[[psycopg.Connection], T],
     *,
     read_only: bool = False,

@@ -5,7 +5,8 @@ from typing import Literal
 
 import psycopg
 from psycopg import sql
-from psycopg_pool import ConnectionPool
+
+from ledger.infra.db import Pool
 
 REQUIRED_PRIVILEGES = {
     "accounts": ("SELECT", "INSERT"),
@@ -50,7 +51,7 @@ class ReadinessResult:
         return self.failed_check is None
 
 
-def pool_state(pool: ConnectionPool) -> Literal["ok", "saturated"]:
+def pool_state(pool: Pool) -> Literal["ok", "saturated"]:
     """Reports whether the request pool has a free connection. (ADR 0004)
 
     Reads the pool's counters and never takes a connection, so it cannot wait or fail.
