@@ -11,7 +11,7 @@ from starlette.responses import JSONResponse, Response
 
 from ledger.api.rest.middleware.concurrency_cap import ConcurrencyCapMiddleware
 from ledger.api.rest.middleware.request_id import RequestIDMiddleware
-from ledger.api.rest.problems import ProblemOccurrence, ProblemSpec, problem_for, INTERNAL_ERROR
+from ledger.api.rest.problems import INTERNAL_ERROR, ProblemOccurrence, ProblemSpec, problem_for
 from ledger.errors import InvalidRequestError, LedgerError, NotReadyError, ServiceBusyError
 from ledger.infra.config import CONCURRENCY_CAP
 from ledger.infra.logging_config import install_log_record_factory, request_id_ctx_var
