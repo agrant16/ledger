@@ -1,7 +1,7 @@
 import logging
 from http import HTTPStatus
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
 from ledger.api.rest.dependencies import get_pool
 from ledger.api.rest.openapi import problem_responses
@@ -70,7 +70,7 @@ def create_new_account(
 def get_account_balance(
     account_id: AccountIdInPath,
     pool=Depends(get_pool),  # noqa: B008
-) ->BalanceResponse:
+) -> BalanceResponse:
     balance = run_in_transaction(pool, lambda conn: get_balance(conn, account_id), read_only=True)
     return BalanceResponse.from_model(balance)
 
