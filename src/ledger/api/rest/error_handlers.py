@@ -205,14 +205,13 @@ async def http_error_handler(
             status_code=exc.status_code,
             headers=exc.headers,
         )
-    else:
-        return problem_response(
-            request,
-            ProblemSpec(status=exc.status_code, type="about:blank", title=title),
-            ProblemOccurrence(
-                detail=str(exc.detail), headers=dict(exc.headers) if exc.headers else None
-            ),
-        )
+    return problem_response(
+        request,
+        ProblemSpec(status=exc.status_code, type="about:blank", title=title),
+        ProblemOccurrence(
+            detail=str(exc.detail), headers=dict(exc.headers) if exc.headers else None
+        ),
+    )
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
