@@ -1,6 +1,6 @@
 # ADR 0016: Milestone 4 failures stay `service-busy`, except a lost commit, which has its own error
 
-* **Status:** Draft
+* **Status:** Accepted
 * **Date:** 2026-10-27 (decided during milestone 4 planning, issue #169)
 * **Deciders:** Alan (human architect) & Claude (AI collaborator)
 

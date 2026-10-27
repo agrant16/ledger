@@ -18,7 +18,7 @@ Short records of the larger decisions behind the ledger service, in the format o
 | [0012](0012-idempotency-claim-and-request-hash.md) | The idempotency claim resolves a repeated key in one place, with a canonical request hash | 2026-10-12 | Accepted |
 | [0013](0013-layered-architecture.md) | A layered source tree: API, services, repositories, models and infrastructure | 2026-10-13 | Accepted |
 | [0014](0014-entries-cursor-pagination.md) | Entry history pages by an opaque cursor on the entry id | 2026-10-19 | Accepted |
-| [0016](0016-milestone-4-failures-and-the-unknown-commit.md) | Milestone 4 failures stay `service-busy`, except a lost commit, which has its own error | 2026-10-27 | Draft |
+| [0016](0016-milestone-4-failures-and-the-unknown-commit.md) | Milestone 4 failures stay `service-busy`, except a lost commit, which has its own error | 2026-10-27 | Accepted |
 
 A new ADR is listed as `Draft` until the pull request that merges it marks it `Accepted`.
 
