@@ -6,21 +6,13 @@ The session-wide `app_pool` in tests/conftest.py stays small. This pool is modul
 
 import os
 from collections.abc import Iterator
-from types import ModuleType
 
 import psycopg
 import pytest
 from psycopg_pool import ConnectionPool
 
 from ledger.infra.config import Settings
-
-
-@pytest.fixture(scope="session")
-def harness() -> ModuleType:
-    """Imported lazily so these tests fail one by one while the module does not exist yet."""
-    from tests.concurrency import harness as module  # noqa: PLC0415
-
-    return module
+from tests.concurrency import harness
 
 
 def _server_connection_limits(settings: Settings) -> tuple[int, int]:
@@ -35,9 +27,7 @@ def _server_connection_limits(settings: Settings) -> tuple[int, int]:
 
 
 @pytest.fixture(scope="module")
-def concurrency_pool(
-    settings: Settings, migrated_database: None, harness: ModuleType
-) -> Iterator[ConnectionPool]:
+def concurrency_pool(settings: Settings, migrated_database: None) -> Iterator[ConnectionPool]:
     """A fixed pool of `CONCURRENCY_THREADS` app-role connections, open and waited for.
 
     Fails with a clear message when the server cannot hold the pool next to the other pools of a
@@ -58,7 +48,7 @@ def concurrency_pool(
 
 
 @pytest.fixture
-def seed(harness: ModuleType, record_property) -> int:
+def seed(record_property) -> int:
     """The seed for this test's random data: `CONCURRENCY_SEED` if set, else a fresh one.
 
     Printed and recorded, so a failure shows it and the run can be repeated with the same data.
