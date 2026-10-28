@@ -35,3 +35,5 @@ Two concurrent transfers must never spend the same money, and transfers in oppos
   - **Locking in request order:** rejected, because opposing transfers could then deadlock.
   - **Deferring locking to milestone 4:** rejected, since the overdraft check needs the locking statement anyway and writing it in order costs nothing extra.
   - **Computing balances from entries on every read:** not chosen. The cached balance is kept in the same transaction and verified against the entries.
+
+*Note (2026-10-28): The full write-up of why READ COMMITTED and not SERIALIZABLE is ADR 0015 (#182). It does not change this decision.*

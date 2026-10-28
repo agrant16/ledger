@@ -33,3 +33,5 @@ A client that does not get a response to `POST /transfers` retries with the same
   - **A separate idempotency table with a stored response:** rejected. A replay is rebuilt from the stored transaction and its entries, so there is no second copy of the response to keep in step.
   - **Hashing the raw request bytes:** rejected, because key order and spacing differ between retries from different clients, and a default written out explicitly would look like a different request.
   - **SERIALIZABLE isolation for the claim:** rejected. The unique index already serializes two claims of one key. The isolation-level write-up for the transfer itself belongs to milestone 4.
+
+*Note (2026-10-28): The isolation-level write-up for the transfer is ADR 0015 (#182). It also records why the claim needs READ COMMITTED. It does not change this decision.*
