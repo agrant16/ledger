@@ -10,7 +10,8 @@ Contract these tests expect from ledger/api/rest/error_handlers.py:
 It registers, on the given app:
 - a handler for LedgerError, using the error table: status, `type`, `title`, `detail` (the
   exception's message), `instance` (`urn:uuid:<request id>`), plus the data the error carries as
-  extension members. A 503 also sends a Retry-After header;
+  extension members. A response also sends a Retry-After header when the error's spec has
+  `retry_after` (#178);
 - a handler for RequestValidationError: status 400 (never FastAPI's 422), type
   `urn:ledger:error:invalid-request`, and the `errors` list from `validation_errors`;
 - a handler for HTTP errors raised by Starlette or a route (an unknown route, a wrong method, an

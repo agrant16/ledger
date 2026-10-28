@@ -12,9 +12,9 @@ Contract these tests expect:
 - It stores `detail` (the client-facing text) and `failed_check`, and its message is the detail
   alone: no "Not Ready:" prefix, because the problem's `title` already says it.
 - Its row in the table: status 503, type `urn:ledger:error:not-ready`, title "Not ready".
-- The LedgerError handler adds Retry-After and the "busy" warning only for `ServiceBusyError`, not
-  for every 503. The warning for a `NotReadyError` is still one WARNING line, and it carries the
-  cause.
+- The LedgerError handler adds Retry-After only when the spec has `retry_after` (#178), which
+  `NotReadyError`'s does not, and the "busy" warning only for `ServiceBusyError`. The warning for a
+  `NotReadyError` is still one WARNING line, and it carries the cause.
 
 When the error is added to ledger/errors.py, add it to EXPECTED and EXAMPLES in
 tests/unit/api/api_cases.py too, so the shared table tests cover it, and change the Retry-After

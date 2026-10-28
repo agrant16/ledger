@@ -17,6 +17,8 @@ ADR 0007 decides which failures are expected (`LedgerError`) and which are bugs,
 - **Request id.** Each request gets a server-generated UUID, returned in the `X-Request-ID` header and as `instance` (`urn:uuid:…`), and attached to every log record made during the request. Log lines are formatted with it (`configure_logging()` in `ledger/logging_config.py` (now `ledger/infra/logging_config.py`, ADR 0013), called from the lifespan), so a response can be matched to its log entry; outside a request the id shows as `-`. A client-supplied id is ignored.
 - **Minimal logging.** A bug is logged once at ERROR with the exception and the request id (uvicorn's own second record for the same exception is filtered out, see the design doc), and a 503 at WARNING with its cause. Expected 4xx errors and successes are not logged. One startup line records the effective pool and concurrency settings; it arrives with the pool wiring, because the concurrency cap does not exist before then. There is no logging library beyond the standard library.
 
+*Note (2026-10-28): whether a response carries `Retry-After` is a `retry_after` field on `ProblemSpec` (#178), not a check on the error class or the 503 status. The handler sends the header when the spec sets it, and `problem_responses` declares it, naming the problem types that send it, on exactly the status entries that include such an error, so the two cannot drift. Runtime responses are unchanged.*
+
 ## Consequences
 * **Positive:**
   - Clients branch on one stable field, and the four 409 errors are distinguishable.
