@@ -10,8 +10,9 @@ really gets, so a changed default fails here and not as a race in production.
 - A write transaction run through `run_in_transaction` on the production pool (`create_pool`)
   reports `read committed`.
 - So does a `read_only=True` transaction.
-- Control: the same check against a pool whose connections default to SERIALIZABLE reports
-  `serializable`, so the assertions above are shown able to fail.
+- Controls: the same check, for a write and for a read-only transaction, against a pool whose
+  connections default to SERIALIZABLE reports `serializable`, so the assertions above are shown
+  able to fail.
 """
 
 from collections.abc import Iterator
@@ -65,8 +66,13 @@ def test_a_read_only_transaction_runs_at_read_committed(production_pool: Pool) -
     assert run(production_pool, effective_level, read_only=True) == READ_COMMITTED
 
 
-def test_control_a_serializable_default_is_seen_by_the_same_check(
+def test_control_a_serializable_default_is_seen_in_a_write_transaction(
     serializable_pool: ConnectionPool,
 ) -> None:
     assert run(serializable_pool, effective_level) == "serializable"
+
+
+def test_control_a_serializable_default_is_seen_in_a_read_only_transaction(
+    serializable_pool: ConnectionPool,
+) -> None:
     assert run(serializable_pool, effective_level, read_only=True) == "serializable"
