@@ -20,12 +20,19 @@ PROBLEM_MEDIA_TYPE = "application/problem+json"
 PROBLEM_REF = {"$ref": "#/components/schemas/ProblemDetails"}
 FASTAPI_VALIDATION_SCHEMAS = ("HTTPValidationError", "ValidationError")
 
-RETRY_AFTER_HEADER = {
-    "Retry-After": {
-        "description": "Seconds to wait before retrying. Retrying with the same key is safe.",
-        "schema": {"type": "integer"},
+
+def _retry_after_header(types: list[str]) -> dict[str, Any]:
+    """Builds the `Retry-After` header declaration for the problem types that send it."""
+    sent_with = ", ".join(f"`{problem_type}`" for problem_type in types)
+    return {
+        "Retry-After": {
+            "description": (
+                f"Seconds to wait before retrying. Sent only with {sent_with}. "
+                "Retrying with the same key is safe."
+            ),
+            "schema": {"type": "integer"},
+        }
     }
-}
 
 
 def problem_responses(*error_classes: type[LedgerError]) -> dict[int | str, dict[str, Any]]:
@@ -38,12 +45,16 @@ def problem_responses(*error_classes: type[LedgerError]) -> dict[int | str, dict
         *error_classes: The `LedgerError` subclasses the route documents.
 
     Returns:
-        The entries keyed by status code. A 503 entry declares the `Retry-After` header.
+        The entries keyed by status code. An entry declares the `Retry-After` header, naming the
+        problem types that send it, if any of its errors has a spec with `retry_after`.
     """
     lines_by_status: dict[int, list[str]] = {}
+    retry_types_by_status: dict[int, list[str]] = {}
     for error_class in error_classes:
         spec = problem_for(error_class)
         lines_by_status.setdefault(spec.status, []).append(f"{spec.title} (`{spec.type}`)")
+        if spec.retry_after:
+            retry_types_by_status.setdefault(spec.status, []).append(spec.type)
     lines_by_status[INTERNAL_ERROR.status] = [
         f"{INTERNAL_ERROR.title} (`{INTERNAL_ERROR.type}`): a bug, logged by the service"
     ]
@@ -54,8 +65,8 @@ def problem_responses(*error_classes: type[LedgerError]) -> dict[int | str, dict
             "description": "\n\n".join(lines),
             "content": {PROBLEM_MEDIA_TYPE: {"schema": PROBLEM_REF}},
         }
-        if status == 503:
-            entry["headers"] = RETRY_AFTER_HEADER
+        if status in retry_types_by_status:
+            entry["headers"] = _retry_after_header(retry_types_by_status[status])
         responses[status] = entry
     return responses
 
