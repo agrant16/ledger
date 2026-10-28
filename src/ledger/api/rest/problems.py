@@ -29,7 +29,7 @@ class ProblemSpec:
         title: The short, fixed problem title.
         extensions: The names of the exception attributes copied into the
             problem body as extra members.
-        retry_after: `True` if the problem response should have a `Retry-After` header,
+        retry_after: `True` if the problem response should send a `Retry-After` header,
             `False` otherwise.
     """
 
