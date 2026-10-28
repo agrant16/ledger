@@ -112,8 +112,8 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
 
     The status, `type` and `title` come from the error class's `ProblemSpec`. The `detail` is
     the error's message. The members the spec lists as extensions, such as `account_id` for an
-    insufficient-funds error, are copied from the error into the body. A ServiceBusyError is
-    logged as a warning and the response includes a `Retry-After` header.
+    insufficient-funds error, are copied from the error into the body. A `ProblemSpec` with
+    `retry_after=True` is logged as a warning and the response includes a `Retry-After` header.
 
     Args:
         request: The request being answered.
