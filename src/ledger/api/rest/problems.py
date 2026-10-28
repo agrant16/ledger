@@ -29,12 +29,15 @@ class ProblemSpec:
         title: The short, fixed problem title.
         extensions: The names of the exception attributes copied into the
             problem body as extra members.
+        retry_after: `True` if the problem response should have a `Retry-After` header,
+            `False` otherwise.
     """
 
     status: int
     type: str
     title: str
     extensions: tuple[str, ...] = ()
+    retry_after: bool = False
 
 
 @dataclass(frozen=True)
@@ -96,7 +99,10 @@ PROBLEMS: dict[type[LedgerError], ProblemSpec] = {
         extensions=("account_name",),
     ),
     ServiceBusyError: ProblemSpec(
-        HTTPStatus.SERVICE_UNAVAILABLE, "urn:ledger:error:service-busy", "Service busy"
+        HTTPStatus.SERVICE_UNAVAILABLE,
+        "urn:ledger:error:service-busy",
+        "Service busy",
+        retry_after=True,
     ),
     NotReadyError: ProblemSpec(
         HTTPStatus.SERVICE_UNAVAILABLE, "urn:ledger:error:not-ready", "Not ready"
