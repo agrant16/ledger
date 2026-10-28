@@ -1,6 +1,6 @@
 # ADR 0015: Row locks at READ COMMITTED, not SERIALIZABLE
 
-* **Status:** Draft
+* **Status:** Accepted
 * **Date:** 2026-10-28
 * **Deciders:** Alan (human architect) & Claude (AI collaborator)
 
@@ -22,7 +22,7 @@ The invariant that needs concurrency control is rule 4: an account with `allow_n
   - A single statement is already consistent at this level, so the cached-balance read endpoint needs nothing extra.
 
 * **Negative / Trade-offs:**
-  - Correctness depends on every writer taking the lock before it reads the balance. The level does not protect a read-then-write that skips the lock, so the locking statement, its `ORDER BY` and the check on its result are load-bearing, and the milestone 4 controls show each test fails when one is removed.
+  - Correctness depends on every writer taking the lock before it reads the balance. The level does not protect a read-then-write that skips the lock, so the locking statement, its `ORDER BY` and the check on its result are load-bearing, and the milestone 4 controls will show that each test fails when one is removed.
   - Two statements in one transaction can see different committed data. Code that needs several reads to agree must lock what it reads or use a snapshot, as the reconciliation job does.
   - Transfers on the same account still serialize on its `balances` row. This is the hot-account cost from ADR 0006, and a stricter level would not remove it.
 
