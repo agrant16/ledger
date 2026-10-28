@@ -112,9 +112,8 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
 
     The status, `type` and `title` come from the error class's `ProblemSpec`. The `detail` is
     the error's message. The members the spec lists as extensions, such as `account_id` for an
-    insufficient-funds error, are copied from the error into the body. A 503 also carries a
-    `Retry-After` header if it is a `Service busy` error. If it is a 503 `Not ready` error the
-    `Retry-After` is not sent.
+    insufficient-funds error, are copied from the error into the body. A ServiceBusyError is
+    logged as a warning and the response includes a `Retry-After` header.
 
     Args:
         request: The request being answered.
@@ -129,9 +128,10 @@ async def ledger_error_handler(request: Request, exc: LedgerError) -> JSONRespon
     problem_spec = problem_for(exc.__class__)
     headers = None
     extensions = {name: getattr(exc, name) for name in problem_spec.extensions}
-    if isinstance(exc, ServiceBusyError):
+    if problem_spec.retry_after:
         headers = {"Retry-After": str(RETRY_AFTER_SECONDS)}
-        logger.warning("Service was busy: %s", exc.__cause__ or exc)
+        if isinstance(exc, ServiceBusyError):
+            logger.warning("Service was busy: %s", exc.__cause__ or exc)
     if isinstance(exc, NotReadyError):
         logger.warning(
             "Not ready: failed_check=%s caused by %s", exc.failed_check, exc.__cause__ or exc
