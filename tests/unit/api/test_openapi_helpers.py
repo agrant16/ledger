@@ -10,7 +10,8 @@ title cannot drift from what the handlers send:
   errors that share a status (the two 400s of a transfer) share one entry whose description names
   each `type` URN;
 - every entry is `application/problem+json` with the `ProblemDetails` schema;
-- a 503 entry also declares a `Retry-After` header.
+- an entry also declares a `Retry-After` header, naming the problem types that send it, when one of
+  its errors has a spec with `retry_after` (#178); a 503 without such an error declares none.
 
     install_openapi(app: FastAPI) -> None
 
