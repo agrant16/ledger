@@ -28,6 +28,8 @@ POOL_TIMEOUT_SECONDS = 15
 
 # Connections a test run can hold next to the concurrency pool: the session `app_pool` (up to 10),
 # the owner connections (1 to 2), the service's own pool (10) and the Compose app (10), rounded up.
+# Neither compose.yaml nor the CI Postgres service sets `max_connections`, so the image default of
+# 100 (3 reserved) is what this budget relies on; CI service containers cannot take server flags.
 OTHER_CONNECTIONS = 32
 
 SEED_VARIABLE = "CONCURRENCY_SEED"
@@ -40,6 +42,11 @@ class Outcome[T]:
 
     value: T | None = None
     error: Exception | None = None
+
+    @property
+    def ok(self) -> bool:
+        """Whether the call returned instead of raising."""
+        return self.error is None
 
 
 def run_concurrently[T](
@@ -112,5 +119,6 @@ def check_connection_budget(max_connections: int, superuser_reserved: int) -> No
             f"The concurrency tests need {needed} connections ({CONCURRENCY_THREADS} for their "
             f"pool and up to {OTHER_CONNECTIONS} for the other pools), but the server allows "
             f"max_connections={max_connections} with {superuser_reserved} reserved, so {usable} "
-            "are usable. Raise max_connections on the test database server."
+            "are usable. Raise max_connections on the test database server (the Postgres "
+            "default is 100) or run the tests against the Compose database."
         )

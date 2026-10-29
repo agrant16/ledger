@@ -18,12 +18,13 @@ from tests.concurrency import harness
 def _server_connection_limits(settings: Settings) -> tuple[int, int]:
     """The server's `max_connections` and `superuser_reserved_connections`."""
     with psycopg.connect(settings.owner_url, autocommit=True) as conn:
-        values = []
-        for setting in ("max_connections", "superuser_reserved_connections"):
+
+        def show(setting: str) -> int:
             row = conn.execute(f"SHOW {setting}").fetchone()
             assert row is not None
-            values.append(int(row[0]))
-    return values[0], values[1]
+            return int(row[0])
+
+        return show("max_connections"), show("superuser_reserved_connections")
 
 
 @pytest.fixture(scope="module")

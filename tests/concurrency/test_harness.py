@@ -23,7 +23,7 @@ from collections.abc import Callable, Iterator
 
 import psycopg
 import pytest
-from psycopg_pool import ConnectionPool, PoolTimeout
+from psycopg_pool import ConnectionPool
 
 from ledger.infra.config import Settings
 from tests.concurrency import harness
@@ -66,7 +66,7 @@ def small_pool(settings: Settings, migrated_database: None) -> Iterator[Connecti
 
 def test_all_calls_run_at_the_same_time(concurrency_pool: ConnectionPool):
     count = harness.CONCURRENCY_THREADS
-    together = threading.Barrier(count, timeout=5)
+    together = threading.Barrier(count, timeout=harness.BARRIER_TIMEOUT_SECONDS)
 
     def call(conn: psycopg.Connection) -> bool:
         together.wait()
@@ -75,7 +75,21 @@ def test_all_calls_run_at_the_same_time(concurrency_pool: ConnectionPool):
     outcomes = harness.run_concurrently(concurrency_pool, [call] * count)
 
     assert len(outcomes) == count
-    assert [outcome.error for outcome in outcomes] == [None] * count
+    assert all(outcome.ok for outcome in outcomes)
+
+
+def test_calls_that_cannot_all_run_together_are_detected(concurrency_pool: ConnectionPool):
+    """Control for the test above: a barrier with one party too many must break every call."""
+    count = 3
+    together = threading.Barrier(count + 1, timeout=1)
+
+    def call(conn: psycopg.Connection) -> bool:
+        together.wait()
+        return True
+
+    outcomes = harness.run_concurrently(concurrency_pool, [call] * count)
+
+    assert [type(outcome.error).__name__ for outcome in outcomes] == ["BrokenBarrierError"] * count
 
 
 def test_each_call_has_its_own_connection(concurrency_pool: ConnectionPool):
@@ -133,7 +147,6 @@ def test_a_pool_too_small_for_the_calls_fails_promptly_and_runs_nothing(small_po
         "BrokenBarrierError",
         "PoolTimeout",
     ]
-    assert any(isinstance(outcome.error, PoolTimeout) for outcome in outcomes)
     assert ran == []
     assert elapsed < 5
 
@@ -166,7 +179,7 @@ def test_the_shared_invariant_check_passes_after_a_run(
 
     outcomes = harness.run_concurrently(concurrency_pool, calls)
 
-    assert all(outcome.error is None for outcome in outcomes)
+    assert all(outcome.ok for outcome in outcomes)
     assert_ledger_consistent(owner_conn)
 
 
