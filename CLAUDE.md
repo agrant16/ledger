@@ -122,7 +122,7 @@ These were verified in milestone 1.
 
 - Start the database the tests need: `docker compose up -d --wait db`
 - Run tests: `uv run pytest` (CI runs `uv run pytest --cov`, which also enforces the coverage floor)
-- Run only the tests that need no database: `uv run pytest tests/unit`. Tests live in `tests/unit`, `tests/integration` (`db`, `service`, `api`), `tests/property` and `tests/e2e`; put a new test where its kind belongs
+- Run only the tests that need no database: `uv run pytest tests/unit`. Tests live in `tests/unit`, `tests/integration` (`db`, `service`, `api`), `tests/property`, `tests/concurrency` (the thread harness and the tests built on it) and `tests/e2e`; put a new test where its kind belongs
 - Run linter: `uv run ruff check .`
 - Run formatter: `uv run ruff format .`
 - Lint the SQL migrations: `uv run sqlfluff lint migrations/` (CI runs it; `uv run sqlfluff fix migrations/` applies the safe fixes)

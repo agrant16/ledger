@@ -112,7 +112,7 @@ uv run ruff format --check .
 uv run sqlfluff lint migrations/
 ```
 
-The tests are laid out by kind: `tests/unit` needs no database (`uv run pytest tests/unit`), `tests/integration`, `tests/property` and `tests/e2e` do. `tests/integration/api` checks the HTTP contract through `TestClient` and may use mocks, injected failures and held locks. `tests/e2e` is black-box: it runs against a live server process, and every action and assertion goes over the network, with no `TestClient`, direct database access or monkeypatching in the test body. Its funding accounts come from the seed script, run as a separate process. See ADRs 0010 and 0013.
+The tests are laid out by kind: `tests/unit` needs no database (`uv run pytest tests/unit`), `tests/integration`, `tests/property`, `tests/concurrency` and `tests/e2e` do. `tests/concurrency` runs calls in threads, released together, each on its own connection from a pool of 50, so the Postgres server must allow at least 82 usable connections (the default of 100 does). `tests/integration/api` checks the HTTP contract through `TestClient` and may use mocks, injected failures and held locks. `tests/e2e` is black-box: it runs against a live server process, and every action and assertion goes over the network, with no `TestClient`, direct database access or monkeypatching in the test body. Its funding accounts come from the seed script, run as a separate process. See ADRs 0010 and 0013.
 
 CI runs `uv run pytest --cov`, which also measures branch coverage and fails below the floor set in `pyproject.toml`; run the same command locally to see which lines are missed.
 
