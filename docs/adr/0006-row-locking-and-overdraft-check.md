@@ -37,3 +37,5 @@ Two concurrent transfers must never spend the same money, and transfers in oppos
   - **Computing balances from entries on every read:** not chosen. The cached balance is kept in the same transaction and verified against the entries.
 
 *Note (2026-10-28): The full write-up of why READ COMMITTED and not SERIALIZABLE is ADR 0015 (#182). It does not change this decision.*
+
+*Note (2026-10-29): The milestone 4 tests (#186, PR 187) show that opposing transfers never deadlock and that two locking orders that follow the request do (a test-only locker with a barrier, and a single statement ordered by request position). They do not catch a removed `ORDER BY`: with two rows Postgres returns them in id order anyway, so the `ORDER BY` itself is still pinned only by the milestone 2 single-connection tests. This does not change the decision.*

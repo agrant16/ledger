@@ -10,6 +10,10 @@ retry, because a retry would hide a lock-order bug. Defends rules 1, 3 and 4.
 - The negative control: the same scenario with a test-only locker that takes the rows in request
   order and waits between its two locks. Two opposing transfers then deadlock every time, which
   shows the test above is able to fail. It must fail with 40P01 and nothing else.
+- A second control for a wrong `ORDER BY`: the real locking statement with its order replaced by
+  the order of the request. A removed `ORDER BY` is not caught by the real test, because two rows
+  come back in id order anyway, so this shows that a statement that follows request order does
+  deadlock under the same scenario.
 """
 
 import random
@@ -26,7 +30,7 @@ from ledger.repository import posting_repo
 from ledger.service.account_service import create_account
 from ledger.service.transfer_service import claim_and_post
 from tests.concurrency import harness
-from tests.concurrency.bad_locking import lock_in_request_order
+from tests.concurrency.bad_locking import LOCK_IN_REQUEST_ORDER_SQL, lock_in_request_order
 from tests.db_helpers import commit_transfer, hash_for
 from tests.ledger_invariants import assert_ledger_consistent
 
@@ -39,6 +43,7 @@ ROUNDS = 20
 # Pairs of opposing transfers per round: 25 pairs are the 50 threads of the harness pool.
 PAIRS_PER_ROUND = harness.CONCURRENCY_THREADS // 2
 CONTROL_ROUNDS = 3
+WRONG_ORDER_PAIRS = 3
 FUNDING_ENTRIES = 4  # two funding transfers of two entries each
 
 
@@ -51,6 +56,15 @@ def open_accounts(pool: ConnectionPool) -> tuple[int, int]:
     commit_transfer(pool, "fund:a", funding.id, a.id, STARTING_BALANCE)
     commit_transfer(pool, "fund:b", funding.id, b.id, STARTING_BALANCE)
     return a.id, b.id
+
+
+def transfer_call(key: str, payload: TransferPayload) -> Call:
+    """A call that claims `key` and posts `payload` through the service, with no retry."""
+
+    def call(conn: psycopg.Connection) -> Transfer:
+        return claim_and_post(conn, key, hash_for(key), payload)
+
+    return call
 
 
 def opposing_calls(
@@ -67,11 +81,7 @@ def opposing_calls(
             amount = rng.randint(1, MAX_AMOUNT)
             key = f"{label}:{pair}:{source}"
             payload = TransferPayload(source, target, amount, "USD")
-
-            def call(conn: psycopg.Connection, key=key, payload=payload) -> Transfer:
-                return claim_and_post(conn, key, hash_for(key), payload)
-
-            calls.append(call)
+            calls.append(transfer_call(key, payload))
             net_to_a += amount if target == a else -amount
     rng.shuffle(calls)
     return calls, net_to_a
@@ -108,8 +118,8 @@ def test_opposing_transfers_never_deadlock(
 
         outcomes = harness.run_concurrently(concurrency_pool, calls)
 
-        errors_seen = [repr(outcome.error) for outcome in outcomes if not outcome.ok]
-        assert errors_seen == [], f"round {round_number}: {errors_seen}"
+        failures = [repr(outcome.error) for outcome in outcomes if not outcome.ok]
+        assert failures == [], f"round {round_number}: {failures}"
         assert_ledger_consistent(owner_conn)
 
     sent = ROUNDS * PAIRS_PER_ROUND * 2
@@ -129,7 +139,6 @@ def test_locking_in_request_order_deadlocks_opposing_transfers(
     """Control for the test above: the lock order is what prevents the deadlock."""
     rng = random.Random(seed)
     a, b = open_accounts(concurrency_pool)
-    committed_transfers = 0
 
     for round_number in range(CONTROL_ROUNDS):
         after_first_lock = threading.Barrier(2, timeout=harness.BARRIER_TIMEOUT_SECONDS)
@@ -144,6 +153,39 @@ def test_locking_in_request_order_deadlocks_opposing_transfers(
         assert failed[0].sqlstate == DEADLOCK_SQLSTATE
         assert sum(outcome.ok for outcome in outcomes) == 1
 
-        committed_transfers += 1
-        assert count_entries(owner_conn) == FUNDING_ENTRIES + 2 * committed_transfers
+        assert count_entries(owner_conn) == FUNDING_ENTRIES + 2 * (round_number + 1)
         assert_ledger_consistent(owner_conn)
+
+
+@pytest.mark.timeout(60)
+def test_one_statement_locking_in_request_order_deadlocks_opposing_transfers(
+    concurrency_pool: ConnectionPool,
+    owner_conn: psycopg.Connection,
+    clean_db: None,
+    seed: int,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Control for a wrong `ORDER BY`: a single locking statement that follows request order.
+
+    There is no barrier between the locks, so a deadlock is likely in a round but not certain.
+    The test runs up to `ROUNDS` rounds of a few threads, stops at the first deadlock, and needs
+    at least one 40P01 and no other failure.
+    """
+    rng = random.Random(seed)
+    a, b = open_accounts(concurrency_pool)
+    monkeypatch.setattr(posting_repo, "LOCK_ACCOUNTS_SQL", LOCK_IN_REQUEST_ORDER_SQL)
+    deadlocks = 0
+
+    for round_number in range(ROUNDS):
+        calls, _ = opposing_calls(a, b, WRONG_ORDER_PAIRS, rng, f"wrong-order-{round_number}")
+
+        outcomes = harness.run_concurrently(concurrency_pool, calls)
+
+        failed = [outcome.error for outcome in outcomes if not outcome.ok]
+        assert all(isinstance(error, errors.DeadlockDetected) for error in failed), repr(failed)
+        deadlocks += len(failed)
+        assert_ledger_consistent(owner_conn)
+        if deadlocks:
+            break
+
+    assert deadlocks > 0, f"no deadlock in {ROUNDS} rounds"

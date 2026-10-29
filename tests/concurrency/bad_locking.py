@@ -22,6 +22,17 @@ LOCK_ONE_ACCOUNT_SQL = """
     FOR UPDATE OF b;
 """
 
+# One statement like `posting_repo.LOCK_ACCOUNTS_SQL`, but ordered by the position of each id in the
+# request and not by id, so the rows are locked in request order.
+LOCK_IN_REQUEST_ORDER_SQL = """
+    SELECT b.account_id, a.currency, b.allow_negative, b.balance_minor
+    FROM unnest(%s::bigint[]) WITH ORDINALITY AS r (account_id, position)
+    JOIN balances b ON b.account_id = r.account_id
+    JOIN accounts a ON a.id = b.account_id
+    ORDER BY r.position
+    FOR UPDATE OF b;
+"""
+
 LockAccounts = Callable[[psycopg.Connection, list[int]], dict[int, LockedAccount]]
 
 
