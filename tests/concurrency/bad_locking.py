@@ -36,16 +36,22 @@ LOCK_IN_REQUEST_ORDER_SQL = """
 LockAccounts = Callable[[psycopg.Connection, list[int]], dict[int, LockedAccount]]
 
 
-def lock_in_request_order(after_first_lock: threading.Barrier) -> LockAccounts:
+def lock_in_request_order(
+    after_first_lock: threading.Barrier, *, first_call_only: bool = False
+) -> LockAccounts:
     """Builds a drop-in for `posting_repo.lock_accounts` that locks in request order.
 
     Args:
         after_first_lock: The barrier every caller waits at once it holds its first row. Its
             party count must equal the number of transfers fired together.
+        first_call_only: Whether each thread waits at the barrier on its first call only. A
+            retried request calls the locker again on the same thread and would otherwise wait
+            for a partner that has already finished.
 
     Returns:
         A function with the signature and result of `posting_repo.lock_accounts`.
     """
+    waited = threading.local()
 
     def lock_accounts(conn: psycopg.Connection, account_ids: list[int]) -> dict[int, LockedAccount]:
         locked: dict[int, LockedAccount] = {}
@@ -53,8 +59,9 @@ def lock_in_request_order(after_first_lock: threading.Barrier) -> LockAccounts:
             row = conn.execute(LOCK_ONE_ACCOUNT_SQL, (account_id,)).fetchone()
             if row is not None:
                 locked[row[0]] = LockedAccount(row[1], row[2], row[3])
-            if position == 0:
+            if position == 0 and not (first_call_only and getattr(waited, "done", False)):
                 after_first_lock.wait()
+                waited.done = True
         return locked
 
     return lock_accounts
