@@ -14,7 +14,8 @@ After each run:
   balance is negative, and all balances still sum to zero;
 - the entry count matches the successful transfers, and the shared invariant check passes.
 
-Run 20 times as 20 parametrized runs, each with its own logged seed (`seed` fixture).
+Run 20 times as 20 parametrized runs, each with its own logged seed (`seed` fixture). Run `n` draws
+its data from `seed + n`, so with `CONCURRENCY_SEED` set the runs still differ from each other.
 """
 
 import random
@@ -24,7 +25,7 @@ import pytest
 from psycopg_pool import ConnectionPool
 
 from ledger.errors import InsufficientFundsError
-from ledger.models.transfer_model import TransferPayload
+from ledger.models.transfer_model import Transfer, TransferPayload
 from ledger.service.account_service import create_account
 from tests.concurrency import harness
 from tests.concurrency.helpers import Call, balance_of, count_entries, transfer_call
@@ -71,8 +72,22 @@ def build_calls(funding: int, protected: list[int], rng: random.Random) -> list[
     return [transfer_call(f"transfer:{n}", payload) for n, payload in enumerate(payloads)]
 
 
+def assert_balances_match(
+    conn: psycopg.Connection, funding: int, protected: list[int], succeeded: list[Transfer | None]
+) -> None:
+    """Each balance is its start plus the entries of the successful transfers; none is negative."""
+    expected = {funding: -PROTECTED_TOTAL, **dict.fromkeys(protected, STARTING_BALANCE)}
+    for transfer in succeeded:
+        assert transfer is not None
+        for entry in transfer.entries:
+            expected[entry.account_id] += entry.amount_minor
+    for account_id, balance in expected.items():
+        assert balance_of(conn, account_id) == balance, f"account {account_id}"
+    assert all(balance_of(conn, account_id) >= 0 for account_id in protected)
+
+
 @pytest.mark.timeout(60)
-@pytest.mark.parametrize("run", range(RUNS))
+@pytest.mark.parametrize("run", range(RUNS), ids=lambda n: f"run-{n}")
 def test_50_concurrent_transfers_never_overdraw_or_change_the_total(
     run: int,
     concurrency_pool: ConnectionPool,
@@ -80,7 +95,7 @@ def test_50_concurrent_transfers_never_overdraw_or_change_the_total(
     clean_db: None,
     seed: int,
 ):
-    rng = random.Random(seed)
+    rng = random.Random(seed + run)
     funding, protected = open_accounts(concurrency_pool)
     calls = build_calls(funding, protected, rng)
 
@@ -96,14 +111,7 @@ def test_50_concurrent_transfers_never_overdraw_or_change_the_total(
     succeeded = [outcome.value for outcome in outcomes if outcome.ok]
     assert succeeded and refused, f"{len(succeeded)} succeeded, {len(refused)} refused"
 
-    expected = {funding: -PROTECTED_TOTAL, **dict.fromkeys(protected, STARTING_BALANCE)}
-    for transfer in succeeded:
-        assert transfer is not None
-        for entry in transfer.entries:
-            expected[entry.account_id] += entry.amount_minor
-    for account_id, balance in expected.items():
-        assert balance_of(owner_conn, account_id) == balance, f"account {account_id}"
-    assert all(balance_of(owner_conn, account_id) >= 0 for account_id in protected)
+    assert_balances_match(owner_conn, funding, protected, succeeded)
 
     total = owner_conn.execute("SELECT sum(balance_minor) FROM balances").fetchone()
     assert total is not None and total[0] == 0

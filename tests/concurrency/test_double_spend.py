@@ -32,7 +32,6 @@ from tests.db_helpers import commit_transfer, reset_database
 from tests.ledger_invariants import assert_ledger_consistent
 
 ROUNDS = 20
-CONTROL_ROUNDS = 3
 STARTING_BALANCE = 100
 AMOUNT = 70
 FUNDING_ENTRIES = 2  # one funding transfer of two entries
@@ -82,14 +81,14 @@ def test_two_transfers_exceeding_the_balance_give_one_success_and_one_refusal(
 
 
 @pytest.mark.timeout(60)
-def test_checking_a_balance_read_before_locking_lets_both_transfers_past_the_check(
+def test_checking_a_balance_read_before_locking_is_stopped_only_by_the_constraint(
     concurrency_pool: ConnectionPool,
     owner_conn: psycopg.Connection,
     clean_db: None,
     monkeypatch: pytest.MonkeyPatch,
 ):
     """Control for the test above: the locked read is what produces the clean refusal."""
-    for round_number in range(CONTROL_ROUNDS):
+    for round_number in range(ROUNDS):
         reset_database(owner_conn)
         a, b, c = open_accounts(concurrency_pool)
         after_read = threading.Barrier(2, timeout=harness.BARRIER_TIMEOUT_SECONDS)
