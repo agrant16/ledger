@@ -52,7 +52,8 @@ def run_in_transaction[T](
     *,
     read_only: bool = False,
 ) -> T:
-    """Runs `work` on one pooled connection as a single database transaction.
+    """
+    Runs `work` on a pooled connection in one database transaction. (rule 5, ADR 0011, ADR 0017)
 
     This is where a request's transaction starts and ends. Service functions take the
     connection and never commit (the caller owns the transaction), so everything `work`
@@ -60,8 +61,12 @@ def run_in_transaction[T](
 
     `work` receives the one connection for the whole request. It must not commit or roll
     back, and it must not take a second connection from the pool while holding this one.
-    A retry should wrap the whole call, not part of `work`, so the idempotency key claim
-    and the posting are retried together on a fresh transaction.
+
+    A write that the database aborts as a deadlock victim (SQLSTATE 40P01) is rolled back
+    and `work` is called again on a fresh transaction, up to 3 attempts in all, with a
+    random delay of 10 to 50 ms between attempts. `work` must therefore be safe to run
+    again from its start, including the idempotency key claim. Read-only runs and every
+    other error are not retried.
 
     The isolation level is the default, READ COMMITTED. With `read_only`, the transaction
     is set READ ONLY as its first statement, so any write in `work` fails.
@@ -72,10 +77,12 @@ def run_in_transaction[T](
         read_only: Whether to start the transaction READ ONLY.
 
     Returns:
-        The value returned by `work`.
+        The value returned by `work` in the attempt that committed.
 
     Raises:
-        ServiceBusyError: No connection became free within the pool timeout.
+        ServiceBusyError: No connection became free within the pool timeout, or every
+            attempt was a deadlock victim, in which case the last deadlock error is the
+            cause.
         LedgerInvariantError: The database raised an `IntegrityError` (a CHECK, foreign
             key, unique or similar constraint), whether during `work` or when the
             transaction commits. That is a bug the database safety net caught, so it is
@@ -83,8 +90,8 @@ def run_in_transaction[T](
             such as a replayed idempotency key, must be handled inside `work` (for
             example with `ON CONFLICT`) or it ends up here.
 
-    Any other exception from `work`, including `LedgerError` subclasses, rolls the
-    transaction back and propagates unchanged.
+    Any other exception from `work`, including `LedgerError` subclasses and a deadlock in
+    a read-only run, rolls the transaction back and propagates unchanged.
     """
     for attempt in range(MAX_RETRIES):
         try:
