@@ -28,10 +28,10 @@ from psycopg_pool import ConnectionPool
 from ledger.models.transfer_model import Transfer, TransferPayload
 from ledger.repository import posting_repo
 from ledger.service.account_service import create_account
-from ledger.service.transfer_service import claim_and_post
 from tests.concurrency import harness
 from tests.concurrency.bad_locking import LOCK_IN_REQUEST_ORDER_SQL, lock_in_request_order
-from tests.db_helpers import commit_transfer, hash_for
+from tests.concurrency.helpers import balance_of, count_entries, transfer_call
+from tests.db_helpers import commit_transfer
 from tests.ledger_invariants import assert_ledger_consistent
 
 Call = Callable[[psycopg.Connection], Transfer]
@@ -58,15 +58,6 @@ def open_accounts(pool: ConnectionPool) -> tuple[int, int]:
     return a.id, b.id
 
 
-def transfer_call(key: str, payload: TransferPayload) -> Call:
-    """A call that claims `key` and posts `payload` through the service, with no retry."""
-
-    def call(conn: psycopg.Connection) -> Transfer:
-        return claim_and_post(conn, key, hash_for(key), payload)
-
-    return call
-
-
 def opposing_calls(
     a: int, b: int, pairs: int, rng: random.Random, label: str
 ) -> tuple[list[Call], int]:
@@ -85,20 +76,6 @@ def opposing_calls(
             net_to_a += amount if target == a else -amount
     rng.shuffle(calls)
     return calls, net_to_a
-
-
-def balance_of(conn: psycopg.Connection, account_id: int) -> int:
-    row = conn.execute(
-        "SELECT balance_minor FROM balances WHERE account_id = %s", (account_id,)
-    ).fetchone()
-    assert row is not None
-    return row[0]
-
-
-def count_entries(conn: psycopg.Connection) -> int:
-    row = conn.execute("SELECT count(*) FROM entries").fetchone()
-    assert row is not None
-    return row[0]
 
 
 @pytest.mark.timeout(90)

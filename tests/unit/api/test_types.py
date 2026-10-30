@@ -282,3 +282,15 @@ def test_a_missing_or_out_of_range_key_header_is_a_400_naming_the_header(
     response = header_client.post("/echo", headers=headers)
     assert response.status_code == 400
     assert response.json()["errors"][0]["parameter"] == "Idempotency-Key"
+
+
+def test_limit_param_returns_an_integer() -> None:
+    limit_param = 25
+    assert types._limit_param(str(limit_param)) == limit_param
+    assert types._limit_param(limit_param) == limit_param
+
+
+def test_decode_cursor_param_rejects_if_not_string() -> None:
+    with pytest.raises(ValueError):
+        cursor_param = 25
+        types._decode_cursor_param(cursor_param)
