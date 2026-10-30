@@ -11,7 +11,8 @@ real thing is in tests/concurrency/test_deadlock_retry.py.
   result is returned. Nothing a failed attempt wrote survives.
 - Between attempts, and only then, it sleeps a random 10 to 50 ms through `time.sleep`.
 - Three deadlocks raise ServiceBusyError, chained to the last DeadlockDetected, and keep nothing.
-- Every attempt runs on the same connection, so the pool of one is never asked for a second.
+- The connection is acquired once and every attempt runs on it: the pool is asked for one
+  connection however many attempts there are.
 - Any other error is not retried: `work` is called once and the error passes as it did before.
   That includes a SerializationFailure (40001), which is a different failure with a similar name.
 - A read only run is not retried.
@@ -70,6 +71,14 @@ def deadlock(conn: psycopg.Connection) -> Exception:
 def single_pool(settings):
     """A pool of one connection: any second connection would have to wait for the first."""
     with ConnectionPool(settings.app_url, min_size=1, max_size=1, timeout=2, open=True) as pool:
+        yield pool
+
+
+@pytest.fixture
+def pair_pool(settings):
+    """A pool of two connections, so a second request for a connection is not forced to wait."""
+    with ConnectionPool(settings.app_url, min_size=2, max_size=2, timeout=2, open=True) as pool:
+        pool.wait(timeout=5)
         yield pool
 
 
@@ -137,15 +146,30 @@ def test_a_run_that_does_not_deadlock_never_sleeps(
     assert sleeps == []
 
 
-def test_every_attempt_runs_on_the_same_connection(
+def test_a_run_asks_the_pool_for_one_connection_however_many_attempts(
+    clean_db: None, pair_pool, sleeps: list[float]
+) -> None:
+    """The connection is held across the retries, not given back and requested again: a retry that
+    went back to the pool could wait or time out in the middle of a request (ADR 0017). The pool
+    has a spare connection, so a re-acquire is visible both in the pool's request count and in the
+    backend of a later attempt."""
+    work = Flaky(deadlock, deadlock)
+    requests_before = pair_pool.get_stats().get("requests_num", 0)
+
+    assert run(pair_pool, work) == "done"
+
+    assert work.calls == MAX_ATTEMPTS
+    assert pair_pool.get_stats().get("requests_num", 0) - requests_before == 1
+    assert len(set(work.backend_pids)) == 1
+
+
+def test_a_single_connection_pool_survives_every_attempt(
     clean_db: None, single_pool, sleeps: list[float]
 ) -> None:
-    """The pool has one connection, so a retry that took a second one would wait and time out."""
     work = Flaky(deadlock, deadlock)
 
     run(single_pool, work)
 
-    assert len(set(work.backend_pids)) == 1
     assert run(single_pool, lambda conn: conn.execute("SELECT 42").fetchone()) == (42,)
 
 
