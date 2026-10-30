@@ -1,3 +1,5 @@
+import random
+import time
 from collections.abc import Callable
 from contextlib import ExitStack
 
@@ -6,6 +8,10 @@ from psycopg_pool import ConnectionPool, PoolTimeout
 
 from ledger.errors import LedgerInvariantError, ServiceBusyError
 from ledger.infra.config import Settings
+
+MAX_RETRIES = 3
+MIN_DELAY_SECONDS = 0.010
+MAX_DELAY_SECONDS = 0.050
 
 Pool = ConnectionPool
 
@@ -80,13 +86,22 @@ def run_in_transaction[T](
     Any other exception from `work`, including `LedgerError` subclasses, rolls the
     transaction back and propagates unchanged.
     """
-    try:
-        with ExitStack() as stack:
-            conn = _acquire(pool, stack)
+    for attempt in range(MAX_RETRIES):
+        try:
+            with ExitStack() as stack:
+                conn = _acquire(pool, stack)
+                with conn.transaction():
+                    if read_only:
+                        conn.execute("SET TRANSACTION READ ONLY")
+                    return work(conn)
+        except psycopg.errors.IntegrityError as failure:
+            raise LedgerInvariantError(
+                f"A database constraint was violated: ({failure.diag.constraint_name})"
+            ) from failure
+        except psycopg.errors.DeadlockDetected as failure:
             if read_only:
-                conn.execute("SET TRANSACTION READ ONLY")
-            return work(conn)
-    except psycopg.errors.IntegrityError as failure:
-        raise LedgerInvariantError(
-            f"A database constraint was violated: ({failure.diag.constraint_name})"
-        ) from failure
+                raise
+            if attempt == MAX_RETRIES - 1:
+                raise ServiceBusyError("Transaction deadlock detected") from failure
+        time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
+    return None
