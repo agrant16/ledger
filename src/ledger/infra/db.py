@@ -51,7 +51,7 @@ def run_in_transaction[T](
     work: Callable[[psycopg.Connection], T],
     *,
     read_only: bool = False,
-) -> T:
+) -> T | None:
     """
     Runs `work` on a pooled connection in one database transaction. (rule 5, ADR 0011, ADR 0017)
 
@@ -111,3 +111,4 @@ def run_in_transaction[T](
                 if attempt == MAX_ATTEMPTS - 1:
                     raise ServiceBusyError("Transaction deadlock detected") from failure
                 time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
+    return None
