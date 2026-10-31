@@ -85,13 +85,10 @@ def run_in_transaction[T](
             cause.
         LedgerInvariantError: The database raised an `IntegrityError` (a CHECK, foreign
             key, unique or similar constraint), whether during `work` or when the
-            transaction commits. That is a bug the database safety net caught, so it is
-            not a `LedgerError` and the API returns a logged 500. An expected conflict,
-            such as a replayed idempotency key, must be handled inside `work` (for
-            example with `ON CONFLICT`) or it ends up here.
-
-    Any other exception from `work`, including `LedgerError` subclasses and a deadlock in
-    a read-only run, rolls the transaction back and propagates unchanged.
+            transaction commits or a deadlock occurred on a read only transaction. That is
+            a bug the database safety net caught, so it is not a `LedgerError` and the API
+            returns a logged 500. An expected conflict, such as a replayed idempotency key,
+            must be handled inside `work` (for example with `ON CONFLICT`) or it ends up here.
     """
     with ExitStack() as stack:
         conn = _acquire(pool, stack)
@@ -107,7 +104,7 @@ def run_in_transaction[T](
                 ) from failure
             except psycopg.errors.DeadlockDetected as failure:
                 if read_only:
-                    raise
+                    raise LedgerInvariantError("Deadlock detected on a read only transaction") from failure
                 if attempt == MAX_ATTEMPTS - 1:
                     raise ServiceBusyError("Transaction deadlock detected") from failure
             time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
