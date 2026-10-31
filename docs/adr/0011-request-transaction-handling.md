@@ -14,6 +14,8 @@ ADR 0005 makes the caller own the database transaction: service functions take t
 - **Reads use `read_only=True`,** which issues `SET TRANSACTION READ ONLY` as the first statement of the transaction, so a bug in a read cannot write. psycopg's `conn.read_only` attribute is deliberately not used: on a pooled connection it would stay set for the next request.
 - **The connection is never in autocommit mode,** which the service functions require.
 
+*Note (2026-10-30): the deadlock retry (#197, ADR 0017) is a loop inside `run_in_transaction`, not around it, so the connection is acquired once and reused by every attempt. Routes still do not change. "Milestone 4's retry loop will wrap `run_in_transaction`" above is therefore superseded as to where the loop lives; the decision that `work` is a function that can be run again stands.*
+
 ## Consequences
 * **Positive:**
   - A trigger failure at commit is raised inside the handler, so it becomes a logged 500 with nothing persisted, and the pool is not left with a broken connection. A test proves this without any transfer code.
