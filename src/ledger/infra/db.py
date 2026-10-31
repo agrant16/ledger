@@ -85,10 +85,11 @@ def run_in_transaction[T](
             cause.
         LedgerInvariantError: The database raised an `IntegrityError` (a CHECK, foreign
             key, unique or similar constraint), whether during `work` or when the
-            transaction commits or a deadlock occurred on a read only transaction. That is
+            transaction commits. A deadlock occurred on a read only transaction. That is
             a bug the database safety net caught, so it is not a `LedgerError` and the API
             returns a logged 500. An expected conflict, such as a replayed idempotency key,
             must be handled inside `work` (for example with `ON CONFLICT`) or it ends up here.
+        LedgerError: Any non-bug or service-busy LedgerError and subclasses raised by `work`.
     """
     with ExitStack() as stack:
         conn = _acquire(pool, stack)
@@ -109,5 +110,4 @@ def run_in_transaction[T](
                     ) from failure
                 if attempt == MAX_ATTEMPTS - 1:
                     raise ServiceBusyError("Transaction deadlock detected") from failure
-                else:
-                    time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
+                time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
