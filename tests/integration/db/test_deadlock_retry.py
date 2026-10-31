@@ -15,7 +15,7 @@ real thing is in tests/concurrency/test_deadlock_retry.py.
   connection however many attempts there are.
 - Any other error is not retried: `work` is called once and the error passes as it did before.
   That includes a SerializationFailure (40001), which is a different failure with a similar name.
-- A read only run is not retried.
+- A read only run is not retried and raises a LedgerInvariantError.
 """
 
 import threading
@@ -27,7 +27,12 @@ import pytest
 from psycopg import errors
 from psycopg_pool import ConnectionPool
 
-from ledger.errors import DuplicateAccountNameError, LedgerError, ServiceBusyError
+from ledger.errors import (
+    DuplicateAccountNameError,
+    LedgerError,
+    LedgerInvariantError,
+    ServiceBusyError,
+)
 from ledger.infra.db import run_in_transaction as run
 from ledger.service.account_service import create_account
 
@@ -286,7 +291,7 @@ def test_a_read_only_run_is_not_retried(clean_db: None, single_pool, sleeps: lis
         calls.append(True)
         raise errors.DeadlockDetected("deadlock detected")
 
-    with pytest.raises(errors.DeadlockDetected):
+    with pytest.raises(LedgerInvariantError):
         run(single_pool, work, read_only=True)
 
     assert len(calls) == 1

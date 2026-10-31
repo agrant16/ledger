@@ -104,7 +104,10 @@ def run_in_transaction[T](
                 ) from failure
             except psycopg.errors.DeadlockDetected as failure:
                 if read_only:
-                    raise LedgerInvariantError("Deadlock detected on a read only transaction") from failure
+                    raise LedgerInvariantError(
+                        "Deadlock detected on a read only transaction"
+                    ) from failure
                 if attempt == MAX_ATTEMPTS - 1:
                     raise ServiceBusyError("Transaction deadlock detected") from failure
-            time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
+                else:
+                    time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
