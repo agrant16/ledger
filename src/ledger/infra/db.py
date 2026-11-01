@@ -89,7 +89,7 @@ def run_in_transaction[T](
             transaction commits. That is a bug the database safety net caught, so it is not a
             `LedgerError` and the API returns a logged 500. An expected conflict, such as a
             replayed idempotency key, must be handled inside `work` (for example with
-            `ON CONFLICT`) or it ends up here. A deadlock occurred on a read only transaction.
+            `ON CONFLICT`) or it ends up here. A deadlock occurred on a read-only transaction.
         LedgerError: Any LedgerError raised by `work`, unchanged, after a rollback.
     """
     with ExitStack() as stack:
@@ -111,5 +111,5 @@ def run_in_transaction[T](
                     ) from failure
                 if attempt == MAX_ATTEMPTS:
                     raise ServiceBusyError("Transaction deadlock detected") from failure
-            time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
+                time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
         raise AssertionError("unreachable branch")
