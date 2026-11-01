@@ -24,9 +24,10 @@ ADR 0011 expected the retry loop to wrap `run_in_transaction`. This ADR records 
   - The claim and the posting are redone together, so a retried transfer cannot apply twice or leave a claim behind.
 
 * **Negative / Trade-offs:**
-  - `run_in_transaction` now owns the transaction boundaries (`conn.transaction()` per attempt) and not the pool's context manager, so it is more code than ADR 0011 described.
+  - `run_in_transaction` now owns the transaction boundaries (`conn.transaction()` per attempt, so the commit and the rollback happen there and not when the pool's context manager exits; the pool context still returns the connection), so it is more code than ADR 0011 described.
   - `work` can run up to 3 times, so it must be safe to run again: no side effects outside the database transaction. Today none has any.
-  - A retried request holds its pool connection through the delays, which are short next to the pool wait.
+  - A retried request holds its pool connection through the delays, which are short next to the pool wait. The load test (milestone 7) should check what this costs: three attempts hold a connection for up to about 100 ms of delay, plus the time of the attempts themselves.
+  - A deadlock raised at commit is covered by the same `except`, but no test raises one there; the tests raise from inside `work`.
 
 * **Alternatives Considered:**
   - **A retry loop around `run_in_transaction` (ADR 0011's plan):** each attempt would take a connection from the pool again, which can wait or time out in the middle of a retry, and a caller could forget the wrapper. Rejected.
