@@ -1,5 +1,6 @@
 import random
 import time
+import typing
 from collections.abc import Callable
 from contextlib import ExitStack
 
@@ -51,7 +52,7 @@ def run_in_transaction[T](
     work: Callable[[psycopg.Connection], T],
     *,
     read_only: bool = False,
-) -> T | None:
+) -> T:
     """
     Runs `work` on a pooled connection in one database transaction. (rule 5, ADR 0011, ADR 0017)
 
@@ -85,15 +86,15 @@ def run_in_transaction[T](
             cause.
         LedgerInvariantError: The database raised an `IntegrityError` (a CHECK, foreign
             key, unique or similar constraint), whether during `work` or when the
-            transaction commits. A deadlock occurred on a read only transaction. That is
-            a bug the database safety net caught, so it is not a `LedgerError` and the API
-            returns a logged 500. An expected conflict, such as a replayed idempotency key,
-            must be handled inside `work` (for example with `ON CONFLICT`) or it ends up here.
-        LedgerError: Any non-bug or service-busy LedgerError and subclasses raised by `work`.
+            transaction commits. That is a bug the database safety net caught, so it is not a
+            `LedgerError` and the API returns a logged 500. An expected conflict, such as a
+            replayed idempotency key, must be handled inside `work` (for example with
+            `ON CONFLICT`) or it ends up here. A deadlock occurred on a read only transaction.
+        LedgerError: Any LedgerError raised by `work`, unchanged, after a rollback.
     """
     with ExitStack() as stack:
         conn = _acquire(pool, stack)
-        for attempt in range(MAX_ATTEMPTS):
+        for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
                 with conn.transaction():
                     if read_only:
@@ -108,7 +109,7 @@ def run_in_transaction[T](
                     raise LedgerInvariantError(
                         "Deadlock detected on a read only transaction"
                     ) from failure
-                if attempt == MAX_ATTEMPTS - 1:
+                if attempt == MAX_ATTEMPTS:
                     raise ServiceBusyError("Transaction deadlock detected") from failure
-                time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
-    return None
+            time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
+        assert False, "unreachable"

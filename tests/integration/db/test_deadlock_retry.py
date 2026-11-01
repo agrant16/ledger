@@ -36,6 +36,7 @@ from ledger.errors import (
 from ledger.infra.db import run_in_transaction as run
 from ledger.service.account_service import create_account
 
+# Not imported from ledger.infra.db because the tests here are for the contract and not the value.
 MAX_ATTEMPTS = 3
 MIN_DELAY_SECONDS = 0.010
 MAX_DELAY_SECONDS = 0.050
@@ -291,8 +292,9 @@ def test_a_read_only_run_is_not_retried(clean_db: None, single_pool, sleeps: lis
         calls.append(True)
         raise errors.DeadlockDetected("deadlock detected")
 
-    with pytest.raises(LedgerInvariantError):
+    with pytest.raises(LedgerInvariantError) as failure:
         run(single_pool, work, read_only=True)
 
+    assert  isinstance(failure.value.__cause__, errors.DeadlockDetected)
     assert len(calls) == 1
     assert sleeps == []
