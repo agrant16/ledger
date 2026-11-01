@@ -1,6 +1,5 @@
 import random
 import time
-import typing
 from collections.abc import Callable
 from contextlib import ExitStack
 
@@ -10,6 +9,7 @@ from psycopg_pool import ConnectionPool, PoolTimeout
 from ledger.errors import LedgerInvariantError, ServiceBusyError
 from ledger.infra.config import Settings
 
+# Placeholder values. Will be added to Settings at a later date.
 MAX_ATTEMPTS = 3
 MIN_DELAY_SECONDS = 0.010
 MAX_DELAY_SECONDS = 0.050
@@ -112,4 +112,4 @@ def run_in_transaction[T](
                 if attempt == MAX_ATTEMPTS:
                     raise ServiceBusyError("Transaction deadlock detected") from failure
             time.sleep(random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS))
-        assert False, "unreachable"
+        raise AssertionError("unreachable branch")
