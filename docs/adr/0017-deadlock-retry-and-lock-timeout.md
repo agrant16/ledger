@@ -11,7 +11,7 @@ ADR 0011 expected the retry loop to wrap `run_in_transaction`. This ADR records 
 
 ## Decision
 - **The retry loop is inside `run_in_transaction`.** The connection is acquired once. Each attempt is one `conn.transaction()` on that connection, with the commit inside the attempt, so a deadlock at any point rolls back that attempt and the next one starts clean.
-- **Only 40P01 is retried,** and only for a write. Any other error, including a 40001 serialization failure, propagates as before, because nothing else here is known to be safe to run again. A read-only run is never retried.
+- **Only 40P01 is retried,** and only for a write. Any other error, including a 40001 serialization failure, propagates as before, because nothing else here is known to be safe to run again. A read-only run is never retried: a read takes no row locks, so a deadlock in one is a bug, and it raises `LedgerInvariantError` (a logged 500) chained to the `DeadlockDetected`.
 - **Up to 3 attempts, with a random delay of 10 to 50 ms between attempts.** The delay is a uniform random draw so that retries from different requests do not line up, and there is none after the last attempt. The values are module constants for now and move into `Settings` with the other tunables (milestone 4).
 - **Exhausting the attempts raises `ServiceBusyError`,** chained to the last `DeadlockDetected` and with a message that names the deadlock (ADR 0016). The API maps it to the `service-busy` 503 with `Retry-After`.
 
