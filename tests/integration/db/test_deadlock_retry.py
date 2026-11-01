@@ -295,6 +295,6 @@ def test_a_read_only_run_is_not_retried(clean_db: None, single_pool, sleeps: lis
     with pytest.raises(LedgerInvariantError) as failure:
         run(single_pool, work, read_only=True)
 
-    assert  isinstance(failure.value.__cause__, errors.DeadlockDetected)
+    assert isinstance(failure.value.__cause__, errors.DeadlockDetected)
     assert len(calls) == 1
     assert sleeps == []
