@@ -17,8 +17,8 @@ deterministic tests are for.
 The last test is rule 4: two requests with different keys whose amounts together exceed the
 balance, so exactly one may succeed.
 
-There is no lock timeout until milestone 4, so every wait here has its own timeout: a hang must
-fail the test, not the suite.
+The service's own lock timeout (milestone 4) is tested once, in the stuck-claim test below. Every
+other wait here has its own timeout too: a hang must fail the test, not the suite.
 """
 
 import threading
@@ -230,6 +230,66 @@ def test_a_waiting_request_takes_the_key_over_when_the_first_claim_rolls_back(
     assert count(owner_conn, "transactions") == transfers + 1
     assert balance(owner_conn, alice.id) == FUNDED - TAKEOVER_AMOUNT
     assert balance(owner_conn, bob.id) == TAKEOVER_AMOUNT
+
+
+# --- a claim that stays open too long -----------------------------------------------------------
+
+SHORT_LOCK_TIMEOUT_MS = 300
+SAFETY_RELEASE_SECONDS = 3  # if the lock timeout is missing, free the claim so the test fails
+
+
+def test_a_claim_left_open_too_long_times_out_as_a_503_and_the_first_request_is_unaffected(
+    client: TestClient,
+    owner_conn: psycopg.Connection,
+    app_pool: ConnectionPool,
+    accounts,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rule 5 under a stuck holder. The second request waits for the open claim, gives up after
+    the lock timeout with a `service-busy` 503 and writes nothing, so the key is still the first
+    request's. The first request then commits exactly one transfer, and a replay returns it."""
+    monkeypatch.setattr("ledger.infra.db.LOCK_TIMEOUT_MS", SHORT_LOCK_TIMEOUT_MS)
+    _, alice, bob = accounts
+    transfers = count(owner_conn, "transactions")
+
+    with app_pool.connection() as first, ThreadPoolExecutor(max_workers=1) as executor:
+        claim = claim_transaction(first, KEY, hash_of(accounts, AMOUNT))
+        post_transaction(
+            first,
+            claim.transaction_id,
+            entries_for_transfer(
+                TransferPayload(
+                    from_account_id=alice.id,
+                    to_account_id=bob.id,
+                    currency="USD",
+                    amount_minor=AMOUNT,
+                )
+            ),
+        )
+        release = threading.Timer(SAFETY_RELEASE_SECONDS, first.rollback)
+        release.start()
+        try:
+            started = time.monotonic()
+            second = executor.submit(post, client, accounts, AMOUNT).result(timeout=WAIT_SECONDS)
+            waited = time.monotonic() - started
+        finally:
+            release.cancel()
+
+        # The first request is unaffected by the second's timeout: it still commits.
+        first.commit()
+
+    assert second.status_code == 503
+    assert second.headers["content-type"] == "application/problem+json"
+    assert second.json()["type"] == "urn:ledger:error:service-busy"
+    assert 0.25 <= waited < SAFETY_RELEASE_SECONDS
+    assert count(owner_conn, "transactions") == transfers + 1
+    assert balance(owner_conn, alice.id) == FUNDED - AMOUNT
+    assert balance(owner_conn, bob.id) == AMOUNT
+
+    replay = post(client, accounts, AMOUNT)
+    assert replay.status_code == 201
+    assert replay.json()["id"] == claim.transaction_id
+    assert count(owner_conn, "transactions") == transfers + 1
 
 
 # --- two real requests released together --------------------------------------------------------

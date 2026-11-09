@@ -245,11 +245,6 @@ def test_the_delay_is_random_between_10_and_50_milliseconds(
             errors.SerializationFailure,
             id="serialization-failure-40001",
         ),
-        pytest.param(
-            lambda conn: errors.LockNotAvailable("lock timeout"),
-            errors.LockNotAvailable,
-            id="lock-not-available-55P03",
-        ),
     ],
 )
 def test_any_other_error_is_not_retried(
@@ -260,8 +255,7 @@ def test_any_other_error_is_not_retried(
     single_pool,
     sleeps: list[float],
 ) -> None:
-    """55P03 is listed here only because it is not a deadlock; milestone 4's lock timeout item
-    decides what it becomes, and then this case is replaced."""
+    """A lock timeout (55P03) is not retried either (see test_lock_timeout.py)."""
     work = Flaky(make_error)
 
     with pytest.raises(expected):
