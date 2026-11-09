@@ -48,6 +48,20 @@ def _acquire(pool: Pool, stack: ExitStack) -> psycopg.Connection:
         raise ServiceBusyError("Connection timeout") from err
 
 
+def _begin[T](
+    conn: psycopg.Connection,
+    work: Callable[[psycopg.Connection], T],
+    *,
+    read_only: bool = False,
+) -> T:
+    with conn.transaction():
+        if read_only:
+            conn.execute("SET TRANSACTION READ ONLY")
+        else:
+            conn.execute("SELECT set_config('lock_timeout', %s, true)", (str(LOCK_TIMEOUT_MS),))
+        return work(conn)
+
+
 def run_in_transaction[T](
     pool: Pool,
     work: Callable[[psycopg.Connection], T],
@@ -102,20 +116,15 @@ def run_in_transaction[T](
         conn = _acquire(pool, stack)
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
-                with conn.transaction():
-                    if read_only:
-                        conn.execute("SET TRANSACTION READ ONLY")
-                    else:
-                        conn.execute(
-                            "SELECT set_config('lock_timeout', %s, true)", (str(LOCK_TIMEOUT_MS),)
-                        )
-                    return work(conn)
+                return _begin(conn, work, read_only=read_only)
             except psycopg.errors.IntegrityError as failure:
                 raise LedgerInvariantError(
                     f"A database constraint was violated: ({failure.diag.constraint_name})"
                 ) from failure
             except psycopg.errors.LockNotAvailable as failure:
-                raise ServiceBusyError("Lock timeout") from failure
+                raise ServiceBusyError(
+                    f"Lock timeout after {LOCK_TIMEOUT_MS} milliseconds"
+                ) from failure
             except psycopg.errors.DeadlockDetected as failure:
                 if read_only:
                     raise LedgerInvariantError(
