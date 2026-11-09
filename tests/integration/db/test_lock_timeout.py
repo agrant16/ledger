@@ -7,7 +7,8 @@ another transaction's lock fails instead of hanging. The wait that fails is a Se
 (ADR 0016): the transaction rolled back and nothing was written, so the client can retry. It is not
 retried inside, because the holder that blocked the first attempt would block the next one too.
 
-- A write run has the setting; a read only run does not (it takes no row locks to wait on).
+- A write run has the setting, on every attempt including a retry after a deadlock; a read only
+  run does not (it takes no row locks to wait on).
 - The setting lasts one transaction. A pooled connection that has run a write is back to no
   timeout after a commit, a rollback and a timeout.
 - A row lock held by another session makes the run fail with ServiceBusyError after about the
@@ -139,6 +140,24 @@ def test_the_setting_does_not_reach_the_next_user_of_the_connection(
 
     with single_pool.connection() as conn:
         assert show_lock_timeout(conn) == "0"
+
+
+def test_a_retry_after_a_deadlock_has_the_lock_timeout_too(
+    clean_db: None, single_pool, sleeps: list[float]
+) -> None:
+    """Each attempt is its own transaction, so each one sets the timeout again."""
+    seen: list[str] = []
+
+    def work(conn: psycopg.Connection) -> str:
+        seen.append(show_lock_timeout(conn))
+        if len(seen) == 1:
+            raise errors.DeadlockDetected("deadlock detected")
+        return "done"
+
+    assert run(single_pool, work) == "done"
+
+    assert seen == [DEFAULT_LOCK_TIMEOUT, DEFAULT_LOCK_TIMEOUT]
+    assert len(sleeps) == 1  # the first attempt really was retried
 
 
 # --- the wait times out ------------------------------------------------------------------------

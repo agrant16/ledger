@@ -70,10 +70,10 @@ def run_in_transaction[T](
     again from its start, including the idempotency key claim. Read-only runs and every
     other error are not retried.
 
-    Every write transaction waits at most 2 seconds for any one lock (`lock_timeout`), so a
-    request stuck behind another transaction fails instead of hanging. The wait that times
-    out is rolled back and is not retried, because the holder would most likely still be
-    there. The setting ends with the transaction and does not apply to read-only runs.
+    Every write transaction, including each retry attempt, waits at most 2 seconds for any
+    one lock (`lock_timeout`), so a request stuck behind another transaction fails instead
+    of hanging. A wait that times out is rolled back and is not retried. The setting ends
+    with the transaction and does not apply to read-only runs.
 
     The isolation level is the default, READ COMMITTED. With `read_only`, the transaction
     is set READ ONLY as its first statement, so any write in `work` fails.

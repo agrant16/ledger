@@ -1,6 +1,6 @@
 # ADR 0004: Synchronous handlers, a fixed connection pool, and one connection per request
 
-* **Status:** Accepted (partly implemented: the fixed pool, the handler thread limit, the concurrency cap and the pool-timeout 503 exist; the lock timeout, exhausted deadlock retries and lost-commit 503 mappings arrive in milestone 4)
+* **Status:** Accepted (partly implemented: the fixed pool, the handler thread limit, the concurrency cap and the pool-timeout 503 exist, as does the lock timeout in `run_in_transaction`; the 503 mappings for the lock timeout and exhausted deadlock retries, and the lost-commit mapping, arrive in milestone 4)
 * **Date:** 2026-10-08 (decided in `docs/design.md` at project start)
 * **Deciders:** Alan (human architect) & Claude (AI collaborator)
 
