@@ -13,6 +13,7 @@ from ledger.infra.config import Settings
 MAX_ATTEMPTS = 3
 MIN_DELAY_SECONDS = 0.010
 MAX_DELAY_SECONDS = 0.050
+LOCK_TIMEOUT_MS = 2000
 
 Pool = ConnectionPool
 
@@ -81,9 +82,9 @@ def run_in_transaction[T](
         The value returned by `work` in the attempt that committed.
 
     Raises:
-        ServiceBusyError: No connection became free within the pool timeout, or every
-            attempt was a deadlock victim, in which case the last deadlock error is the
-            cause.
+        ServiceBusyError: No connection became free within the pool timeout, a lock timeout
+            occurred, or every attempt was a deadlock victim, in which case the last deadlock
+            error is the cause.
         LedgerInvariantError: The database raised an `IntegrityError` (a CHECK, foreign
             key, unique or similar constraint), whether during `work` or when the
             transaction commits. That is a bug the database safety net caught, so it is not a
@@ -99,11 +100,17 @@ def run_in_transaction[T](
                 with conn.transaction():
                     if read_only:
                         conn.execute("SET TRANSACTION READ ONLY")
+                    else:
+                        conn.execute(
+                            "SELECT set_config('lock_timeout', %s, true)", (str(LOCK_TIMEOUT_MS),)
+                        )
                     return work(conn)
             except psycopg.errors.IntegrityError as failure:
                 raise LedgerInvariantError(
                     f"A database constraint was violated: ({failure.diag.constraint_name})"
                 ) from failure
+            except psycopg.errors.LockNotAvailable as failure:
+                raise ServiceBusyError("Lock timeout") from failure
             except psycopg.errors.DeadlockDetected as failure:
                 if read_only:
                     raise LedgerInvariantError(
