@@ -1,6 +1,6 @@
 # ADR 0017: A deadlock is retried, and a lock wait is bounded, inside `run_in_transaction`
 
-* **Status:** Draft
+* **Status:** Accepted
 * **Date:** 2026-10-30 (decided during milestone 4 planning, issue #197)
 * **Deciders:** Alan (human architect) & Claude (AI collaborator)
 

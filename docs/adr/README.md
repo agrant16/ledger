@@ -20,7 +20,7 @@ Short records of the larger decisions behind the ledger service, in the format o
 | [0014](0014-entries-cursor-pagination.md) | Entry history pages by an opaque cursor on the entry id | 2026-10-19 | Accepted |
 | [0015](0015-row-locks-at-read-committed-not-serializable.md) | Row locks at READ COMMITTED, not SERIALIZABLE | 2026-10-28 | Accepted |
 | [0016](0016-milestone-4-failures-and-the-unknown-commit.md) | Milestone 4 failures stay `service-busy`, except a lost commit, which has its own error | 2026-10-27 | Accepted |
-| [0017](0017-deadlock-retry-and-lock-timeout.md) | A deadlock is retried, and a lock wait is bounded, inside `run_in_transaction` | 2026-10-30 | Draft |
+| [0017](0017-deadlock-retry-and-lock-timeout.md) | A deadlock is retried, and a lock wait is bounded, inside `run_in_transaction` | 2026-10-30 | Accepted |
 
 A new ADR is listed as `Draft` until the pull request that merges it marks it `Accepted`.
 
