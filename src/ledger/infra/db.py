@@ -70,6 +70,11 @@ def run_in_transaction[T](
     again from its start, including the idempotency key claim. Read-only runs and every
     other error are not retried.
 
+    Every write transaction waits at most 2 seconds for any one lock (`lock_timeout`), so a
+    request stuck behind another transaction fails instead of hanging. The wait that times
+    out is rolled back and is not retried, because the holder would most likely still be
+    there. The setting ends with the transaction and does not apply to read-only runs.
+
     The isolation level is the default, READ COMMITTED. With `read_only`, the transaction
     is set READ ONLY as its first statement, so any write in `work` fails.
 
@@ -82,9 +87,9 @@ def run_in_transaction[T](
         The value returned by `work` in the attempt that committed.
 
     Raises:
-        ServiceBusyError: No connection became free within the pool timeout, a lock timeout
-            occurred, or every attempt was a deadlock victim, in which case the last deadlock
-            error is the cause.
+        ServiceBusyError: No connection became free within the pool timeout; a lock wait
+            exceeded the lock timeout, in which case the database error is the cause; or every
+            attempt was a deadlock victim, in which case the last deadlock error is the cause.
         LedgerInvariantError: The database raised an `IntegrityError` (a CHECK, foreign
             key, unique or similar constraint), whether during `work` or when the
             transaction commits. That is a bug the database safety net caught, so it is not a
