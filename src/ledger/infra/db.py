@@ -54,6 +54,7 @@ def _run_once[T](
     *,
     read_only: bool,
 ) -> T:
+    """Called by `run_in_transaction` and runs `work` once."""
     with conn.transaction():
         if read_only:
             conn.execute("SET TRANSACTION READ ONLY")
