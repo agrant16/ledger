@@ -13,6 +13,7 @@ from ledger.infra.config import Settings
 MAX_ATTEMPTS = 3
 MIN_DELAY_SECONDS = 0.010
 MAX_DELAY_SECONDS = 0.050
+LOCK_TIMEOUT_MS = 2000
 
 Pool = ConnectionPool
 
@@ -47,6 +48,21 @@ def _acquire(pool: Pool, stack: ExitStack) -> psycopg.Connection:
         raise ServiceBusyError("Connection timeout") from err
 
 
+def _run_once[T](
+    conn: psycopg.Connection,
+    work: Callable[[psycopg.Connection], T],
+    *,
+    read_only: bool,
+) -> T:
+    """Called by `run_in_transaction` and runs `work` once."""
+    with conn.transaction():
+        if read_only:
+            conn.execute("SET TRANSACTION READ ONLY")
+        else:
+            conn.execute("SELECT set_config('lock_timeout', %s, true)", (str(LOCK_TIMEOUT_MS),))
+        return work(conn)
+
+
 def run_in_transaction[T](
     pool: Pool,
     work: Callable[[psycopg.Connection], T],
@@ -69,6 +85,11 @@ def run_in_transaction[T](
     again from its start, including the idempotency key claim. Read-only runs and every
     other error are not retried.
 
+    Every write transaction, including each retry attempt, waits at most 2 seconds for any
+    one lock (`lock_timeout`), so a request stuck behind another transaction fails instead
+    of hanging. A wait that times out is rolled back and is not retried. The setting ends
+    with the transaction and does not apply to read-only runs.
+
     The isolation level is the default, READ COMMITTED. With `read_only`, the transaction
     is set READ ONLY as its first statement, so any write in `work` fails.
 
@@ -81,9 +102,9 @@ def run_in_transaction[T](
         The value returned by `work` in the attempt that committed.
 
     Raises:
-        ServiceBusyError: No connection became free within the pool timeout, or every
-            attempt was a deadlock victim, in which case the last deadlock error is the
-            cause.
+        ServiceBusyError: No connection became free within the pool timeout; a lock wait
+            exceeded the lock timeout, in which case the database error is the cause; or every
+            attempt was a deadlock victim, in which case the last deadlock error is the cause.
         LedgerInvariantError: The database raised an `IntegrityError` (a CHECK, foreign
             key, unique or similar constraint), whether during `work` or when the
             transaction commits. That is a bug the database safety net caught, so it is not a
@@ -96,13 +117,14 @@ def run_in_transaction[T](
         conn = _acquire(pool, stack)
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
-                with conn.transaction():
-                    if read_only:
-                        conn.execute("SET TRANSACTION READ ONLY")
-                    return work(conn)
+                return _run_once(conn, work, read_only=read_only)
             except psycopg.errors.IntegrityError as failure:
                 raise LedgerInvariantError(
                     f"A database constraint was violated: ({failure.diag.constraint_name})"
+                ) from failure
+            except psycopg.errors.LockNotAvailable as failure:
+                raise ServiceBusyError(
+                    f"Lock timeout after {LOCK_TIMEOUT_MS} milliseconds"
                 ) from failure
             except psycopg.errors.DeadlockDetected as failure:
                 if read_only:
