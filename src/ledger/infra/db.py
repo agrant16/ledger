@@ -48,11 +48,11 @@ def _acquire(pool: Pool, stack: ExitStack) -> psycopg.Connection:
         raise ServiceBusyError("Connection timeout") from err
 
 
-def _begin[T](
+def _run_once[T](
     conn: psycopg.Connection,
     work: Callable[[psycopg.Connection], T],
     *,
-    read_only: bool = False,
+    read_only: bool,
 ) -> T:
     with conn.transaction():
         if read_only:
@@ -116,7 +116,7 @@ def run_in_transaction[T](
         conn = _acquire(pool, stack)
         for attempt in range(1, MAX_ATTEMPTS + 1):
             try:
-                return _begin(conn, work, read_only=read_only)
+                return _run_once(conn, work, read_only=read_only)
             except psycopg.errors.IntegrityError as failure:
                 raise LedgerInvariantError(
                     f"A database constraint was violated: ({failure.diag.constraint_name})"
